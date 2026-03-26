@@ -8,7 +8,7 @@ const SkillTree = {
     const el = document.getElementById('screen-skill-tree');
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>⚔️ スキルツリー</h2>
       </div>
       <div class="loading-inline">読み込み中...</div>
@@ -26,7 +26,7 @@ const SkillTree = {
 
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>⚔️ スキルツリー</h2>
       </div>
 
@@ -67,7 +67,7 @@ const Collection = {
     const el = document.getElementById('screen-collection');
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>📖 コレクション図鑑</h2>
       </div>
       <div class="loading-inline">読み込み中...</div>
@@ -89,7 +89,7 @@ const Collection = {
 
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>📖 コレクション図鑑</h2>
       </div>
 
@@ -153,7 +153,7 @@ const MyPage = {
 
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>👤 マイページ</h2>
       </div>
 

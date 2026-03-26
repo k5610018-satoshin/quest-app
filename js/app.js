@@ -40,19 +40,24 @@ const App = {
   },
 
   /**
-   * ホーム画面を表示
+   * ホーム画面を表示（freshがtrueならAPI再取得、falseならキャッシュで即表示）
    */
-  async showHome() {
-    this.showLoading('ステータスを読み込み中...');
-    const result = await API.getStudentStatus(this.currentStudent.studentId);
-    this.hideLoading();
+  async showHome(fresh) {
+    if (fresh !== false) {
+      this.showLoading('ステータスを読み込み中...');
+      const result = await API.getStudentStatus(this.currentStudent.studentId);
+      this.hideLoading();
 
-    if (result.success) {
-      this.currentStudent = { ...this.currentStudent, ...result.status };
-      this.renderHome(result.status);
-      this.showScreen('home');
+      if (result.success) {
+        this.currentStudent = { ...this.currentStudent, ...result.status };
+        this.renderHome(result.status);
+        this.showScreen('home');
+      } else {
+        this.showError('ステータスの取得に失敗しました');
+      }
     } else {
-      this.showError('ステータスの取得に失敗しました');
+      // キャッシュ済みデータで即座に画面切替（戻るボタン用）
+      this.showScreen('home');
     }
   },
 

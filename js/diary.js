@@ -7,7 +7,7 @@ const Diary = {
     const el = document.getElementById('screen-diary');
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>📝 日記を書く</h2>
       </div>
 

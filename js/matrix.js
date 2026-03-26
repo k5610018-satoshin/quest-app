@@ -30,7 +30,7 @@ const Matrix = {
 
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="${hasPending ? 'App.showScreen(\'reflection\')' : 'App.showHome()'}">← もどる</button>
+        <button class="back-btn" onclick="${hasPending ? 'App.showScreen(\'reflection\')' : 'App.showHome(false)'}">← もどる</button>
         <h2>🌍 心マトリクス</h2>
       </div>
 

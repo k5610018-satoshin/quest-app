@@ -10,7 +10,7 @@ const Reflection = {
     const el = document.getElementById('screen-reflection');
     el.innerHTML = `
       <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome()">← もどる</button>
+        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>🔄 振り返りを書く</h2>
       </div>
 
