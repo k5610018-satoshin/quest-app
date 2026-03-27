@@ -166,7 +166,7 @@ a{color:var(--primary);text-decoration:none}
 .toast-error{background:var(--danger)}
 
 /* Entry cards (card-based view for reflections) */
-.entry-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;margin-bottom:10px;border-left:3px solid var(--primary)}
+.entry-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;margin-bottom:10px}
 .entry-card .ec-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px}
 .entry-card .ec-name{font-weight:700;font-size:13px}
 .entry-card .ec-date{font-size:11px;color:var(--text2)}
@@ -302,6 +302,8 @@ let diarySortAsc = false;
 let refSortKey = 'date';
 let refSortAsc = false;
 let refViewMode = 'card';
+let missingPeriod = '';
+let missingSubject = '';
 
 // Newsletter check state (localStorage)
 const NL_DIARY_KEY = 'nl_checked_diaries';
@@ -431,28 +433,39 @@ function getMissing() {
   return { missingDiary, missingReflection };
 }
 
-function selectStudent(studentId) {
-  if (selectedStudentId === studentId) {
-    selectedStudentId = null;
-  } else {
-    selectedStudentId = studentId;
-  }
-  render();
-}
-
 function clearFilter() {
   selectedStudentId = null;
   render();
 }
 
+function toggleCommentInput(cardId) {
+  const area = document.getElementById(cardId + '-area');
+  if (!area) return;
+  const isHidden = area.style.display === 'none';
+  area.style.display = isHidden ? 'block' : 'none';
+  if (isHidden) {
+    const textarea = document.getElementById(cardId);
+    if (textarea) textarea.focus();
+  }
+}
+
 function activeFilterHtml() {
-  if (!selectedStudentId) return '';
-  const s = getStudent(selectedStudentId);
-  if (!s) return '';
-  return `<div class="active-filter">
-    ${s.student_number}番 ${escHtml(s.name)} でフィルター中
-    <button onclick="clearFilter()" title="フィルター解除">&times;</button>
-  </div>`;
+  const studentOpts = DB.users.map(u => {
+    const sid = getStudentId(u);
+    return `<option value="${sid}" ${selectedStudentId === sid ? 'selected' : ''}>${u.student_number}番 ${escHtml(u.name)}</option>`;
+  }).join('');
+  return `
+    <select onchange="selectStudent(this.value || null);this.blur()" style="padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;min-width:140px">
+      <option value="">全員表示</option>
+      ${studentOpts}
+    </select>
+    ${selectedStudentId ? `<button class="btn btn-sm btn-outline" onclick="clearFilter()">✕ 解除</button>` : ''}
+  `;
+}
+
+function selectStudent(studentId) {
+  selectedStudentId = studentId || null;
+  render();
 }
 
 function getZoneClass(zone) {
@@ -475,32 +488,112 @@ function sortArrow(currentKey, targetKey, asc) {
 // 1. Dashboard
 // ============================================================
 function renderDashboard() {
+  const today = todayStr();
   const diaryCountMap = {};
   const refCountMap = {};
   DB.diaries.forEach(d => { const sid = d.student_id; diaryCountMap[sid] = (diaryCountMap[sid] || 0) + 1; });
   DB.reflections.forEach(r => { const sid = r.student_id; refCountMap[sid] = (refCountMap[sid] || 0) + 1; });
 
+  const todayDiaries = DB.diaries.filter(d => d.created_at && d.created_at.startsWith(today));
+  const todayRefs = DB.reflections.filter(r => r.created_at && r.created_at.startsWith(today));
+  const todayDiaryIds = new Set(todayDiaries.map(d => d.student_id));
+  const todayRefIds = new Set(todayRefs.map(r => r.student_id));
+  const uncommentedDiaries = DB.diaries.filter(d => !d.teacher_comment && d.content);
+  const uncommentedRefs = DB.reflections.filter(r => !r.teacher_comment && r.content);
+  const starredRefs = DB.reflections.filter(r => r.star_rating && r.star_rating > 0);
+
+  // --- 全体統計 ---
   const statsHtml = `
     <div class="stats-row">
       <div class="stat-box"><div class="stat-val">${DB.users.length}</div><div class="stat-label">児童数</div></div>
-      <div class="stat-box"><div class="stat-val">${DB.diaries.length}</div><div class="stat-label">日記総数</div></div>
-      <div class="stat-box"><div class="stat-val">${DB.reflections.length}</div><div class="stat-label">振り返り総数</div></div>
-      <div class="stat-box"><div class="stat-val">${DB.matrix_records.length}</div><div class="stat-label">マトリクス記録</div></div>
-      <div class="stat-box"><div class="stat-val">${DB.diaries.filter(d => d.created_at && d.created_at.startsWith(todayStr())).length}</div><div class="stat-label">今日の日記</div></div>
-      <div class="stat-box"><div class="stat-val">${DB.reflections.filter(r => r.created_at && r.created_at.startsWith(todayStr())).length}</div><div class="stat-label">今日の振り返り</div></div>
+      <div class="stat-box"><div class="stat-val">${todayDiaries.length}</div><div class="stat-label">今日の日記</div></div>
+      <div class="stat-box"><div class="stat-val">${todayRefs.length}</div><div class="stat-label">今日の振り返り</div></div>
+      <div class="stat-box"><div class="stat-val">${uncommentedDiaries.length + uncommentedRefs.length}</div><div class="stat-label">未コメント</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.diaries.length} / ${DB.reflections.length}</div><div class="stat-label">日記/振返 累計</div></div>
+      <div class="stat-box"><div class="stat-val">${starredRefs.length}</div><div class="stat-label">星つき振返</div></div>
     </div>
   `;
 
+  // --- 今日のアクティビティ ---
+  const todayAll = [...todayDiaries.map(d => ({type:'📝',name:getStudentName(d.student_id),num:getStudentNum(d.student_id),time:d.created_at,label:'日記',preview:(d.content||'').slice(0,40)})),
+                     ...todayRefs.map(r => ({type:'🔄',name:getStudentName(r.student_id),num:getStudentNum(r.student_id),time:r.created_at,label:r.subject||'振返',preview:(r.content||'').slice(0,40)}))
+  ].sort((a,b) => (b.time||'').localeCompare(a.time||''));
+
+  const activityHtml = todayAll.length > 0
+    ? todayAll.slice(0,12).map(a => `<div style="display:flex;gap:6px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span>${a.type}</span>
+        <span style="font-weight:700;min-width:90px">${a.num}番 ${escHtml(a.name)}</span>
+        <span class="chip active" style="font-size:10px;padding:0 6px">${escHtml(a.label)}</span>
+        <span style="color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(a.preview)}</span>
+        <span style="color:var(--text2);font-size:10px">${fmtDateTime(a.time).split(' ')[1] || ''}</span>
+      </div>`).join('')
+    : '<div style="color:var(--text2);padding:10px;text-align:center">今日はまだ投稿がありません</div>';
+
+  // --- 未提出（時間目・教科別フィルタ対応） ---
+  const missingDiary = DB.users.filter(u => !todayDiaryIds.has(getStudentId(u)));
+
+  // 振り返り: 時間目or教科で絞り込んだ未提出
+  let filteredTodayRefs = todayRefs;
+  let missingRefLabel = '振返未提出';
+  if (missingPeriod) {
+    filteredTodayRefs = todayRefs.filter(r => r.period === missingPeriod);
+    missingRefLabel = missingPeriod + '時間目 未提出';
+  }
+  if (missingSubject) {
+    filteredTodayRefs = filteredTodayRefs.filter(r => r.subject === missingSubject);
+    missingRefLabel = (missingPeriod ? missingPeriod + '時間目 ' : '') + missingSubject + ' 未提出';
+  }
+  const filteredRefIds = new Set(filteredTodayRefs.map(r => r.student_id));
+  const missingRef = DB.users.filter(u => !filteredRefIds.has(getStudentId(u)));
+
+  const periodChips = ['1','2','3','4','5','6'].map(p =>
+    `<span class="chip${missingPeriod===p?' active':''}" onclick="missingPeriod=missingPeriod==='${p}'?'':'${p}';render()" style="font-size:10px;padding:1px 8px">${p}時間目</span>`
+  ).join('');
+  const subjectChipsMissing = SUBJECTS.slice(0,8).map(s =>
+    `<span class="chip${missingSubject===s?' active':''}" onclick="missingSubject=missingSubject==='${s}'?'':'${s}';render()" style="font-size:10px;padding:1px 8px">${s}</span>`
+  ).join('');
+
+  const missingHtml = `
+    <div style="margin-bottom:8px">
+      <span style="font-weight:600;font-size:12px">📝 日記未提出 (${missingDiary.length})</span>
+      ${missingDiary.length === 0 ? '<span style="color:var(--success);font-size:12px;margin-left:8px">全員OK</span>'
+        : `<div style="display:flex;flex-wrap:wrap;gap:3px;margin-top:4px">${missingDiary.map(u =>
+          `<span class="missing-chip" style="font-size:11px;padding:2px 6px">${u.student_number} ${escHtml(u.name)}</span>`).join('')}</div>`}
+    </div>
+    <div>
+      <div style="font-weight:600;font-size:12px;margin-bottom:4px">🔄 ${escHtml(missingRefLabel)} (${missingRef.length}/${DB.users.length})</div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:4px">${periodChips}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:3px;margin-bottom:6px">${subjectChipsMissing}</div>
+      ${missingRef.length === 0 ? '<div style="color:var(--success);font-size:12px">全員提出済み！</div>'
+        : `<div style="display:flex;flex-wrap:wrap;gap:3px">${missingRef.map(u =>
+          `<span class="missing-chip" style="font-size:11px;padding:2px 6px">${u.student_number} ${escHtml(u.name)}</span>`).join('')}</div>`}
+    </div>`;
+
+  // --- 未コメント（先生が返信していない直近5件） ---
+  const recentUncommented = [...uncommentedDiaries.map(d => ({type:'📝',id:d.id,name:getStudentName(d.student_id),num:getStudentNum(d.student_id),date:d.created_at,preview:(d.content||'').slice(0,50)})),
+                              ...uncommentedRefs.map(r => ({type:'🔄',id:r.id,name:getStudentName(r.student_id),num:getStudentNum(r.student_id),date:r.created_at,preview:(r.content||'').slice(0,50)}))
+  ].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0,8);
+
+  const uncommentedHtml = recentUncommented.length > 0
+    ? recentUncommented.map(u => `<div style="display:flex;gap:6px;align-items:baseline;padding:3px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <span>${u.type}</span>
+        <span style="font-weight:700;min-width:80px">${u.num}番 ${escHtml(u.name)}</span>
+        <span style="color:var(--text2);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escHtml(u.preview)}</span>
+        <span style="color:var(--text2);font-size:10px">${fmtDate(u.date)}</span>
+      </div>`).join('')
+    : '<div style="color:var(--success);padding:8px;text-align:center;font-size:12px">全てコメント済み！</div>';
+
+  // --- 児童カード ---
   const cardsHtml = DB.users.map(u => {
     const sid = getStudentId(u);
     const dCount = diaryCountMap[sid] || 0;
     const rCount = refCountMap[sid] || 0;
     const streak = u.streak || u.login_streak || 0;
-    const selected = selectedStudentId === sid ? ' selected' : '';
+    const didToday = todayDiaryIds.has(sid) || todayRefIds.has(sid);
     return `
-      <div class="student-card${selected}" onclick="selectStudent('${sid}')">
+      <div class="student-card" onclick="selectStudent('${sid}');currentTab='diary';document.querySelectorAll('.tab').forEach(t=>{t.classList.toggle('active',t.dataset.tab==='diary')});render()">
         <div class="sc-top">
-          <div class="sc-num">${u.student_number || '?'}</div>
+          <div class="sc-num" style="${didToday ? 'background:var(--success)' : ''}">${u.student_number || '?'}</div>
           <div>
             <div class="sc-name">${escHtml(u.name)}</div>
             <div class="sc-lv">Lv.${u.level || 1} / ${u.exp || 0} EXP</div>
@@ -514,13 +607,26 @@ function renderDashboard() {
         <div class="sc-streak ${streak >= 3 ? 'hot' : 'cold'}">
           ${streak >= 3 ? '🔥' : '📝'} ストリーク: ${streak}日
         </div>
-      </div>
-    `;
+      </div>`;
   }).join('');
 
-  return statsHtml + `
-    ${activeFilterHtml()}
-    <div class="grid-4" style="margin-top:8px">${cardsHtml}</div>
+  return `${statsHtml}
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="card">
+        <div class="card-header"><h3 style="font-size:13px;font-weight:700">📋 今日のアクティビティ (${todayAll.length}件)</h3></div>
+        <div class="card-body" style="max-height:280px;overflow-y:auto;padding:8px 12px">${activityHtml}</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3 style="font-size:13px;font-weight:700">⚠️ 未提出</h3></div>
+        <div class="card-body" style="padding:8px 12px">${missingHtml}</div>
+      </div>
+    </div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><h3 style="font-size:13px;font-weight:700">💬 未コメント (${recentUncommented.length}件)</h3></div>
+      <div class="card-body" style="padding:8px 12px">${uncommentedHtml}</div>
+    </div>
+    <h3 style="font-size:13px;font-weight:700;margin-bottom:6px">👤 児童一覧 <span style="font-size:11px;color:var(--text2);font-weight:400">（クリックで日記タブへ）</span></h3>
+    <div class="grid-4">${cardsHtml}</div>
   `;
 }
 
@@ -580,7 +686,7 @@ function renderDiary() {
     const cardId = 'dc-' + idx;
 
     return `
-      <div class="entry-card" style="border-left-color:${isChecked ? 'var(--warning)' : 'var(--primary)'}">
+      <div class="entry-card">
         <div class="ec-header">
           <span>
             <input type="checkbox" class="ec-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDiaryCheck('${d.id}');render()">
@@ -588,14 +694,13 @@ function renderDiary() {
           </span>
           <span class="ec-date">${fmtDateTime(d.created_at)}</span>
         </div>
-        <div class="ec-content">${escHtml(d.content)}</div>
-        <div class="ec-comment-area">
-          ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+        <div class="ec-content" onclick="toggleCommentInput('${cardId}')" style="cursor:pointer">${escHtml(d.content)}</div>
+        ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+        <div class="ec-comment-area" id="${cardId}-area" style="display:none">
           <div class="ec-input-row">
-            <textarea id="${cardId}" rows="1" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
-            <button onclick="saveDiaryCommentCard('${d.id}','${cardId}',this)">送信</button>
+            <textarea id="${cardId}" rows="1" placeholder="${cmt ? '新しいコメントで上書き...' : 'コメントを入力...'}">${cmt ? '' : ''}</textarea>
+            <button onclick="saveDiaryCommentCard('${d.id}','${cardId}',this)">${cmt ? '更新' : '送信'}</button>
           </div>
-          <div class="ec-saved" id="${cardId}-ok">✓ 保存しました</div>
         </div>
       </div>`;
   }).join('');
@@ -624,6 +729,7 @@ async function saveDiaryCommentCard(diaryId, textareaId, btn) {
   const textarea = document.getElementById(textareaId);
   if (!textarea) return;
   const comment = textarea.value.trim();
+  if (!comment) { showToast('コメントを入力してください', 'error'); return; }
   const oldText = btn.textContent;
   btn.textContent = '...';
   btn.disabled = true;
@@ -632,9 +738,8 @@ async function saveDiaryCommentCard(diaryId, textareaId, btn) {
     const d = DB.diaries.find(x => String(x.id) === String(diaryId));
     if (d) d.teacher_comment = comment;
     gasAddComment('diary', diaryId, comment);
-    const ok = document.getElementById(textareaId + '-ok');
-    if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 2000); }
     showToast('コメントを保存しました');
+    render();
   } catch (e) {
     showToast('保存エラー: ' + e.message, 'error');
   }
@@ -778,15 +883,14 @@ function renderReflection() {
             ${zoneHtml}
           </div>
           ${r.plan ? `<div style="font-size:11px;color:#166534;background:rgba(22,101,52,.06);padding:3px 8px;border-radius:4px;margin-bottom:4px">📋 ${escHtml(r.plan)}</div>` : ''}
-          <div class="ec-content">${escHtml(r.content)}</div>
+          <div class="ec-content" onclick="toggleCommentInput('${cardId}')" style="cursor:pointer">${escHtml(r.content)}</div>
           ${starHtml}
-          <div class="ec-comment-area">
-            ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+          ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+          <div class="ec-comment-area" id="${cardId}-area" style="display:none">
             <div class="ec-input-row">
-              <textarea id="${cardId}" rows="1" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
-              <button onclick="saveRefComment('${r.id}','${cardId}',this)">送信</button>
+              <textarea id="${cardId}" rows="1" placeholder="${cmt ? '新しいコメントで上書き...' : 'コメントを入力...'}">${cmt ? '' : ''}</textarea>
+              <button onclick="saveRefComment('${r.id}','${cardId}',this)">${cmt ? '更新' : '送信'}</button>
             </div>
-            <div class="ec-saved" id="${cardId}-ok">✓ 保存しました</div>
           </div>
         </div>`;
     }).join('');
@@ -805,6 +909,7 @@ async function saveRefComment(refId, textareaId, btn) {
   const textarea = document.getElementById(textareaId);
   if (!textarea) return;
   const comment = textarea.value.trim();
+  if (!comment) { showToast('コメントを入力してください', 'error'); return; }
   const oldText = btn.textContent;
   btn.textContent = '...';
   btn.disabled = true;
@@ -813,9 +918,8 @@ async function saveRefComment(refId, textareaId, btn) {
     const r = DB.reflections.find(x => String(x.id) === String(refId));
     if (r) r.teacher_comment = comment;
     gasAddComment('reflection', refId, comment);
-    const ok = document.getElementById(textareaId + '-ok');
-    if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 2000); }
     showToast('コメントを保存しました');
+    render();
   } catch (e) {
     showToast('保存エラー: ' + e.message, 'error');
   }
@@ -1050,9 +1154,34 @@ function clearNewsletter() {
 // 5. Missing
 // ============================================================
 function renderMissing() {
-  const { missingDiary, missingReflection } = getMissing();
-  const today = new Date();
-  const dateStr = `${today.getMonth()+1}月${today.getDate()}日`;
+  const today = todayStr();
+  const todayDate = new Date();
+  const dateStr = `${todayDate.getMonth()+1}月${todayDate.getDate()}日`;
+
+  // 日記
+  const todayDiaryIds = new Set(DB.diaries.filter(d => d.created_at && d.created_at.startsWith(today)).map(d => d.student_id));
+  const missingDiary = DB.users.filter(u => !todayDiaryIds.has(getStudentId(u)));
+
+  // 振り返り（時間目・教科別）
+  let todayRefs = DB.reflections.filter(r => r.created_at && r.created_at.startsWith(today));
+  let refFilterLabel = '振り返り未提出';
+  if (missingPeriod) {
+    todayRefs = todayRefs.filter(r => r.period === missingPeriod);
+    refFilterLabel = missingPeriod + '時間目 未提出';
+  }
+  if (missingSubject) {
+    todayRefs = todayRefs.filter(r => r.subject === missingSubject);
+    refFilterLabel = (missingPeriod ? missingPeriod + '時間目 ' : '') + missingSubject + ' 未提出';
+  }
+  const filteredRefIds = new Set(todayRefs.map(r => r.student_id));
+  const missingReflection = DB.users.filter(u => !filteredRefIds.has(getStudentId(u)));
+
+  const periodChips = ['1','2','3','4','5','6'].map(p =>
+    `<span class="chip${missingPeriod===p?' active':''}" onclick="missingPeriod=missingPeriod==='${p}'?'':'${p}';render()" style="padding:2px 10px">${p}時間目</span>`
+  ).join('');
+  const subjectChipsMissing = SUBJECTS.map(s =>
+    `<span class="chip${missingSubject===s?' active':''}" onclick="missingSubject=missingSubject==='${s}'?'':'${s}';render()" style="padding:2px 10px">${s}</span>`
+  ).join('');
 
   return `
     <h2 style="font-size:16px;font-weight:700;margin-bottom:12px">📋 ${dateStr} 未提出一覧</h2>
@@ -1064,7 +1193,13 @@ function renderMissing() {
       }
     </div>
     <div class="missing-section" style="margin-top:16px">
-      <h3>📖 振り返り未提出 <span class="badge badge-red" style="font-size:12px;padding:2px 8px;border-radius:8px">${missingReflection.length}人</span></h3>
+      <h3>📖 ${escHtml(refFilterLabel)} <span class="badge badge-red" style="font-size:12px;padding:2px 8px;border-radius:8px">${missingReflection.length}人</span></h3>
+      <div style="margin:8px 0">
+        <div style="margin-bottom:4px;font-size:12px;font-weight:600;color:var(--text2)">時間目で絞り込み:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px">${periodChips}</div>
+        <div style="margin-bottom:4px;font-size:12px;font-weight:600;color:var(--text2)">教科で絞り込み:</div>
+        <div style="display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px">${subjectChipsMissing}</div>
+      </div>
       ${missingReflection.length === 0
         ? '<p style="color:var(--success);font-weight:600;padding:6px 0">全員提出済み！</p>'
         : `<div class="missing-grid">${missingReflection.map(u => `<div class="missing-chip">${u.student_number}番 ${escHtml(u.name)}</div>`).join('')}</div>`
