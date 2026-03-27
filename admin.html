@@ -561,50 +561,46 @@ function renderDiary() {
   diaries = sortDiaries(diaries);
   const checkedIds = getCheckedDiaries();
 
-  const rowsHtml = diaries.length === 0
-    ? `<tr><td colspan="5" style="color:var(--text2);padding:16px;text-align:center">日記がありません</td></tr>`
-    : diaries.map(d => {
-      const cmt = d.teacher_comment || '';
-      const isChecked = checkedIds.includes(String(d.id));
-      return `
-        <tr class="${isChecked ? 'checked-row' : ''}">
-          <td class="col-check"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDiaryCheck('${d.id}');render()"></td>
-          <td class="col-date">${fmtDate(d.created_at)}</td>
-          <td class="col-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</td>
-          <td class="col-content">${escHtml(d.content)}</td>
-          <td class="col-comment">
-            <div class="inline-comment">
-              <input type="text" id="dc-${d.id}" value="${escHtml(cmt)}" placeholder="コメント...">
-              <button onclick="saveDiaryComment('${d.id}')">保存</button>
-              <span class="saved" id="ds-${d.id}">OK</span>
-            </div>
-          </td>
-        </tr>
-      `;
-    }).join('');
+  if (diaries.length === 0) {
+    return `<div class="filter-bar">${activeFilterHtml()}</div><div style="color:var(--text2);text-align:center;padding:30px">日記がありません</div>`;
+  }
 
-  return `
+  const sortBar = `
     <div class="filter-bar">
       ${activeFilterHtml()}
       <span style="color:var(--text2);font-size:12px">${diaries.length}件</span>
-    </div>
-    <div class="card">
-      <div style="overflow-x:auto">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-check"></th>
-              <th class="sortable" onclick="toggleDiarySort('date')">日付${sortArrow(diarySortKey,'date',diarySortAsc)}</th>
-              <th class="sortable" onclick="toggleDiarySort('name')">名前${sortArrow(diarySortKey,'name',diarySortAsc)}</th>
-              <th>内容</th>
-              <th>コメント</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
+      <button class="btn btn-sm btn-outline" onclick="toggleDiarySort('date')">日付順 ${sortArrow(diarySortKey,'date',diarySortAsc)}</button>
+      <button class="btn btn-sm btn-outline" onclick="toggleDiarySort('name')">名前順 ${sortArrow(diarySortKey,'name',diarySortAsc)}</button>
     </div>
   `;
+
+  const cardsHtml = diaries.map((d, idx) => {
+    const cmt = d.teacher_comment || '';
+    const isChecked = checkedIds.includes(String(d.id));
+    const cardId = 'dc-' + idx;
+
+    return `
+      <div class="entry-card" style="border-left-color:${isChecked ? 'var(--warning)' : 'var(--primary)'}">
+        <div class="ec-header">
+          <span>
+            <input type="checkbox" class="ec-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDiaryCheck('${d.id}');render()">
+            <span class="ec-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</span>
+          </span>
+          <span class="ec-date">${fmtDateTime(d.created_at)}</span>
+        </div>
+        <div class="ec-content">${escHtml(d.content)}</div>
+        <div class="ec-comment-area">
+          ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+          <div class="ec-input-row">
+            <textarea id="${cardId}" rows="1" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
+            <button onclick="saveDiaryCommentCard('${d.id}','${cardId}',this)">送信</button>
+          </div>
+          <div class="ec-saved" id="${cardId}-ok">✓ 保存しました</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  return `${sortBar}<div class="grid-3">${cardsHtml}</div>`;
 }
 
 async function saveDiaryComment(id) {
@@ -622,6 +618,28 @@ async function saveDiaryComment(id) {
   } catch (e) {
     showToast('保存エラー: ' + e.message, 'error');
   }
+}
+
+async function saveDiaryCommentCard(diaryId, textareaId, btn) {
+  const textarea = document.getElementById(textareaId);
+  if (!textarea) return;
+  const comment = textarea.value.trim();
+  const oldText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    await supaUpdate('diaries', diaryId, { teacher_comment: comment });
+    const d = DB.diaries.find(x => String(x.id) === String(diaryId));
+    if (d) d.teacher_comment = comment;
+    gasAddComment('diary', diaryId, comment);
+    const ok = document.getElementById(textareaId + '-ok');
+    if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 2000); }
+    showToast('コメントを保存しました');
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  }
+  btn.textContent = oldText;
+  btn.disabled = false;
 }
 
 // ============================================================
@@ -775,7 +793,7 @@ function renderReflection() {
 
   return `${subjectChips}${viewToggle}
     <div class="filter-bar">${activeFilterHtml()}<span style="color:var(--text2);font-size:12px">${refs.length}件</span></div>
-    ${cardsHtml}`;
+    <div class="grid-3">${cardsHtml}</div>`;
 }
 
 function setSubjectFilter(subject) {
