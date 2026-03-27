@@ -189,6 +189,7 @@ const MyPage = {
           <div class="stat-label">合計投稿</div>
         </div>
       </div>
+
     `;
   }
 };

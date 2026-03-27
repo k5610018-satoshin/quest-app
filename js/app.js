@@ -9,21 +9,24 @@ const App = {
 
   /**
    * アプリ初期化
+   * 優先順位: URLパラメータ > localStorage > 出席番号選択画面
    */
   async init() {
-    // URLパラメータから出席番号を取得
     const params = new URLSearchParams(window.location.search);
     const studentNum = params.get('student');
+    const saved = localStorage.getItem('quest_student_number');
 
     if (studentNum) {
       await this.loginByNumber(parseInt(studentNum));
+    } else if (saved) {
+      await this.loginByNumber(parseInt(saved));
     } else {
       this.showScreen('select');
     }
   },
 
   /**
-   * 出席番号でログイン
+   * 出席番号でログイン → localStorageに保存
    */
   async loginByNumber(num) {
     this.showLoading('冒険者を確認中...');
@@ -32,12 +35,15 @@ const App = {
 
     if (result.success) {
       this.currentStudent = result.student;
+      localStorage.setItem('quest_student_number', num);
       await this.showHome();
     } else {
       this.showError(result.error || 'ログインに失敗しました');
+      localStorage.removeItem('quest_student_number');
       this.showScreen('select');
     }
   },
+
 
   /**
    * ホーム画面を表示（freshがtrueならAPI再取得、falseならキャッシュで即表示）
