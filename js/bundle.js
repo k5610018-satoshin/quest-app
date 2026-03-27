@@ -514,7 +514,7 @@ const App = {
   renderHomeDiaries() {
     const body = document.getElementById('home-tab-body');
     if (!body || this.homeTab !== 'diaries') return;
-    const diaries = this.homeDiaries || [];
+    const diaries = (this.homeDiaries || []).slice().reverse();
     if (diaries.length === 0) { body.innerHTML = '<div class="history-empty">まだ日記がありません</div>'; return; }
 
     const days = ['日','月','火','水','木','金','土'];
@@ -579,7 +579,7 @@ const App = {
     const refs = this.homeRefs || [];
     const mats = this.homeMats || [];
 
-    const filtered = this.homeRefSubject ? refs.filter(r => r.subject === this.homeRefSubject) : refs;
+    const filtered = (this.homeRefSubject ? refs.filter(r => r.subject === this.homeRefSubject) : refs).slice().reverse();
     if (filtered.length === 0) {
       list.innerHTML = '<div class="history-empty">まだ振り返りがありません</div>';
       return;
@@ -1164,7 +1164,7 @@ const Reflection = {
       return;
     }
 
-    const filtered = this.pastRefs.filter(r => r.subject === subject);
+    const filtered = this.pastRefs.filter(r => r.subject === subject).slice().reverse();
     if (filtered.length === 0) {
       section.innerHTML = `<div class="ref-past-head">📖 ${App.escapeHtml(subject)} の過去の記録</div><div class="history-empty">まだありません</div>`;
       return;

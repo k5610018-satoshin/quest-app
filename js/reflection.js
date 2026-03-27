@@ -126,7 +126,7 @@ const Reflection = {
       return;
     }
 
-    const filtered = this.pastRefs.filter(r => r.subject === subject);
+    const filtered = this.pastRefs.filter(r => r.subject === subject).slice().reverse();
     if (filtered.length === 0) {
       section.innerHTML = `<div class="ref-past-head">📖 ${App.escapeHtml(subject)} の過去の記録</div><div class="history-empty">まだありません</div>`;
       return;
