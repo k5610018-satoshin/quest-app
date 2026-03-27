@@ -102,11 +102,12 @@ const Weekly = {
     return diaries.map(diary => {
       const dt = new Date((diary.createdAt || '').replace(' ', 'T'));
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const gachaName = App.resolveGachaName(diary.gachaResult);
       return `
         <div class="wk-card wk-diary-card">
           <div class="wk-card-head">
             <span class="wk-card-date">${dateStr}</span>
-            ${diary.gachaResult ? '<span class="wk-gacha">🎰 ' + this.esc(diary.gachaResult) + '</span>' : ''}
+            ${gachaName ? '<span class="wk-gacha">🎰 ' + this.esc(gachaName) + '</span>' : ''}
             <span class="wk-exp">+${diary.expEarned || 10} EXP</span>
           </div>
           <div class="wk-card-body">${this.esc(diary.content || '')}</div>
@@ -175,7 +176,7 @@ const Weekly = {
         html += `<div class="wk-card wk-ref-card">
           <div class="wk-card-head">
             <span class="wk-card-date">${dateStr} ${r.period ? r.period + '時間目' : ''}</span>
-            ${r.types ? '<span class="wk-card-types">' + r.types + '</span>' : ''}
+            ${r.types ? '<span class="wk-card-types">' + this.esc(r.types) + '</span>' : ''}
             <span class="wk-exp">+${r.expEarned || 5} EXP</span>
           </div>
           ${r.plan ? '<div class="wk-card-plan">📋 ' + this.esc(r.plan) + '</div>' : ''}
@@ -318,6 +319,9 @@ const Weekly = {
     const content = document.getElementById('weekly-content')?.value?.trim();
     if (!content) return App.showError('振り返りを入力してください');
 
+    // 送信前にテキストを退避（エラー時の復元用）
+    const savedContent = content;
+
     const d = this.weekData;
     const section = document.querySelector('.weekly-review-section');
     section.innerHTML = `
@@ -337,6 +341,14 @@ const Weekly = {
       if (result.leveledUp) App.showLevelUpBanner(result.oldLevel, result.newLevel);
     } else {
       App.showError(result.error || '送信に失敗しました');
+      // エラー時: テキストエリアを復元して再送信可能にする
+      section.innerHTML = `
+        <p class="wk-review-hint">今週がんばったこと、来週がんばりたいこと、気づいたことを書こう</p>
+        <textarea id="weekly-content" class="ref-textarea" rows="4"
+          placeholder="今週の振り返りを書いてね"></textarea>
+        <button class="submit-btn" onclick="Weekly.submit()">📊 今週の振り返りを送信 (+5 EXP)</button>
+      `;
+      document.getElementById('weekly-content').value = savedContent;
     }
   },
 

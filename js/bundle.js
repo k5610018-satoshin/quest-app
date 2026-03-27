@@ -298,8 +298,8 @@ const App = {
 
     if (result.success) {
       this.currentStudent = result.student;
-      localStorage.setItem('quest_access_token', token);
-      localStorage.setItem('quest_student_cache', JSON.stringify(result.student));
+      this.safeSetItem('quest_access_token', token);
+      this.safeSetItem('quest_student_cache', JSON.stringify(result.student));
       if (window.location.search.includes('token=')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -313,12 +313,11 @@ const App = {
       this.hideLoading();
     } else {
       this.hideLoading();
-      if (!cached) {
-        this.showError('トークンが無効です。先生に確認してください。');
-        localStorage.removeItem('quest_access_token');
-        localStorage.removeItem('quest_student_cache');
-        this.showScreen('select');
-      }
+      this.showError('トークンが無効です。先生に確認してください。');
+      localStorage.removeItem('quest_access_token');
+      localStorage.removeItem('quest_student_cache');
+      this.currentStudent = null;
+      this.showScreen('select');
     }
   },
 
@@ -351,7 +350,7 @@ const App = {
 
       if (result.success) {
         this.currentStudent = { ...this.currentStudent, ...result.status };
-        localStorage.setItem('quest_student_cache', JSON.stringify(this.currentStudent));
+        this.safeSetItem('quest_student_cache', JSON.stringify(this.currentStudent));
         this.renderHome(result.status);
         this.showScreen('home');
       } else {
@@ -483,8 +482,8 @@ const App = {
       ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) && !localStorage.getItem('quest_new_items_seen') ? `
         <div class="new-items-banner">
           <span>🎁 新しいアイテムが${status.newItemCount || status.recentNewItems.length}個！</span>
-          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
-          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
+          <button onclick="App.safeSetItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
+          <button onclick="App.safeSetItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
         </div>
       ` : ''}
     `;
@@ -511,10 +510,11 @@ const App = {
     body.innerHTML = '<div class="home-history-scroll">' + diaries.map(d => {
       const dt = new Date((d.createdAt || '').replace(' ', 'T'));
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const gachaName = this.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${d.gachaResult ? '<span class="history-gacha">🎰 ' + this.escapeHtml(d.gachaResult) + '</span>' : ''}
+          ${gachaName ? '<span class="history-gacha">🎰 ' + this.escapeHtml(gachaName) + '</span>' : ''}
           <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${this.escapeHtml(d.content || '')}</div>
@@ -592,7 +592,7 @@ const App = {
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
           <span class="history-subject">${this.escapeHtml(r.subject || '')}</span>
-          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+          ${r.types ? '<span class="history-types">' + this.escapeHtml(r.types) + '</span>' : ''}
           <span class="history-exp">+${r.expEarned || 5}</span>
         </div>
         ${r.plan ? '<div class="history-plan">📋 ' + this.escapeHtml(r.plan) + '</div>' : ''}
@@ -680,9 +680,6 @@ const App = {
       case 'reflection':
         Reflection.init();
         break;
-      case 'matrix':
-        Matrix.init();
-        break;
       case 'weekly':
         Weekly.init();
         break;
@@ -718,7 +715,7 @@ const App = {
     if (toast) {
       toast.textContent = msg;
       toast.className = 'toast error active';
-      setTimeout(() => toast.classList.remove('active'), 3000);
+      setTimeout(() => toast.classList.remove('active'), 5000);
     }
   },
 
@@ -731,10 +728,42 @@ const App = {
     }
   },
 
+  /** localStorage.setItem のQuotaExceeded安全ラッパー */
+  safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      // QuotaExceededError: 容量超過時はキャッシュを消して再試行
+      console.warn('localStorage quota exceeded, clearing cache', e);
+      try {
+        localStorage.removeItem('quest_student_cache');
+        localStorage.removeItem('quest_new_items_seen');
+        localStorage.setItem(key, value);
+      } catch (e2) {
+        console.error('localStorage write failed after cleanup', e2);
+      }
+    }
+  },
+
   escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  /**
+   * ガチャ結果ID → モンスター名に変換
+   * GASはgachaResultにモンスターID('mon_001')か'miss'を保存する。
+   * 表示時にCLIENT_GACHAテーブルで名前に変換し、missは非表示にする。
+   */
+  resolveGachaName(gachaId) {
+    if (!gachaId || gachaId === 'miss') return null;
+    if (typeof CLIENT_GACHA !== 'undefined') {
+      const mon = CLIENT_GACHA.find(m => m.id === gachaId);
+      if (mon) return mon.name;
+    }
+    // IDがテーブルにない場合はそのまま返す（将来モンスター追加時のフォールバック）
+    return gachaId;
   },
 
   /** EXPからレベルを計算 */
@@ -891,10 +920,11 @@ const Diary = {
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
       const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
 
+      const gachaName = App.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${d.gachaResult ? '<span class="history-gacha">🎰</span>' : ''}
+          ${gachaName ? '<span class="history-gacha">🎰 ' + esc(gachaName) + '</span>' : ''}
           <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${esc(d.content || '')}</div>
@@ -933,6 +963,13 @@ const Diary = {
       this.updateWithServerResult(result);
     } else {
       App.showError('保存エラー: ' + (result.error || ''));
+      // エラー時: 入力フォームを復元し、再送信可能にする
+      const formEl = document.querySelector('.diary-form');
+      const areaEl = document.getElementById('diary-result');
+      if (formEl) formEl.style.display = '';
+      if (areaEl) areaEl.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = alreadyDone ? '📮 日記を追加する' : '📮 送信してガチャを引く！';
     }
   },
 
@@ -1003,6 +1040,8 @@ const Diary = {
   },
 
   goHome() {
+    App.homeDiaries = null;
+    App.homeRefs = null;
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
     const baseExp = s.diaryDoneToday ? 5 : 10;
@@ -1013,14 +1052,14 @@ const Diary = {
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.diaryDoneToday = true;
     s.expToNext = App.calcExpToNext(s.totalExp);
-    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.safeSetItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
     if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;
-        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.safeSetItem('quest_student_cache', JSON.stringify(r.student));
         App.renderHome(r.student);
       }
     });
@@ -1081,7 +1120,7 @@ const Reflection = {
             <button class="back-link" onclick="App.showHome(false)">← ホーム</button>
           </div>
           <div class="ref-chip-section">
-            <div class="ref-chip-label">教科</div>
+            <div class="ref-chip-label">教科（えらんでね）</div>
             <div class="ref-chips" id="ref-subject-chips">
               ${CONFIG.subjects.map(s => `<button class="ref-chip" data-value="${s}" onclick="Reflection.selectSubject(this)">${s}</button>`).join('')}
             </div>
@@ -1175,7 +1214,7 @@ const Reflection = {
         return `<div class="history-card history-ref">
           <div class="history-card-head">
             <span class="history-date">${dateStr}</span>
-            ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+            ${r.types ? '<span class="history-types">' + esc(r.types) + '</span>' : ''}
           </div>
           ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
           <div class="history-card-body">${esc(r.content || '')}</div>
@@ -1213,6 +1252,11 @@ const Reflection = {
     this.canvas = document.getElementById('matrix-canvas');
     this.ctx = this.canvas.getContext('2d');
 
+    // 前回のresizeリスナーを解除してリークを防止
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+    }
+
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
@@ -1223,6 +1267,7 @@ const Reflection = {
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.drawPoints();
     };
+    this._resizeHandler = resize;
     resize();
     window.addEventListener('resize', resize);
 
@@ -1405,8 +1450,16 @@ const Reflection = {
       result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
-    if (result.success) { this.updateWithServerResult(result); }
-    else { App.showError('保存エラー: ' + (result.error || '')); }
+    if (result.success) {
+      this.updateWithServerResult(result);
+    } else {
+      App.showError('保存エラー: ' + (result.error || ''));
+      // エラー時: 結果オーバーレイを隠し、送信ボタンを復帰
+      const area = document.getElementById('ref-result');
+      if (area) area.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = '✏️ 振り返り＋マトリクスを送信';
+    }
   },
 
   getZoneSequence() {
@@ -1454,6 +1507,8 @@ const Reflection = {
 
   goHome() {
     document.getElementById('ref-result').style.display = 'none';
+    App.homeDiaries = null;
+    App.homeRefs = null;
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
     const content = document.getElementById('ref-content')?.value || '';
@@ -1468,14 +1523,14 @@ const Reflection = {
     s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.expToNext = App.calcExpToNext(s.totalExp);
-    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.safeSetItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
     if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;
-        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.safeSetItem('quest_student_cache', JSON.stringify(r.student));
         App.renderHome(r.student);
       }
     });
@@ -1852,7 +1907,12 @@ const SkillTree = {
 
     const result = await API.getSkillTree(App.currentStudent.studentId);
     if (!result.success) {
-      el.innerHTML += `<div class="error-msg">${result.error}</div>`;
+      el.innerHTML = `
+        <div class="screen-header">
+          <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
+          <h2>⚔️ スキルツリー</h2>
+        </div>
+        <div class="error-msg">${result.error}</div>`;
       return;
     }
 
@@ -1909,7 +1969,12 @@ const Collection = {
 
     const result = await API.getCollection(App.currentStudent.studentId);
     if (!result.success) {
-      el.innerHTML += `<div class="error-msg">${result.error}</div>`;
+      el.innerHTML = `
+        <div class="screen-header">
+          <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
+          <h2>📖 コレクション図鑑</h2>
+        </div>
+        <div class="error-msg">${result.error}</div>`;
       return;
     }
 
@@ -2131,11 +2196,12 @@ const Weekly = {
     return diaries.map(diary => {
       const dt = new Date((diary.createdAt || '').replace(' ', 'T'));
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const gachaName = App.resolveGachaName(diary.gachaResult);
       return `
         <div class="wk-card wk-diary-card">
           <div class="wk-card-head">
             <span class="wk-card-date">${dateStr}</span>
-            ${diary.gachaResult ? '<span class="wk-gacha">🎰 ' + this.esc(diary.gachaResult) + '</span>' : ''}
+            ${gachaName ? '<span class="wk-gacha">🎰 ' + this.esc(gachaName) + '</span>' : ''}
             <span class="wk-exp">+${diary.expEarned || 10} EXP</span>
           </div>
           <div class="wk-card-body">${this.esc(diary.content || '')}</div>
@@ -2204,7 +2270,7 @@ const Weekly = {
         html += `<div class="wk-card wk-ref-card">
           <div class="wk-card-head">
             <span class="wk-card-date">${dateStr} ${r.period ? r.period + '時間目' : ''}</span>
-            ${r.types ? '<span class="wk-card-types">' + r.types + '</span>' : ''}
+            ${r.types ? '<span class="wk-card-types">' + this.esc(r.types) + '</span>' : ''}
             <span class="wk-exp">+${r.expEarned || 5} EXP</span>
           </div>
           ${r.plan ? '<div class="wk-card-plan">📋 ' + this.esc(r.plan) + '</div>' : ''}
@@ -2347,6 +2413,9 @@ const Weekly = {
     const content = document.getElementById('weekly-content')?.value?.trim();
     if (!content) return App.showError('振り返りを入力してください');
 
+    // 送信前にテキストを退避（エラー時の復元用）
+    const savedContent = content;
+
     const d = this.weekData;
     const section = document.querySelector('.weekly-review-section');
     section.innerHTML = `
@@ -2366,6 +2435,14 @@ const Weekly = {
       if (result.leveledUp) App.showLevelUpBanner(result.oldLevel, result.newLevel);
     } else {
       App.showError(result.error || '送信に失敗しました');
+      // エラー時: テキストエリアを復元して再送信可能にする
+      section.innerHTML = `
+        <p class="wk-review-hint">今週がんばったこと、来週がんばりたいこと、気づいたことを書こう</p>
+        <textarea id="weekly-content" class="ref-textarea" rows="4"
+          placeholder="今週の振り返りを書いてね"></textarea>
+        <button class="submit-btn" onclick="Weekly.submit()">📊 今週の振り返りを送信 (+5 EXP)</button>
+      `;
+      document.getElementById('weekly-content').value = savedContent;
     }
   },
 

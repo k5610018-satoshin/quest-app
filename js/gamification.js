@@ -16,7 +16,12 @@ const SkillTree = {
 
     const result = await API.getSkillTree(App.currentStudent.studentId);
     if (!result.success) {
-      el.innerHTML += `<div class="error-msg">${result.error}</div>`;
+      el.innerHTML = `
+        <div class="screen-header">
+          <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
+          <h2>⚔️ スキルツリー</h2>
+        </div>
+        <div class="error-msg">${result.error}</div>`;
       return;
     }
 
@@ -73,7 +78,12 @@ const Collection = {
 
     const result = await API.getCollection(App.currentStudent.studentId);
     if (!result.success) {
-      el.innerHTML += `<div class="error-msg">${result.error}</div>`;
+      el.innerHTML = `
+        <div class="screen-header">
+          <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
+          <h2>📖 コレクション図鑑</h2>
+        </div>
+        <div class="error-msg">${result.error}</div>`;
       return;
     }
 

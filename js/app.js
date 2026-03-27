@@ -55,8 +55,8 @@ const App = {
 
     if (result.success) {
       this.currentStudent = result.student;
-      localStorage.setItem('quest_access_token', token);
-      localStorage.setItem('quest_student_cache', JSON.stringify(result.student));
+      this.safeSetItem('quest_access_token', token);
+      this.safeSetItem('quest_student_cache', JSON.stringify(result.student));
       if (window.location.search.includes('token=')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
@@ -70,12 +70,11 @@ const App = {
       this.hideLoading();
     } else {
       this.hideLoading();
-      if (!cached) {
-        this.showError('トークンが無効です。先生に確認してください。');
-        localStorage.removeItem('quest_access_token');
-        localStorage.removeItem('quest_student_cache');
-        this.showScreen('select');
-      }
+      this.showError('トークンが無効です。先生に確認してください。');
+      localStorage.removeItem('quest_access_token');
+      localStorage.removeItem('quest_student_cache');
+      this.currentStudent = null;
+      this.showScreen('select');
     }
   },
 
@@ -108,7 +107,7 @@ const App = {
 
       if (result.success) {
         this.currentStudent = { ...this.currentStudent, ...result.status };
-        localStorage.setItem('quest_student_cache', JSON.stringify(this.currentStudent));
+        this.safeSetItem('quest_student_cache', JSON.stringify(this.currentStudent));
         this.renderHome(result.status);
         this.showScreen('home');
       } else {
@@ -240,8 +239,8 @@ const App = {
       ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) && !localStorage.getItem('quest_new_items_seen') ? `
         <div class="new-items-banner">
           <span>🎁 新しいアイテムが${status.newItemCount || status.recentNewItems.length}個！</span>
-          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
-          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
+          <button onclick="App.safeSetItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
+          <button onclick="App.safeSetItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
         </div>
       ` : ''}
     `;
@@ -268,10 +267,11 @@ const App = {
     body.innerHTML = '<div class="home-history-scroll">' + diaries.map(d => {
       const dt = new Date((d.createdAt || '').replace(' ', 'T'));
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const gachaName = this.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${d.gachaResult ? '<span class="history-gacha">🎰 ' + this.escapeHtml(d.gachaResult) + '</span>' : ''}
+          ${gachaName ? '<span class="history-gacha">🎰 ' + this.escapeHtml(gachaName) + '</span>' : ''}
           <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${this.escapeHtml(d.content || '')}</div>
@@ -349,7 +349,7 @@ const App = {
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
           <span class="history-subject">${this.escapeHtml(r.subject || '')}</span>
-          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+          ${r.types ? '<span class="history-types">' + this.escapeHtml(r.types) + '</span>' : ''}
           <span class="history-exp">+${r.expEarned || 5}</span>
         </div>
         ${r.plan ? '<div class="history-plan">📋 ' + this.escapeHtml(r.plan) + '</div>' : ''}
@@ -437,9 +437,6 @@ const App = {
       case 'reflection':
         Reflection.init();
         break;
-      case 'matrix':
-        Matrix.init();
-        break;
       case 'weekly':
         Weekly.init();
         break;
@@ -475,7 +472,7 @@ const App = {
     if (toast) {
       toast.textContent = msg;
       toast.className = 'toast error active';
-      setTimeout(() => toast.classList.remove('active'), 3000);
+      setTimeout(() => toast.classList.remove('active'), 5000);
     }
   },
 
@@ -488,10 +485,42 @@ const App = {
     }
   },
 
+  /** localStorage.setItem のQuotaExceeded安全ラッパー */
+  safeSetItem(key, value) {
+    try {
+      localStorage.setItem(key, value);
+    } catch (e) {
+      // QuotaExceededError: 容量超過時はキャッシュを消して再試行
+      console.warn('localStorage quota exceeded, clearing cache', e);
+      try {
+        localStorage.removeItem('quest_student_cache');
+        localStorage.removeItem('quest_new_items_seen');
+        localStorage.setItem(key, value);
+      } catch (e2) {
+        console.error('localStorage write failed after cleanup', e2);
+      }
+    }
+  },
+
   escapeHtml(str) {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  /**
+   * ガチャ結果ID → モンスター名に変換
+   * GASはgachaResultにモンスターID('mon_001')か'miss'を保存する。
+   * 表示時にCLIENT_GACHAテーブルで名前に変換し、missは非表示にする。
+   */
+  resolveGachaName(gachaId) {
+    if (!gachaId || gachaId === 'miss') return null;
+    if (typeof CLIENT_GACHA !== 'undefined') {
+      const mon = CLIENT_GACHA.find(m => m.id === gachaId);
+      if (mon) return mon.name;
+    }
+    // IDがテーブルにない場合はそのまま返す（将来モンスター追加時のフォールバック）
+    return gachaId;
   },
 
   /** EXPからレベルを計算 */

@@ -53,7 +53,7 @@ const Reflection = {
             <button class="back-link" onclick="App.showHome(false)">← ホーム</button>
           </div>
           <div class="ref-chip-section">
-            <div class="ref-chip-label">教科</div>
+            <div class="ref-chip-label">教科（えらんでね）</div>
             <div class="ref-chips" id="ref-subject-chips">
               ${CONFIG.subjects.map(s => `<button class="ref-chip" data-value="${s}" onclick="Reflection.selectSubject(this)">${s}</button>`).join('')}
             </div>
@@ -147,7 +147,7 @@ const Reflection = {
         return `<div class="history-card history-ref">
           <div class="history-card-head">
             <span class="history-date">${dateStr}</span>
-            ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+            ${r.types ? '<span class="history-types">' + esc(r.types) + '</span>' : ''}
           </div>
           ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
           <div class="history-card-body">${esc(r.content || '')}</div>
@@ -185,6 +185,11 @@ const Reflection = {
     this.canvas = document.getElementById('matrix-canvas');
     this.ctx = this.canvas.getContext('2d');
 
+    // 前回のresizeリスナーを解除してリークを防止
+    if (this._resizeHandler) {
+      window.removeEventListener('resize', this._resizeHandler);
+    }
+
     const resize = () => {
       const rect = wrap.getBoundingClientRect();
       const dpr = window.devicePixelRatio || 1;
@@ -195,6 +200,7 @@ const Reflection = {
       this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       this.drawPoints();
     };
+    this._resizeHandler = resize;
     resize();
     window.addEventListener('resize', resize);
 
@@ -377,8 +383,16 @@ const Reflection = {
       result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
-    if (result.success) { this.updateWithServerResult(result); }
-    else { App.showError('保存エラー: ' + (result.error || '')); }
+    if (result.success) {
+      this.updateWithServerResult(result);
+    } else {
+      App.showError('保存エラー: ' + (result.error || ''));
+      // エラー時: 結果オーバーレイを隠し、送信ボタンを復帰
+      const area = document.getElementById('ref-result');
+      if (area) area.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = '✏️ 振り返り＋マトリクスを送信';
+    }
   },
 
   getZoneSequence() {
@@ -426,6 +440,8 @@ const Reflection = {
 
   goHome() {
     document.getElementById('ref-result').style.display = 'none';
+    App.homeDiaries = null;
+    App.homeRefs = null;
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
     const content = document.getElementById('ref-content')?.value || '';
@@ -440,14 +456,14 @@ const Reflection = {
     s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.expToNext = App.calcExpToNext(s.totalExp);
-    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.safeSetItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
     if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;
-        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.safeSetItem('quest_student_cache', JSON.stringify(r.student));
         App.renderHome(r.student);
       }
     });

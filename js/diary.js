@@ -105,10 +105,11 @@ const Diary = {
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
       const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
 
+      const gachaName = App.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${d.gachaResult ? '<span class="history-gacha">🎰</span>' : ''}
+          ${gachaName ? '<span class="history-gacha">🎰 ' + esc(gachaName) + '</span>' : ''}
           <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${esc(d.content || '')}</div>
@@ -147,6 +148,13 @@ const Diary = {
       this.updateWithServerResult(result);
     } else {
       App.showError('保存エラー: ' + (result.error || ''));
+      // エラー時: 入力フォームを復元し、再送信可能にする
+      const formEl = document.querySelector('.diary-form');
+      const areaEl = document.getElementById('diary-result');
+      if (formEl) formEl.style.display = '';
+      if (areaEl) areaEl.style.display = 'none';
+      btn.disabled = false;
+      btn.textContent = alreadyDone ? '📮 日記を追加する' : '📮 送信してガチャを引く！';
     }
   },
 
@@ -217,6 +225,8 @@ const Diary = {
   },
 
   goHome() {
+    App.homeDiaries = null;
+    App.homeRefs = null;
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
     const baseExp = s.diaryDoneToday ? 5 : 10;
@@ -227,14 +237,14 @@ const Diary = {
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.diaryDoneToday = true;
     s.expToNext = App.calcExpToNext(s.totalExp);
-    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.safeSetItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
     if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;
-        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.safeSetItem('quest_student_cache', JSON.stringify(r.student));
         App.renderHome(r.student);
       }
     });
