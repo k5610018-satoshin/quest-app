@@ -1051,14 +1051,14 @@ const Reflection = {
   pastMats: null,
 
   ZONES: [
-    { name: 'パワーアップ', center: 0 },
-    { name: '学びが生まれる', center: 45 },
-    { name: '人も自分も笑顔', center: 90 },
-    { name: 'ダラダラ', center: 135 },
-    { name: 'たいくつ・どんより', center: 180 },
-    { name: '不安・寂しい', center: 225 },
-    { name: '人も自分もイヤな顔', center: 270 },
-    { name: 'イライラ', center: 315 }
+    { name: '月', center: 0 },
+    { name: '星', center: 45 },
+    { name: '太陽', center: 90 },
+    { name: '花畑', center: 135 },
+    { name: '沼', center: 180 },
+    { name: 'ブラックホール', center: 225 },
+    { name: '曇', center: 270 },
+    { name: '雷', center: 315 }
   ],
 
   init() {
@@ -1507,14 +1507,14 @@ const Matrix = {
 
   // 8つのゾーン
   ZONES: [
-    { name: 'グングン', emoji: '🌙', center: 0, color: '#6366f1' },
-    { name: 'キラキラ', emoji: '⭐', center: 45, color: '#eab308' },
-    { name: 'ニコニコ', emoji: '☀️', center: 90, color: '#f97316' },
-    { name: 'フワフワ', emoji: '🌸', center: 135, color: '#ec4899' },
-    { name: 'ダラダラ', emoji: '💧', center: 180, color: '#94a3b8' },
-    { name: 'ドロドロ', emoji: '🌀', center: 225, color: '#78716c' },
-    { name: 'モヤモヤ', emoji: '☁️', center: 270, color: '#64748b' },
-    { name: 'イライラ', emoji: '⚡', center: 315, color: '#ef4444' }
+    { name: '月', emoji: '🌙', center: 0, color: '#6366f1' },
+    { name: '星', emoji: '⭐', center: 45, color: '#eab308' },
+    { name: '太陽', emoji: '☀️', center: 90, color: '#f97316' },
+    { name: '花畑', emoji: '🌸', center: 135, color: '#ec4899' },
+    { name: '沼', emoji: '💧', center: 180, color: '#94a3b8' },
+    { name: 'ブラックホール', emoji: '🌀', center: 225, color: '#78716c' },
+    { name: '曇', emoji: '☁️', center: 270, color: '#64748b' },
+    { name: '雷', emoji: '⚡', center: 315, color: '#ef4444' }
   ],
 
   init() {

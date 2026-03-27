@@ -13,14 +13,14 @@ const Reflection = {
   pastMats: null,
 
   ZONES: [
-    { name: 'パワーアップ', center: 0 },
-    { name: '学びが生まれる', center: 45 },
-    { name: '人も自分も笑顔', center: 90 },
-    { name: 'ダラダラ', center: 135 },
-    { name: 'たいくつ・どんより', center: 180 },
-    { name: '不安・寂しい', center: 225 },
-    { name: '人も自分もイヤな顔', center: 270 },
-    { name: 'イライラ', center: 315 }
+    { name: '月', center: 0 },
+    { name: '星', center: 45 },
+    { name: '太陽', center: 90 },
+    { name: '花畑', center: 135 },
+    { name: '沼', center: 180 },
+    { name: 'ブラックホール', center: 225 },
+    { name: '曇', center: 270 },
+    { name: '雷', center: 315 }
   ],
 
   init() {

@@ -14,14 +14,14 @@ const Matrix = {
 
   // 8つのゾーン
   ZONES: [
-    { name: 'グングン', emoji: '🌙', center: 0, color: '#6366f1' },
-    { name: 'キラキラ', emoji: '⭐', center: 45, color: '#eab308' },
-    { name: 'ニコニコ', emoji: '☀️', center: 90, color: '#f97316' },
-    { name: 'フワフワ', emoji: '🌸', center: 135, color: '#ec4899' },
-    { name: 'ダラダラ', emoji: '💧', center: 180, color: '#94a3b8' },
-    { name: 'ドロドロ', emoji: '🌀', center: 225, color: '#78716c' },
-    { name: 'モヤモヤ', emoji: '☁️', center: 270, color: '#64748b' },
-    { name: 'イライラ', emoji: '⚡', center: 315, color: '#ef4444' }
+    { name: '月', emoji: '🌙', center: 0, color: '#6366f1' },
+    { name: '星', emoji: '⭐', center: 45, color: '#eab308' },
+    { name: '太陽', emoji: '☀️', center: 90, color: '#f97316' },
+    { name: '花畑', emoji: '🌸', center: 135, color: '#ec4899' },
+    { name: '沼', emoji: '💧', center: 180, color: '#94a3b8' },
+    { name: 'ブラックホール', emoji: '🌀', center: 225, color: '#78716c' },
+    { name: '曇', emoji: '☁️', center: 270, color: '#64748b' },
+    { name: '雷', emoji: '⚡', center: 315, color: '#ef4444' }
   ],
 
   init() {
