@@ -603,8 +603,8 @@ const App = {
             <img src="assets/heart-matrix.png" class="hm-fig-img" draggable="false">
             <canvas class="hm-fig-canvas" data-points='${JSON.stringify(matPoints)}'></canvas>
           </div>
-          <div class="history-matrix">🌍 ${this.escapeHtml(mat.zoneSequence || mat.dominantZone || '')}</div>
-        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(mat.zoneSequence || mat.dominantZone || '') + '</div>' : '')}
+          <div class="history-matrix">🌍 ${this.escapeHtml(this.convertZoneName(mat.zoneSequence || mat.dominantZone || ''))}</div>
+        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(this.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : '')}
       </div>`;
     }).join('') + '</div>';
 
@@ -764,6 +764,31 @@ const App = {
     }
     // IDがテーブルにない場合はそのまま返す（将来モンスター追加時のフォールバック）
     return gachaId;
+  },
+
+  /**
+   * 旧ゾーン名 → 新ゾーン名に変換（既存データの互換用）
+   */
+  convertZoneName(name) {
+    const map = {
+      'パワーアップ': '月', 'グングン': '月',
+      '学びが生まれる': '星', 'キラキラ': '星',
+      '人も自分も笑顔': '太陽', 'ニコニコ': '太陽',
+      'ダラダラ': '花畑', 'フワフワ': '花畑',
+      'たいくつ・どんより': '沼',
+      '不安・寂しい': 'ブラックホール', 'ドロドロ': 'ブラックホール',
+      '人も自分もイヤな顔': '曇', 'モヤモヤ': '曇',
+      'イライラ': '雷',
+      '中心': '地球',
+      // matrix.jsの旧名も対応
+      'ドキドキ': '月', 'ウキウキ': '太陽', 'ホッコリ': '花畑', 'ジーン': '星'
+    };
+    if (!name) return name;
+    // ゾーン遷移文字列（→区切り）も変換
+    if (name.includes('→')) {
+      return name.split('→').map(z => map[z.trim()] || z.trim()).join('→');
+    }
+    return map[name] || name;
   },
 
   /** EXPからレベルを計算 */
@@ -1219,7 +1244,7 @@ const Reflection = {
           ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
           <div class="history-card-body">${esc(r.content || '')}</div>
           ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
-          ${mat ? '<div class="history-matrix">🌍 ' + esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+          ${mat ? '<div class="history-matrix">🌍 ' + esc(App.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : ''}
         </div>`;
       }).join('');
   },
@@ -2275,7 +2300,7 @@ const Weekly = {
           </div>
           ${r.plan ? '<div class="wk-card-plan">📋 ' + this.esc(r.plan) + '</div>' : ''}
           <div class="wk-card-body">${this.esc(r.content || '')}</div>
-          ${mat ? '<div class="wk-card-matrix">🌍 ' + this.esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+          ${mat ? '<div class="wk-card-matrix">🌍 ' + this.esc(App.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : ''}
         </div>`;
       }
       html += '</div>';
@@ -2294,11 +2319,11 @@ const Weekly = {
     // ゾーン分布集計
     const zoneCounts = {};
     for (const m of matrices) {
-      const z = m.dominantZone || m.endZone || '';
+      const z = App.convertZoneName(m.dominantZone || m.endZone || '');
       if (z) zoneCounts[z] = (zoneCounts[z] || 0) + 1;
     }
     const zoneBar = Object.entries(zoneCounts).map(([z, c]) =>
-      `<span class="wk-zone-chip">${z} ×${c}</span>`
+      `<span class="wk-zone-chip">${this.esc(z)} ×${c}</span>`
     ).join(' ');
 
     let html = `<div class="wk-matrix-summary">
@@ -2321,7 +2346,7 @@ const Weekly = {
           <img src="assets/heart-matrix.png" class="wk-matrix-img" draggable="false">
           <canvas class="wk-matrix-canvas" data-idx="${i}"></canvas>
         </div>
-        <div class="wk-matrix-trail">${this.esc(m.zoneSequence || m.dominantZone || '')}</div>
+        <div class="wk-matrix-trail">${this.esc(App.convertZoneName(m.zoneSequence || m.dominantZone || ''))}</div>
       </div>`;
     }
 

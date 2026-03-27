@@ -152,7 +152,7 @@ const Reflection = {
           ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
           <div class="history-card-body">${esc(r.content || '')}</div>
           ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
-          ${mat ? '<div class="history-matrix">🌍 ' + esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+          ${mat ? '<div class="history-matrix">🌍 ' + esc(App.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : ''}
         </div>`;
       }).join('');
   },

@@ -360,8 +360,8 @@ const App = {
             <img src="assets/heart-matrix.png" class="hm-fig-img" draggable="false">
             <canvas class="hm-fig-canvas" data-points='${JSON.stringify(matPoints)}'></canvas>
           </div>
-          <div class="history-matrix">🌍 ${this.escapeHtml(mat.zoneSequence || mat.dominantZone || '')}</div>
-        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(mat.zoneSequence || mat.dominantZone || '') + '</div>' : '')}
+          <div class="history-matrix">🌍 ${this.escapeHtml(this.convertZoneName(mat.zoneSequence || mat.dominantZone || ''))}</div>
+        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(this.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : '')}
       </div>`;
     }).join('') + '</div>';
 
@@ -521,6 +521,31 @@ const App = {
     }
     // IDがテーブルにない場合はそのまま返す（将来モンスター追加時のフォールバック）
     return gachaId;
+  },
+
+  /**
+   * 旧ゾーン名 → 新ゾーン名に変換（既存データの互換用）
+   */
+  convertZoneName(name) {
+    const map = {
+      'パワーアップ': '月', 'グングン': '月',
+      '学びが生まれる': '星', 'キラキラ': '星',
+      '人も自分も笑顔': '太陽', 'ニコニコ': '太陽',
+      'ダラダラ': '花畑', 'フワフワ': '花畑',
+      'たいくつ・どんより': '沼',
+      '不安・寂しい': 'ブラックホール', 'ドロドロ': 'ブラックホール',
+      '人も自分もイヤな顔': '曇', 'モヤモヤ': '曇',
+      'イライラ': '雷',
+      '中心': '地球',
+      // matrix.jsの旧名も対応
+      'ドキドキ': '月', 'ウキウキ': '太陽', 'ホッコリ': '花畑', 'ジーン': '星'
+    };
+    if (!name) return name;
+    // ゾーン遷移文字列（→区切り）も変換
+    if (name.includes('→')) {
+      return name.split('→').map(z => map[z.trim()] || z.trim()).join('→');
+    }
+    return map[name] || name;
   },
 
   /** EXPからレベルを計算 */

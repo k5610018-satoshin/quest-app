@@ -181,7 +181,7 @@ const Weekly = {
           </div>
           ${r.plan ? '<div class="wk-card-plan">📋 ' + this.esc(r.plan) + '</div>' : ''}
           <div class="wk-card-body">${this.esc(r.content || '')}</div>
-          ${mat ? '<div class="wk-card-matrix">🌍 ' + this.esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+          ${mat ? '<div class="wk-card-matrix">🌍 ' + this.esc(App.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : ''}
         </div>`;
       }
       html += '</div>';
@@ -200,11 +200,11 @@ const Weekly = {
     // ゾーン分布集計
     const zoneCounts = {};
     for (const m of matrices) {
-      const z = m.dominantZone || m.endZone || '';
+      const z = App.convertZoneName(m.dominantZone || m.endZone || '');
       if (z) zoneCounts[z] = (zoneCounts[z] || 0) + 1;
     }
     const zoneBar = Object.entries(zoneCounts).map(([z, c]) =>
-      `<span class="wk-zone-chip">${z} ×${c}</span>`
+      `<span class="wk-zone-chip">${this.esc(z)} ×${c}</span>`
     ).join(' ');
 
     let html = `<div class="wk-matrix-summary">
@@ -227,7 +227,7 @@ const Weekly = {
           <img src="assets/heart-matrix.png" class="wk-matrix-img" draggable="false">
           <canvas class="wk-matrix-canvas" data-idx="${i}"></canvas>
         </div>
-        <div class="wk-matrix-trail">${this.esc(m.zoneSequence || m.dominantZone || '')}</div>
+        <div class="wk-matrix-trail">${this.esc(App.convertZoneName(m.zoneSequence || m.dominantZone || ''))}</div>
       </div>`;
     }
 
