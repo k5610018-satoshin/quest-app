@@ -845,7 +845,7 @@ function renderReflection() {
         const matrix = matrixMap[r.id];
         const typeSymbols = r.types || r.detected_types || '';
         const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
-        const zoneHtml = matrix && matrix.zone ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
+        const zoneHtml = matrix && matrix.zone ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(convertZone(matrix.zone))}</span>` : '';
         const isChecked = checkedIds.includes(String(r.id));
         const starHtml = r.star_rating ? '⭐'.repeat(r.star_rating) : '';
         return `
@@ -883,7 +883,7 @@ function renderReflection() {
       const matrix = matrixMap[r.id];
       const typeSymbols = r.types || r.detected_types || '';
       const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
-      const zoneHtml = matrix && matrix.zone ? `<span class="ec-zone ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
+      const zoneHtml = matrix && matrix.zone ? `<span class="ec-zone ${getZoneClass(matrix.zone)}">${escHtml(convertZone(matrix.zone))}</span>` : '';
       const isChecked = checkedIds.includes(String(r.id));
       const starLabels = ['', 'いいね！', 'よくできたね！', '新しいね！'];
       const starHtml = r.star_rating && r.star_rating > 0
@@ -954,12 +954,29 @@ async function saveRefComment(refId, textareaId, btn) {
 // ============================================================
 // 3b. Matrix Tab (心マトリクス)
 // ============================================================
+const ZONE_MAP = {
+  'パワーアップ':'月','グングン':'月','ドキドキ':'月',
+  '学びが生まれる':'星','キラキラ':'星','ジーン':'星',
+  '人も自分も笑顔':'太陽','ニコニコ':'太陽','ウキウキ':'太陽',
+  'ダラダラ':'花畑','フワフワ':'花畑','ホッコリ':'花畑',
+  'たいくつ・どんより':'沼',
+  '不安・寂しい':'ブラックホール','ドロドロ':'ブラックホール',
+  '人も自分もイヤな顔':'曇','モヤモヤ':'曇',
+  'イライラ':'雷',
+  '中心':'地球'
+};
+function convertZone(name) {
+  if (!name) return name;
+  if (name.includes('→')) return name.split('→').map(z => ZONE_MAP[z.trim()] || z.trim()).join('→');
+  return ZONE_MAP[name] || name;
+}
 function getZoneType(zone) {
-  if (!zone) return 'mid';
-  const pos = ['学びが生まれる','パワーアップ','太陽','星'];
-  const neg = ['イライラ','ダラダラ','不安・寂しい','たいくつ・どんより','人も自分もイヤな顔','沼','ブラックホール','曇','雷'];
-  if (pos.some(p => zone.includes(p))) return 'pos';
-  if (neg.some(n => zone.includes(n))) return 'neg';
+  const z = convertZone(zone);
+  if (!z) return 'mid';
+  const pos = ['月','星','太陽'];
+  const neg = ['沼','ブラックホール','曇','雷'];
+  if (pos.includes(z)) return 'pos';
+  if (neg.includes(z)) return 'neg';
   return 'mid';
 }
 
@@ -971,7 +988,7 @@ function renderMatrixTab() {
   // ゾーン集計
   const zoneCounts = {};
   records.forEach(m => {
-    const z = m.dominant_zone || m.end_zone || '';
+    const z = convertZone(m.dominant_zone || m.end_zone || '');
     if (z) zoneCounts[z] = (zoneCounts[z] || 0) + 1;
   });
   const zoneBar = Object.entries(zoneCounts).sort((a,b) => b[1]-a[1]).map(([z,c]) =>
@@ -993,7 +1010,7 @@ function renderMatrixTab() {
           <img src="assets/heart-matrix.png" draggable="false">
           <canvas class="admin-matrix-canvas" data-midx="${i}"></canvas>
         </div>
-        <div class="mi-trail">${escHtml(m.zone_sequence || m.dominant_zone || '')}</div>
+        <div class="mi-trail">${escHtml(convertZone(m.zone_sequence || m.dominant_zone || ''))}</div>
       </div>`;
     }).join('');
 
@@ -1126,7 +1143,7 @@ function renderStudentDetail() {
 
   // ゾーン集計
   const zoneCounts = {};
-  matrices.forEach(m => { const z = m.dominant_zone || ''; if (z) zoneCounts[z] = (zoneCounts[z]||0)+1; });
+  matrices.forEach(m => { const z = convertZone(m.dominant_zone || ''); if (z) zoneCounts[z] = (zoneCounts[z]||0)+1; });
   const zoneBar = Object.entries(zoneCounts).sort((a,b)=>b[1]-a[1]).map(([z,c]) =>
     `<span class="zone-chip z-${getZoneType(z)}">${escHtml(z)} ×${c}</span>`
   ).join(' ');
