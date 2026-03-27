@@ -28,27 +28,49 @@ const App = {
 
   /**
    * トークンでログイン（メイン認証方式）
-   * getStudentByTokenが認証+ステータスを一括返却するので、showHomeのAPI再取得は不要
+   * ★高速化: localStorageにキャッシュ済みステータスがあれば即座に描画
+   *   → バックグラウンドでAPI取得して差分更新
    */
   async loginByToken(token) {
-    this.showLoading('冒険者を確認中...');
+    // キャッシュがあれば即座に描画（体感0ms）
+    const cached = localStorage.getItem('quest_student_cache');
+    if (cached) {
+      try {
+        const cachedStudent = JSON.parse(cached);
+        this.currentStudent = cachedStudent;
+        this.renderHome(cachedStudent);
+        this.showScreen('home');
+      } catch(e) { /* キャッシュ破損は無視 */ }
+    } else {
+      this.showLoading('冒険者を確認中...');
+    }
+
+    // API取得（キャッシュ表示中でもバックグラウンドで実行）
     const result = await API.getStudentByToken(token);
-    this.hideLoading();
 
     if (result.success) {
       this.currentStudent = result.student;
       localStorage.setItem('quest_access_token', token);
-      // URLからtokenパラメータを消す（履歴に残さない）
+      localStorage.setItem('quest_student_cache', JSON.stringify(result.student));
       if (window.location.search.includes('token=')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
-      // API応答にフルステータスが含まれるので、そのままホーム描画（追加API不要）
-      this.renderHome(result.student);
-      this.showScreen('home');
+      // 最新データでホーム再描画（差分が反映される）
+      if (this.currentScreen === 'home') {
+        this.renderHome(result.student);
+      } else {
+        this.renderHome(result.student);
+        this.showScreen('home');
+      }
+      this.hideLoading();
     } else {
-      this.showError('トークンが無効です。先生に確認してください。');
-      localStorage.removeItem('quest_access_token');
-      this.showScreen('select');
+      this.hideLoading();
+      if (!cached) {
+        this.showError('トークンが無効です。先生に確認してください。');
+        localStorage.removeItem('quest_access_token');
+        localStorage.removeItem('quest_student_cache');
+        this.showScreen('select');
+      }
     }
   },
 
@@ -81,6 +103,7 @@ const App = {
 
       if (result.success) {
         this.currentStudent = { ...this.currentStudent, ...result.status };
+        localStorage.setItem('quest_student_cache', JSON.stringify(this.currentStudent));
         this.renderHome(result.status);
         this.showScreen('home');
       } else {
