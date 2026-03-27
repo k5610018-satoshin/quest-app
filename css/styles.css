@@ -96,7 +96,17 @@ body {
 /* === 出席番号選択画面 === */
 .select-screen { text-align: center; padding-top: 40px; }
 .app-title { font-size: 1.8rem; margin-bottom: 8px; }
-.app-subtitle { color: var(--text-light); margin-bottom: 24px; }
+.app-subtitle { color: var(--text-light); margin-bottom: 8px; }
+.app-note {
+  color: var(--text-light);
+  font-size: 0.75rem;
+  margin-bottom: 20px;
+  line-height: 1.5;
+  background: #eef2ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  display: inline-block;
+}
 
 .number-grid {
   display: grid;
