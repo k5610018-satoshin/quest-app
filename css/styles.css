@@ -97,6 +97,30 @@ body {
   border-radius: var(--radius); padding: 8px; text-align: center; font-weight: 600; margin-bottom: 10px; font-size: 0.9rem;
 }
 
+/* ホームタブ */
+.home-tabs { display: flex; gap: 2px; margin: 6px 0 0; border-bottom: 2px solid var(--border); }
+.home-tab {
+  flex: 1; padding: 7px 4px; border: none; background: transparent;
+  font-size: 0.82rem; font-weight: bold; color: var(--text-light);
+  cursor: pointer; border-bottom: 3px solid transparent; transition: all 0.15s;
+}
+.home-tab.active { color: var(--primary); border-bottom-color: var(--primary); background: rgba(99,102,241,0.05); }
+.home-tab:hover { color: var(--primary); }
+.home-tab-body { flex: 1; overflow-y: auto; padding: 8px 0; min-height: 0; }
+.home-history-scroll { }
+.home-ref-chips { display: flex; gap: 3px; flex-wrap: wrap; margin-bottom: 8px; }
+
+/* 振り返り一覧のマトリクス図 */
+.history-matrix-fig {
+  position: relative; width: 160px; height: 160px; margin: 6px 0;
+}
+.hm-fig-img { width: 100%; height: 100%; object-fit: contain; border-radius: 6px; }
+.hm-fig-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+/* 振り返り画面: 教科別の過去記録 */
+.ref-past-section { margin-top: 6px; max-height: 200px; overflow-y: auto; }
+.ref-past-head { font-size: 0.8rem; font-weight: bold; color: var(--text-light); margin-bottom: 4px; }
+
 .main-buttons { display: flex; gap: 10px; margin-bottom: 12px; }
 .main-btn {
   flex: 1; display: flex; align-items: center; gap: 10px; padding: 14px;
@@ -188,18 +212,6 @@ body {
 }
 .history-empty { text-align: center; color: var(--text-light); padding: 20px; font-size: 0.85rem; }
 
-/* === 振り返り左パネルタブ === */
-.ref-left-tabs {
-  display: flex; gap: 2px; margin-bottom: 6px;
-}
-.ref-left-tab {
-  flex: 1; padding: 5px 4px; border: none; background: transparent;
-  font-size: 0.78rem; font-weight: bold; color: var(--text-light);
-  cursor: pointer; border-bottom: 2px solid transparent;
-}
-.ref-left-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
-.ref-left-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
-.ref-history-scroll { flex: 1; overflow-y: auto; }
 
 /* === 振り返り+マトリクス統合画面（2カラム） === */
 .ref-layout {

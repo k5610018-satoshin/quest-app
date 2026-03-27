@@ -249,6 +249,11 @@ const TYPES = {
 const App = {
   currentStudent: null,
   currentScreen: 'select',
+  homeTab: 'main',
+  homeDiaries: null,
+  homeRefs: null,
+  homeMats: null,
+  homeRefSubject: null,
 
   /**
    * アプリ初期化
@@ -388,6 +393,38 @@ const App = {
         </div>
       </div>
 
+      <!-- ホームタブ -->
+      <div class="home-tabs">
+        <button class="home-tab ${this.homeTab==='main'?'active':''}" onclick="App.switchHomeTab('main')">🏠 ホーム</button>
+        <button class="home-tab ${this.homeTab==='diaries'?'active':''}" onclick="App.switchHomeTab('diaries')">📝 日記一覧</button>
+        <button class="home-tab ${this.homeTab==='refs'?'active':''}" onclick="App.switchHomeTab('refs')">🔄 振り返り一覧</button>
+      </div>
+
+      <div class="home-tab-body" id="home-tab-body"></div>
+    `;
+
+    this.renderHomeTab(status);
+  },
+
+  switchHomeTab(tab) {
+    this.homeTab = tab;
+    document.querySelectorAll('.home-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.home-tab[onclick*="'${tab}'"]`)?.classList.add('active');
+    this.renderHomeTab(this.currentStudent);
+  },
+
+  renderHomeTab(status) {
+    const body = document.getElementById('home-tab-body');
+    if (!body) return;
+    switch (this.homeTab) {
+      case 'main': body.innerHTML = this.renderHomeMain(status); break;
+      case 'diaries': body.innerHTML = '<div class="loading-inline">読み込み中...</div>'; this.loadHomeDiaries(); break;
+      case 'refs': body.innerHTML = this.renderHomeRefsShell(); this.loadHomeRefs(); break;
+    }
+  },
+
+  renderHomeMain(status) {
+    return `
       ${status.isMonday ? '<div class="bonus-banner">🌟 月曜ボーナス！EXP 2倍！</div>' : ''}
       ${status.isFriday ? '<div class="bonus-banner">🎰 金曜ボーナス！ガチャドロップ率2倍！</div>' : ''}
 
@@ -461,6 +498,173 @@ const App = {
         </div>
       ` : ''}
     `;
+  },
+
+  // === 日記一覧タブ ===
+  async loadHomeDiaries() {
+    if (this.homeDiaries) {
+      this.renderHomeDiaries();
+      return;
+    }
+    const result = await API.getDiaries(this.currentStudent.studentId);
+    this.homeDiaries = (result.success && result.diaries) ? result.diaries : [];
+    this.renderHomeDiaries();
+  },
+
+  renderHomeDiaries() {
+    const body = document.getElementById('home-tab-body');
+    if (!body || this.homeTab !== 'diaries') return;
+    const diaries = this.homeDiaries || [];
+    if (diaries.length === 0) { body.innerHTML = '<div class="history-empty">まだ日記がありません</div>'; return; }
+
+    const days = ['日','月','火','水','木','金','土'];
+    body.innerHTML = '<div class="home-history-scroll">' + diaries.map(d => {
+      const dt = new Date((d.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      return `<div class="history-card history-diary">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          ${d.gachaResult ? '<span class="history-gacha">🎰 ' + this.escapeHtml(d.gachaResult) + '</span>' : ''}
+          <span class="history-exp">+${d.expEarned || 10}</span>
+        </div>
+        <div class="history-card-body">${this.escapeHtml(d.content || '')}</div>
+        ${d.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(d.teacherComment) + '</div>' : ''}
+      </div>`;
+    }).join('') + '</div>';
+  },
+
+  // === 振り返り一覧タブ ===
+  renderHomeRefsShell() {
+    return `
+      <div class="home-ref-chips">
+        <button class="ref-chip ${!this.homeRefSubject ? 'selected' : ''}" onclick="App.filterHomeRefs(null)">全教科</button>
+        ${CONFIG.subjects.map(s => `<button class="ref-chip ${this.homeRefSubject === s ? 'selected' : ''}" onclick="App.filterHomeRefs('${s}')">${s}</button>`).join('')}
+      </div>
+      <div id="home-refs-list"><div class="loading-inline">読み込み中...</div></div>
+    `;
+  },
+
+  async loadHomeRefs() {
+    if (this.homeRefs) {
+      this.renderHomeRefs();
+      return;
+    }
+    const sid = this.currentStudent.studentId;
+    const [refResult, matResult] = await Promise.all([
+      API.getReflections(sid),
+      API.getMatrixHistory(sid)
+    ]);
+    this.homeRefs = (refResult.success && refResult.reflections) ? refResult.reflections : [];
+    this.homeMats = (matResult.success && matResult.records) ? matResult.records : [];
+    this.renderHomeRefs();
+  },
+
+  filterHomeRefs(subject) {
+    this.homeRefSubject = subject;
+    // チップの選択状態を更新
+    document.querySelectorAll('.home-ref-chips .ref-chip').forEach(c => c.classList.remove('selected'));
+    if (!subject) {
+      document.querySelector('.home-ref-chips .ref-chip')?.classList.add('selected');
+    } else {
+      document.querySelectorAll('.home-ref-chips .ref-chip').forEach(c => {
+        if (c.textContent === subject) c.classList.add('selected');
+      });
+    }
+    this.renderHomeRefs();
+  },
+
+  renderHomeRefs() {
+    const list = document.getElementById('home-refs-list');
+    if (!list || this.homeTab !== 'refs') return;
+    const refs = this.homeRefs || [];
+    const mats = this.homeMats || [];
+
+    const filtered = this.homeRefSubject ? refs.filter(r => r.subject === this.homeRefSubject) : refs;
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="history-empty">まだ振り返りがありません</div>';
+      return;
+    }
+
+    const matByRef = {};
+    for (const m of mats) { if (m.reflectionId) matByRef[m.reflectionId] = m; }
+
+    const days = ['日','月','火','水','木','金','土'];
+    let idx = 0;
+
+    list.innerHTML = '<div class="home-history-scroll">' + filtered.map(r => {
+      const dt = new Date((r.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const mat = matByRef[r.id];
+      const matPoints = mat ? this.parseMatrixPoints(mat.pointsJson) : [];
+      const curIdx = idx++;
+
+      return `<div class="history-card history-ref">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          <span class="history-subject">${this.escapeHtml(r.subject || '')}</span>
+          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+          <span class="history-exp">+${r.expEarned || 5}</span>
+        </div>
+        ${r.plan ? '<div class="history-plan">📋 ' + this.escapeHtml(r.plan) + '</div>' : ''}
+        <div class="history-card-body">${this.escapeHtml(r.content || '')}</div>
+        ${r.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(r.teacherComment) + '</div>' : ''}
+        ${matPoints.length > 0 ? `
+          <div class="history-matrix-fig">
+            <img src="assets/heart-matrix.png" class="hm-fig-img" draggable="false">
+            <canvas class="hm-fig-canvas" data-points='${JSON.stringify(matPoints)}'></canvas>
+          </div>
+          <div class="history-matrix">🌍 ${this.escapeHtml(mat.zoneSequence || mat.dominantZone || '')}</div>
+        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(mat.zoneSequence || mat.dominantZone || '') + '</div>' : '')}
+      </div>`;
+    }).join('') + '</div>';
+
+    // マトリクスのcanvasを描画
+    setTimeout(() => this.drawHomeMatrixCanvases(), 50);
+  },
+
+  parseMatrixPoints(json) {
+    try { const arr = JSON.parse(json || '[]'); return Array.isArray(arr) ? arr : []; }
+    catch(e) { return []; }
+  },
+
+  drawHomeMatrixCanvases() {
+    document.querySelectorAll('.hm-fig-canvas').forEach(canvas => {
+      let points;
+      try { points = JSON.parse(canvas.dataset.points || '[]'); } catch(e) { return; }
+      if (points.length === 0) return;
+
+      const wrap = canvas.parentElement;
+      const rect = wrap.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width, h = rect.height;
+
+      if (points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].px * w / 100, points[0].py * h / 100);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].px * w / 100, points[i].py * h / 100);
+        ctx.strokeStyle = 'rgba(99,102,241,0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      points.forEach((p, i) => {
+        const x = p.px * w / 100, y = p.py * h / 100;
+        const t = i / Math.max(points.length - 1, 1);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${Math.round(99+t*140)},${Math.round(102-t*40)},${Math.round(241-t*100)})`;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    });
   },
 
   // ========== 画面遷移 ==========
@@ -834,18 +1038,17 @@ const Diary = {
 };
 /**
  * 学びの冒険クエスト - 振り返り+心マトリクス統合画面
- * PC最適化: 左に心マトリクス＋過去の記録、右に振り返り入力
+ * PC最適化: 左に心マトリクス＋教科別の過去記録、右に振り返り入力
  */
 
 const Reflection = {
   usedSymbols: new Set(),
-  // マトリクスデータ
   matrixPoints: [],
   canvas: null,
   ctx: null,
   CIRCLE: { cx: 50, cy: 50, r: 42 },
-  pastData: null,
-  showingHistory: false,
+  pastRefs: null,
+  pastMats: null,
 
   ZONES: [
     { name: 'パワーアップ', center: 0 },
@@ -861,35 +1064,25 @@ const Reflection = {
   init() {
     this.usedSymbols.clear();
     this.matrixPoints = [];
-    this.pastData = null;
-    this.showingHistory = false;
+    this.pastRefs = null;
+    this.pastMats = null;
     const el = document.getElementById('screen-reflection');
 
     el.innerHTML = `
       <div class="ref-layout">
-        <!-- 左: 心マトリクス + 過去の記録 -->
+        <!-- 左: 心マトリクス + 教科別の過去記録 -->
         <div class="ref-left">
-          <div class="ref-left-tabs">
-            <button class="ref-left-tab active" onclick="Reflection.showLeftTab('matrix')">🌍 マトリクス</button>
-            <button class="ref-left-tab" onclick="Reflection.showLeftTab('history')">📖 過去の記録</button>
+          <div class="matrix-wrap">
+            <img src="assets/heart-matrix.png" class="matrix-bg" alt="心マトリクス" draggable="false">
+            <canvas id="matrix-canvas"></canvas>
           </div>
-          <div class="ref-left-panel" id="ref-left-matrix">
-            <div class="matrix-wrap">
-              <img src="assets/heart-matrix.png" class="matrix-bg" alt="心マトリクス" draggable="false">
-              <canvas id="matrix-canvas"></canvas>
-            </div>
-            <div class="matrix-bar">
-              <button class="ctrl-btn-sm" onclick="Reflection.undoPoint()">↩ もどす</button>
-              <span class="matrix-count" id="matrix-count">タップ: 0</span>
-              <button class="ctrl-btn-sm" onclick="Reflection.resetPoints()">🔄 リセット</button>
-            </div>
-            <div class="matrix-trail" id="matrix-trail"></div>
+          <div class="matrix-bar">
+            <button class="ctrl-btn-sm" onclick="Reflection.undoPoint()">↩ もどす</button>
+            <span class="matrix-count" id="matrix-count">タップ: 0</span>
+            <button class="ctrl-btn-sm" onclick="Reflection.resetPoints()">🔄 リセット</button>
           </div>
-          <div class="ref-left-panel" id="ref-left-history" style="display:none;">
-            <div class="ref-history-scroll" id="ref-history-content">
-              <div class="loading-inline">読み込み中...</div>
-            </div>
-          </div>
+          <div class="matrix-trail" id="matrix-trail"></div>
+          <div class="ref-past-section" id="ref-past-section"></div>
         </div>
 
         <!-- 右: 振り返り入力 -->
@@ -946,21 +1139,8 @@ const Reflection = {
 
     this.setupCanvas();
     this.autoSelectPeriod();
-  },
-
-  // === 左パネルのタブ切替 ===
-  showLeftTab(tab) {
-    document.querySelectorAll('.ref-left-tab').forEach(t => t.classList.remove('active'));
-    if (tab === 'matrix') {
-      document.querySelectorAll('.ref-left-tab')[0].classList.add('active');
-      document.getElementById('ref-left-matrix').style.display = '';
-      document.getElementById('ref-left-history').style.display = 'none';
-    } else {
-      document.querySelectorAll('.ref-left-tab')[1].classList.add('active');
-      document.getElementById('ref-left-matrix').style.display = 'none';
-      document.getElementById('ref-left-history').style.display = '';
-      if (!this.pastData) this.loadPastData();
-    }
+    // バックグラウンドで過去データを取得
+    this.loadPastData();
   },
 
   async loadPastData() {
@@ -969,50 +1149,55 @@ const Reflection = {
       API.getReflections(sid),
       API.getMatrixHistory(sid)
     ]);
+    this.pastRefs = (refResult.success && refResult.reflections) ? refResult.reflections : [];
+    this.pastMats = (matResult.success && matResult.records) ? matResult.records : [];
+    // 教科が既に選択されていたら表示
+    const subject = document.getElementById('ref-subject')?.value;
+    if (subject) this.showPastForSubject(subject);
+  },
 
-    const container = document.getElementById('ref-history-content');
-    if (!container) return;
-
-    const refs = (refResult.success && refResult.reflections) ? refResult.reflections : [];
-    const mats = (matResult.success && matResult.records) ? matResult.records : [];
-    this.pastData = { refs, mats };
-
-    if (refs.length === 0) {
-      container.innerHTML = '<div class="history-empty">まだ振り返りがありません</div>';
+  showPastForSubject(subject) {
+    const section = document.getElementById('ref-past-section');
+    if (!section) return;
+    if (!this.pastRefs) {
+      section.innerHTML = '<div class="loading-inline" style="font-size:0.8rem;">読み込み中...</div>';
       return;
     }
 
-    // マトリクスをreflectionIdで紐づけ
+    const filtered = this.pastRefs.filter(r => r.subject === subject);
+    if (filtered.length === 0) {
+      section.innerHTML = `<div class="ref-past-head">📖 ${App.escapeHtml(subject)} の過去の記録</div><div class="history-empty">まだありません</div>`;
+      return;
+    }
+
     const matByRef = {};
-    for (const m of mats) { if (m.reflectionId) matByRef[m.reflectionId] = m; }
+    for (const m of (this.pastMats || [])) { if (m.reflectionId) matByRef[m.reflectionId] = m; }
 
     const days = ['日','月','火','水','木','金','土'];
     const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
 
-    container.innerHTML = refs.map(r => {
-      const dt = new Date((r.createdAt || '').replace(' ', 'T'));
-      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
-      const mat = matByRef[r.id];
+    section.innerHTML = `<div class="ref-past-head">📖 ${esc(subject)} の過去の記録（${filtered.length}件）</div>` +
+      filtered.slice(0, 10).map(r => {
+        const dt = new Date((r.createdAt || '').replace(' ', 'T'));
+        const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+        const mat = matByRef[r.id];
 
-      return `<div class="history-card history-ref">
-        <div class="history-card-head">
-          <span class="history-date">${dateStr}</span>
-          <span class="history-subject">${esc(r.subject || '')}</span>
-          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
-        </div>
-        ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
-        <div class="history-card-body">${esc(r.content || '')}</div>
-        ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
-        ${mat ? '<div class="history-matrix">🌍 ' + esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
-      </div>`;
-    }).join('');
+        return `<div class="history-card history-ref">
+          <div class="history-card-head">
+            <span class="history-date">${dateStr}</span>
+            ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+          </div>
+          ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
+          <div class="history-card-body">${esc(r.content || '')}</div>
+          ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
+          ${mat ? '<div class="history-matrix">🌍 ' + esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+        </div>`;
+      }).join('');
   },
 
-  /** 現在時刻から時間目を自動選択 */
   autoSelectPeriod() {
     const now = new Date();
     const hhmm = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
-
     let matchedPeriod = null;
     for (const pt of (CONFIG.periodTimes || [])) {
       if (hhmm >= pt.start && hhmm <= this.addMinutes(pt.end, 15)) {
@@ -1020,12 +1205,9 @@ const Reflection = {
         break;
       }
     }
-
     if (matchedPeriod) {
       const btn = document.querySelector(`#ref-period-chips .ref-chip[data-value="${matchedPeriod}時間目"]`);
-      if (btn) {
-        this.selectPeriod(btn);
-      }
+      if (btn) this.selectPeriod(btn);
     }
   },
 
@@ -1098,7 +1280,6 @@ const Reflection = {
     const w = this.canvas.getBoundingClientRect().width;
     const h = this.canvas.getBoundingClientRect().height;
     this.ctx.clearRect(0, 0, w, h);
-
     if (this.matrixPoints.length === 0) return;
 
     if (this.matrixPoints.length >= 2) {
@@ -1129,14 +1310,8 @@ const Reflection = {
       this.ctx.stroke();
 
       this.ctx.font = 'bold 12px sans-serif';
-      if (i === 0) {
-        this.ctx.fillStyle = '#6366f1';
-        this.ctx.fillText('はじめ', x + 10, y - 5);
-      }
-      if (i === this.matrixPoints.length - 1 && i > 0) {
-        this.ctx.fillStyle = '#ec4899';
-        this.ctx.fillText('いま', x + 10, y - 5);
-      }
+      if (i === 0) { this.ctx.fillStyle = '#6366f1'; this.ctx.fillText('はじめ', x + 10, y - 5); }
+      if (i === this.matrixPoints.length - 1 && i > 0) { this.ctx.fillStyle = '#ec4899'; this.ctx.fillText('いま', x + 10, y - 5); }
     });
 
     document.getElementById('matrix-count').textContent = 'タップ: ' + this.matrixPoints.length;
@@ -1147,30 +1322,18 @@ const Reflection = {
     if (this.matrixPoints.length === 0) { el.innerHTML = ''; return; }
     const zones = this.matrixPoints.map(p => p.zone);
     const seq = [zones[0]];
-    for (let i = 1; i < zones.length; i++) {
-      if (zones[i] !== zones[i - 1]) seq.push(zones[i]);
-    }
+    for (let i = 1; i < zones.length; i++) { if (zones[i] !== zones[i-1]) seq.push(zones[i]); }
     el.innerHTML = seq.join(' → ');
   },
 
-  undoPoint() {
-    if (this.matrixPoints.length === 0) return;
-    this.matrixPoints.pop();
-    this.drawPoints();
-    this.updateTrail();
-  },
+  undoPoint() { if (this.matrixPoints.length === 0) return; this.matrixPoints.pop(); this.drawPoints(); this.updateTrail(); },
+  resetPoints() { this.matrixPoints = []; this.drawPoints(); this.updateTrail(); },
 
-  resetPoints() {
-    this.matrixPoints = [];
-    this.drawPoints();
-    this.updateTrail();
-  },
-
-  // === 教科・時間目の選択 ===
   selectSubject(btn) {
     document.querySelectorAll('#ref-subject-chips .ref-chip').forEach(c => c.classList.remove('selected'));
     btn.classList.add('selected');
     document.getElementById('ref-subject').value = btn.dataset.value;
+    this.showPastForSubject(btn.dataset.value);
   },
 
   selectPeriod(btn) {
@@ -1179,7 +1342,6 @@ const Reflection = {
     document.getElementById('ref-period').value = btn.dataset.value;
   },
 
-  // === 7つの型 ===
   insertType(symbol) {
     if (this.usedSymbols.has(symbol)) return;
     const textarea = document.getElementById('ref-content');
@@ -1197,9 +1359,7 @@ const Reflection = {
   onInput() {
     const text = document.getElementById('ref-content').value;
     this.usedSymbols.clear();
-    for (const type of TYPES.definitions) {
-      if (text.includes(type.symbol)) this.usedSymbols.add(type.symbol);
-    }
+    for (const type of TYPES.definitions) { if (text.includes(type.symbol)) this.usedSymbols.add(type.symbol); }
     this.updateToolbar();
     this.updateDetectedTypes();
   },
@@ -1220,7 +1380,6 @@ const Reflection = {
     }).join('');
   },
 
-  // === 送信 ===
   async submit() {
     const subject = document.getElementById('ref-subject').value;
     const period = document.getElementById('ref-period').value;
@@ -1256,11 +1415,8 @@ const Reflection = {
       result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
-    if (result.success) {
-      this.updateWithServerResult(result);
-    } else {
-      App.showError('保存エラー: ' + (result.error || ''));
-    }
+    if (result.success) { this.updateWithServerResult(result); }
+    else { App.showError('保存エラー: ' + (result.error || '')); }
   },
 
   getZoneSequence() {
@@ -1279,12 +1435,9 @@ const Reflection = {
   showInstantResult(expGained, detectedTypes, hasMatrix) {
     const area = document.getElementById('ref-result');
     area.style.display = 'flex';
-
     area.innerHTML = `
       <div class="result-card">
-        <div class="result-exp animate-pop">
-          +${expGained} EXP${App.currentStudent.isMonday ? ' (月曜2倍！)' : ''}
-        </div>
+        <div class="result-exp animate-pop">+${expGained} EXP${App.currentStudent.isMonday ? ' (月曜2倍！)' : ''}</div>
         ${detectedTypes.length > 0 ? `<div class="result-types-line">${detectedTypes.map(s => { const t = TYPES.getBySymbol(s); return '<span style="color:' + (t?.color||'#666') + '">' + s + ' ' + (t?.name||'') + '</span>'; }).join(' ')}</div>` : ''}
         ${hasMatrix ? '<div>🌍 マトリクス記録中...</div>' : ''}
         <div id="ref-server-extras"></div>
@@ -1300,20 +1453,13 @@ const Reflection = {
     const r = result.reflection || result;
     const exp = r.exp || result.exp;
     const skills = r.skills || result.skills || { updatedTypes: [], newBadges: [] };
-    if (exp && exp.leveledUp) {
-      html += `<div class="level-up">🎉 レベルアップ！ Lv.${exp.oldLevel} → Lv.${exp.newLevel}</div>`;
-    }
+    if (exp && exp.leveledUp) html += `<div class="level-up">🎉 レベルアップ！ Lv.${exp.oldLevel} → Lv.${exp.newLevel}</div>`;
     if (skills.updatedTypes) {
       skills.updatedTypes.filter(u => u.level > u.oldLevel).forEach(u => {
         html += `<div>⬆️ ${TYPES.getBySymbol(u.symbol)?.name||u.symbol} Lv.${u.level}</div>`;
       });
     }
     extras.innerHTML = html;
-  },
-
-  showResult(result) {
-    this.showInstantResult(0, [], false);
-    this.updateWithServerResult(result);
   },
 
   goHome() {

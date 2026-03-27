@@ -6,6 +6,11 @@
 const App = {
   currentStudent: null,
   currentScreen: 'select',
+  homeTab: 'main',
+  homeDiaries: null,
+  homeRefs: null,
+  homeMats: null,
+  homeRefSubject: null,
 
   /**
    * アプリ初期化
@@ -145,6 +150,38 @@ const App = {
         </div>
       </div>
 
+      <!-- ホームタブ -->
+      <div class="home-tabs">
+        <button class="home-tab ${this.homeTab==='main'?'active':''}" onclick="App.switchHomeTab('main')">🏠 ホーム</button>
+        <button class="home-tab ${this.homeTab==='diaries'?'active':''}" onclick="App.switchHomeTab('diaries')">📝 日記一覧</button>
+        <button class="home-tab ${this.homeTab==='refs'?'active':''}" onclick="App.switchHomeTab('refs')">🔄 振り返り一覧</button>
+      </div>
+
+      <div class="home-tab-body" id="home-tab-body"></div>
+    `;
+
+    this.renderHomeTab(status);
+  },
+
+  switchHomeTab(tab) {
+    this.homeTab = tab;
+    document.querySelectorAll('.home-tab').forEach(t => t.classList.remove('active'));
+    document.querySelector(`.home-tab[onclick*="'${tab}'"]`)?.classList.add('active');
+    this.renderHomeTab(this.currentStudent);
+  },
+
+  renderHomeTab(status) {
+    const body = document.getElementById('home-tab-body');
+    if (!body) return;
+    switch (this.homeTab) {
+      case 'main': body.innerHTML = this.renderHomeMain(status); break;
+      case 'diaries': body.innerHTML = '<div class="loading-inline">読み込み中...</div>'; this.loadHomeDiaries(); break;
+      case 'refs': body.innerHTML = this.renderHomeRefsShell(); this.loadHomeRefs(); break;
+    }
+  },
+
+  renderHomeMain(status) {
+    return `
       ${status.isMonday ? '<div class="bonus-banner">🌟 月曜ボーナス！EXP 2倍！</div>' : ''}
       ${status.isFriday ? '<div class="bonus-banner">🎰 金曜ボーナス！ガチャドロップ率2倍！</div>' : ''}
 
@@ -218,6 +255,173 @@ const App = {
         </div>
       ` : ''}
     `;
+  },
+
+  // === 日記一覧タブ ===
+  async loadHomeDiaries() {
+    if (this.homeDiaries) {
+      this.renderHomeDiaries();
+      return;
+    }
+    const result = await API.getDiaries(this.currentStudent.studentId);
+    this.homeDiaries = (result.success && result.diaries) ? result.diaries : [];
+    this.renderHomeDiaries();
+  },
+
+  renderHomeDiaries() {
+    const body = document.getElementById('home-tab-body');
+    if (!body || this.homeTab !== 'diaries') return;
+    const diaries = this.homeDiaries || [];
+    if (diaries.length === 0) { body.innerHTML = '<div class="history-empty">まだ日記がありません</div>'; return; }
+
+    const days = ['日','月','火','水','木','金','土'];
+    body.innerHTML = '<div class="home-history-scroll">' + diaries.map(d => {
+      const dt = new Date((d.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      return `<div class="history-card history-diary">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          ${d.gachaResult ? '<span class="history-gacha">🎰 ' + this.escapeHtml(d.gachaResult) + '</span>' : ''}
+          <span class="history-exp">+${d.expEarned || 10}</span>
+        </div>
+        <div class="history-card-body">${this.escapeHtml(d.content || '')}</div>
+        ${d.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(d.teacherComment) + '</div>' : ''}
+      </div>`;
+    }).join('') + '</div>';
+  },
+
+  // === 振り返り一覧タブ ===
+  renderHomeRefsShell() {
+    return `
+      <div class="home-ref-chips">
+        <button class="ref-chip ${!this.homeRefSubject ? 'selected' : ''}" onclick="App.filterHomeRefs(null)">全教科</button>
+        ${CONFIG.subjects.map(s => `<button class="ref-chip ${this.homeRefSubject === s ? 'selected' : ''}" onclick="App.filterHomeRefs('${s}')">${s}</button>`).join('')}
+      </div>
+      <div id="home-refs-list"><div class="loading-inline">読み込み中...</div></div>
+    `;
+  },
+
+  async loadHomeRefs() {
+    if (this.homeRefs) {
+      this.renderHomeRefs();
+      return;
+    }
+    const sid = this.currentStudent.studentId;
+    const [refResult, matResult] = await Promise.all([
+      API.getReflections(sid),
+      API.getMatrixHistory(sid)
+    ]);
+    this.homeRefs = (refResult.success && refResult.reflections) ? refResult.reflections : [];
+    this.homeMats = (matResult.success && matResult.records) ? matResult.records : [];
+    this.renderHomeRefs();
+  },
+
+  filterHomeRefs(subject) {
+    this.homeRefSubject = subject;
+    // チップの選択状態を更新
+    document.querySelectorAll('.home-ref-chips .ref-chip').forEach(c => c.classList.remove('selected'));
+    if (!subject) {
+      document.querySelector('.home-ref-chips .ref-chip')?.classList.add('selected');
+    } else {
+      document.querySelectorAll('.home-ref-chips .ref-chip').forEach(c => {
+        if (c.textContent === subject) c.classList.add('selected');
+      });
+    }
+    this.renderHomeRefs();
+  },
+
+  renderHomeRefs() {
+    const list = document.getElementById('home-refs-list');
+    if (!list || this.homeTab !== 'refs') return;
+    const refs = this.homeRefs || [];
+    const mats = this.homeMats || [];
+
+    const filtered = this.homeRefSubject ? refs.filter(r => r.subject === this.homeRefSubject) : refs;
+    if (filtered.length === 0) {
+      list.innerHTML = '<div class="history-empty">まだ振り返りがありません</div>';
+      return;
+    }
+
+    const matByRef = {};
+    for (const m of mats) { if (m.reflectionId) matByRef[m.reflectionId] = m; }
+
+    const days = ['日','月','火','水','木','金','土'];
+    let idx = 0;
+
+    list.innerHTML = '<div class="home-history-scroll">' + filtered.map(r => {
+      const dt = new Date((r.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const mat = matByRef[r.id];
+      const matPoints = mat ? this.parseMatrixPoints(mat.pointsJson) : [];
+      const curIdx = idx++;
+
+      return `<div class="history-card history-ref">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          <span class="history-subject">${this.escapeHtml(r.subject || '')}</span>
+          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+          <span class="history-exp">+${r.expEarned || 5}</span>
+        </div>
+        ${r.plan ? '<div class="history-plan">📋 ' + this.escapeHtml(r.plan) + '</div>' : ''}
+        <div class="history-card-body">${this.escapeHtml(r.content || '')}</div>
+        ${r.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(r.teacherComment) + '</div>' : ''}
+        ${matPoints.length > 0 ? `
+          <div class="history-matrix-fig">
+            <img src="assets/heart-matrix.png" class="hm-fig-img" draggable="false">
+            <canvas class="hm-fig-canvas" data-points='${JSON.stringify(matPoints)}'></canvas>
+          </div>
+          <div class="history-matrix">🌍 ${this.escapeHtml(mat.zoneSequence || mat.dominantZone || '')}</div>
+        ` : (mat ? '<div class="history-matrix">🌍 ' + this.escapeHtml(mat.zoneSequence || mat.dominantZone || '') + '</div>' : '')}
+      </div>`;
+    }).join('') + '</div>';
+
+    // マトリクスのcanvasを描画
+    setTimeout(() => this.drawHomeMatrixCanvases(), 50);
+  },
+
+  parseMatrixPoints(json) {
+    try { const arr = JSON.parse(json || '[]'); return Array.isArray(arr) ? arr : []; }
+    catch(e) { return []; }
+  },
+
+  drawHomeMatrixCanvases() {
+    document.querySelectorAll('.hm-fig-canvas').forEach(canvas => {
+      let points;
+      try { points = JSON.parse(canvas.dataset.points || '[]'); } catch(e) { return; }
+      if (points.length === 0) return;
+
+      const wrap = canvas.parentElement;
+      const rect = wrap.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      canvas.width = rect.width * dpr;
+      canvas.height = rect.height * dpr;
+      canvas.style.width = rect.width + 'px';
+      canvas.style.height = rect.height + 'px';
+      const ctx = canvas.getContext('2d');
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const w = rect.width, h = rect.height;
+
+      if (points.length >= 2) {
+        ctx.beginPath();
+        ctx.moveTo(points[0].px * w / 100, points[0].py * h / 100);
+        for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].px * w / 100, points[i].py * h / 100);
+        ctx.strokeStyle = 'rgba(99,102,241,0.6)';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+      }
+
+      points.forEach((p, i) => {
+        const x = p.px * w / 100, y = p.py * h / 100;
+        const t = i / Math.max(points.length - 1, 1);
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fillStyle = `rgb(${Math.round(99+t*140)},${Math.round(102-t*40)},${Math.round(241-t*100)})`;
+        ctx.fill();
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.5;
+        ctx.stroke();
+      });
+    });
   },
 
   // ========== 画面遷移 ==========
