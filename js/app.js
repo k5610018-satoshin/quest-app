@@ -130,24 +130,14 @@ const App = {
       : 100;
 
     el.innerHTML = `
-      <div class="home-header">
-        <div class="player-info">
-          <div class="player-name">${this.escapeHtml(status.name)}</div>
-          <div class="player-level">Lv.${status.level} 冒険者</div>
-        </div>
-        <div class="streak-badge" title="連続${status.streakDays}日">
-          🔥 ${status.streakDays}日
-        </div>
-      </div>
-
-      <div class="exp-bar-container">
-        <div class="exp-bar-label">
-          <span>EXP ${status.totalExp}</span>
-          <span>${status.expToNext > 0 ? '次のレベルまで ' + status.expToNext : 'MAX!'}</span>
-        </div>
-        <div class="exp-bar">
+      <div class="home-header-compact">
+        <span class="player-name">${this.escapeHtml(status.name)}</span>
+        <span class="player-level-inline">Lv.${status.level}</span>
+        <div class="exp-bar-inline">
           <div class="exp-bar-fill" style="width: ${Math.min(expPercent, 100)}%"></div>
         </div>
+        <span class="exp-label-inline">EXP ${status.totalExp}${status.expToNext > 0 ? ' / 次まで' + status.expToNext : ' MAX!'}</span>
+        <span class="streak-badge-inline">🔥${status.streakDays}日</span>
       </div>
 
       <!-- ホームタブ -->

@@ -373,24 +373,14 @@ const App = {
       : 100;
 
     el.innerHTML = `
-      <div class="home-header">
-        <div class="player-info">
-          <div class="player-name">${this.escapeHtml(status.name)}</div>
-          <div class="player-level">Lv.${status.level} 冒険者</div>
-        </div>
-        <div class="streak-badge" title="連続${status.streakDays}日">
-          🔥 ${status.streakDays}日
-        </div>
-      </div>
-
-      <div class="exp-bar-container">
-        <div class="exp-bar-label">
-          <span>EXP ${status.totalExp}</span>
-          <span>${status.expToNext > 0 ? '次のレベルまで ' + status.expToNext : 'MAX!'}</span>
-        </div>
-        <div class="exp-bar">
+      <div class="home-header-compact">
+        <span class="player-name">${this.escapeHtml(status.name)}</span>
+        <span class="player-level-inline">Lv.${status.level}</span>
+        <div class="exp-bar-inline">
           <div class="exp-bar-fill" style="width: ${Math.min(expPercent, 100)}%"></div>
         </div>
+        <span class="exp-label-inline">EXP ${status.totalExp}${status.expToNext > 0 ? ' / 次まで' + status.expToNext : ' MAX!'}</span>
+        <span class="streak-badge-inline">🔥${status.streakDays}日</span>
       </div>
 
       <!-- ホームタブ -->
@@ -1264,7 +1254,7 @@ const Reflection = {
   detectZone(xPct, yPct) {
     const dx = xPct - this.CIRCLE.cx;
     const dy = yPct - this.CIRCLE.cy;
-    if (Math.sqrt(dx * dx + dy * dy) < this.CIRCLE.r * 0.25) return { name: '中心' };
+    if (Math.sqrt(dx * dx + dy * dy) < this.CIRCLE.r * 0.25) return { name: '地球' };
     let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
     if (angle < 0) angle += 360;
     for (const zone of this.ZONES) {
@@ -1272,7 +1262,7 @@ const Reflection = {
       if (diff > 180) diff = 360 - diff;
       if (diff <= 22.5) return zone;
     }
-    return { name: '中心' };
+    return { name: '地球' };
   },
 
   drawPoints() {
@@ -1429,7 +1419,7 @@ const Reflection = {
   getDominantZone() {
     const c = {};
     for (const p of this.matrixPoints) c[p.zone] = (c[p.zone] || 0) + 1;
-    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
+    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '地球';
   },
 
   showInstantResult(expGained, detectedTypes, hasMatrix) {
@@ -1723,7 +1713,7 @@ const Matrix = {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < this.CIRCLE.r * 0.25) {
-      return { name: '中心', emoji: '🌍' };
+      return { name: '地球', emoji: '🌍' };
     }
 
     let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
@@ -1734,7 +1724,7 @@ const Matrix = {
       if (diff > 180) diff = 360 - diff;
       if (diff <= 22.5) return zone;
     }
-    return { name: '中心', emoji: '🌍' };
+    return { name: '地球', emoji: '🌍' };
   },
 
   updateSummary() {
@@ -1841,7 +1831,7 @@ const Matrix = {
     for (const p of this.points) {
       counts[p.zone] = (counts[p.zone] || 0) + 1;
     }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '地球';
   }
 };
 /**

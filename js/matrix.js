@@ -230,7 +230,7 @@ const Matrix = {
     const dist = Math.sqrt(dx * dx + dy * dy);
 
     if (dist < this.CIRCLE.r * 0.25) {
-      return { name: '中心', emoji: '🌍' };
+      return { name: '地球', emoji: '🌍' };
     }
 
     let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
@@ -241,7 +241,7 @@ const Matrix = {
       if (diff > 180) diff = 360 - diff;
       if (diff <= 22.5) return zone;
     }
-    return { name: '中心', emoji: '🌍' };
+    return { name: '地球', emoji: '🌍' };
   },
 
   updateSummary() {
@@ -348,6 +348,6 @@ const Matrix = {
     for (const p of this.points) {
       counts[p.zone] = (counts[p.zone] || 0) + 1;
     }
-    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
+    return Object.entries(counts).sort((a, b) => b[1] - a[1])[0]?.[0] || '地球';
   }
 };

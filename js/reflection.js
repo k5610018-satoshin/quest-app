@@ -226,7 +226,7 @@ const Reflection = {
   detectZone(xPct, yPct) {
     const dx = xPct - this.CIRCLE.cx;
     const dy = yPct - this.CIRCLE.cy;
-    if (Math.sqrt(dx * dx + dy * dy) < this.CIRCLE.r * 0.25) return { name: '中心' };
+    if (Math.sqrt(dx * dx + dy * dy) < this.CIRCLE.r * 0.25) return { name: '地球' };
     let angle = Math.atan2(dx, -dy) * (180 / Math.PI);
     if (angle < 0) angle += 360;
     for (const zone of this.ZONES) {
@@ -234,7 +234,7 @@ const Reflection = {
       if (diff > 180) diff = 360 - diff;
       if (diff <= 22.5) return zone;
     }
-    return { name: '中心' };
+    return { name: '地球' };
   },
 
   drawPoints() {
@@ -391,7 +391,7 @@ const Reflection = {
   getDominantZone() {
     const c = {};
     for (const p of this.matrixPoints) c[p.zone] = (c[p.zone] || 0) + 1;
-    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
+    return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '地球';
   },
 
   showInstantResult(expGained, detectedTypes, hasMatrix) {
