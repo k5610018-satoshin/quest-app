@@ -28,32 +28,30 @@ const SkillTree = {
       <div class="screen-header">
         <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
         <h2>⚔️ スキルツリー</h2>
+        <span class="skill-summary-inline">
+          ${allLv3 ? '🏆 全型Lv.3達成！' : `Lv.3達成まで あと${skills.filter(s => s.level < 3).length}型`}
+        </span>
       </div>
 
-      <div class="skill-list">
+      <div class="skill-grid">
         ${skills.map(s => {
           const type = TYPES.getBySymbol(s.symbol);
           const pct = s.nextRequired ? (s.count / s.nextRequired * 100) : 100;
           const lvlNames = ['', '見習い', '使い手', '達人', '名人', '伝説'];
           return `
-            <div class="skill-item">
-              <div class="skill-header">
-                <span class="skill-symbol" style="color: ${type?.color || '#666'}">${s.symbol}</span>
-                <span class="skill-name">${s.name}</span>
-                <span class="skill-level">Lv.${s.level} ${lvlNames[s.level] || ''}</span>
+            <div class="skill-card" style="--skill-color: ${type?.color || '#666'}">
+              <div class="skill-card-top">
+                <span class="skill-card-symbol">${s.symbol}</span>
+                <div>
+                  <div class="skill-card-name">${s.name}</div>
+                  <div class="skill-card-level">Lv.${s.level} ${lvlNames[s.level] || ''}</div>
+                </div>
               </div>
-              <div class="skill-bar">
-                <div class="skill-bar-fill" style="width: ${Math.min(pct, 100)}%; background: ${type?.color || '#666'}"></div>
-              </div>
-              <div class="skill-progress">${s.count}${s.nextRequired ? '/' + s.nextRequired : ' (MAX)'}</div>
+              <div class="skill-bar"><div class="skill-bar-fill" style="width:${Math.min(pct,100)}%;background:var(--skill-color)"></div></div>
+              <div class="skill-progress">${s.count}${s.nextRequired ? '/' + s.nextRequired : ' MAX'}</div>
             </div>
           `;
         }).join('')}
-      </div>
-
-      <div class="skill-summary">
-        ${allLv3 ? '🏆 全型Lv.3達成！学びの守護神！' :
-          `全型Lv.3達成まで：あと${skills.filter(s => s.level < 3).length}型！`}
       </div>
     `;
   }

@@ -156,13 +156,8 @@ const App = {
         </button>
         <button class="main-btn reflection-btn" onclick="App.showScreen('reflection')">
           <span class="btn-icon">🔄</span>
-          <span class="btn-label">振り返りを書く</span>
-          <span class="btn-badge">+3〜12 EXP</span>
-        </button>
-        <button class="main-btn matrix-btn" onclick="App.showScreen('matrix')">
-          <span class="btn-icon">🌍</span>
-          <span class="btn-label">心マトリクス</span>
-          <span class="btn-badge">+2 EXP</span>
+          <span class="btn-label">振り返り＋心マトリクス</span>
+          <span class="btn-badge">+3〜14 EXP</span>
         </button>
       </div>
 
