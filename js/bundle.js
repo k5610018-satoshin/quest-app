@@ -515,6 +515,47 @@ const App = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  /** EXPからレベルを計算 */
+  calcLevel(totalExp) {
+    let level = 1;
+    for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+      if (totalExp >= LEVEL_THRESHOLDS[i]) level = i + 1;
+      else break;
+    }
+    return level;
+  },
+
+  /** 次のレベルまでの必要EXP */
+  calcExpToNext(totalExp) {
+    const level = this.calcLevel(totalExp);
+    if (level >= LEVEL_THRESHOLDS.length) return 0;
+    return LEVEL_THRESHOLDS[level] - totalExp;
+  },
+
+  /** レベルアップバナーを表示 */
+  showLevelUpBanner(oldLevel, newLevel) {
+    // 既存バナーがあれば削除
+    const existing = document.getElementById('levelup-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'levelup-banner';
+    banner.className = 'levelup-banner';
+    banner.innerHTML = `
+      <div class="levelup-content">
+        <span class="levelup-icon">🎉</span>
+        <span class="levelup-text">レベルアップ！ Lv.${oldLevel} → Lv.${newLevel}</span>
+      </div>
+    `;
+    document.body.appendChild(banner);
+
+    // 5秒後に自動消去
+    setTimeout(() => {
+      banner.classList.add('fadeout');
+      setTimeout(() => banner.remove(), 500);
+    }, 5000);
   }
 };
 
@@ -697,15 +738,22 @@ const Diary = {
 
   /** 投稿完了後のホーム遷移（キャッシュ更新で即遷移、API再取得はバックグラウンド） */
   goHome() {
-    // ローカルキャッシュのステータスを楽観的に更新
     const s = App.currentStudent;
+    const oldLevel = s.level || 1;
+    // 楽観的にEXP・投稿数を更新
+    const baseExp = s.diaryDoneToday ? 5 : 10;
+    const gained = baseExp * (s.isMonday ? 2 : 1);
+    s.totalExp = (s.totalExp || 0) + gained;
+    s.level = App.calcLevel(s.totalExp);
     s.totalDiaryPosts = (s.totalDiaryPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.diaryDoneToday = true;
+    s.expToNext = App.calcExpToNext(s.totalExp);
     localStorage.setItem('quest_student_cache', JSON.stringify(s));
-    // 即座にホーム描画
     App.renderHome(s);
     App.showScreen('home');
+    // レベルアップしていたらバナー表示
+    if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     // バックグラウンドでAPI再取得（正確なデータに更新）
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
@@ -1003,7 +1051,7 @@ const Reflection = {
     // ★即座にクライアント側で結果を予測して表示
     const detectedTypes = TYPES.detect(content);
     let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
-    if (plan && plan.length > 0) baseExp += 1; // 計画ボーナス
+    if (plan && plan.length > 0) baseExp += 2; // 計画ボーナス
     const hasMatrix = this.matrixPoints.length > 0;
     if (hasMatrix) baseExp += 3; // マトリクスボーナス
     const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
@@ -1088,11 +1136,24 @@ const Reflection = {
   goHome() {
     document.getElementById('ref-result').style.display = 'none';
     const s = App.currentStudent;
+    const oldLevel = s.level || 1;
+    // 楽観的にEXP更新（型数+計画+マトリクスで計算）
+    const content = document.getElementById('ref-content')?.value || '';
+    const plan = document.getElementById('ref-plan')?.value || '';
+    const types = TYPES.detect(content);
+    let base = types.length <= 1 ? 3 : types.length === 2 ? 5 : types.length === 3 ? 8 : 12;
+    if (plan.trim().length > 0) base += 2;
+    if (this.matrixPoints.length > 0) base += 3;
+    const gained = base * (s.isMonday ? 2 : 1);
+    s.totalExp = (s.totalExp || 0) + gained;
+    s.level = App.calcLevel(s.totalExp);
     s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    s.expToNext = App.calcExpToNext(s.totalExp);
     localStorage.setItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
+    if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;

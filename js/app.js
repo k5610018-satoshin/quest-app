@@ -291,6 +291,47 @@ const App = {
     const div = document.createElement('div');
     div.textContent = str;
     return div.innerHTML;
+  },
+
+  /** EXPからレベルを計算 */
+  calcLevel(totalExp) {
+    let level = 1;
+    for (let i = 0; i < LEVEL_THRESHOLDS.length; i++) {
+      if (totalExp >= LEVEL_THRESHOLDS[i]) level = i + 1;
+      else break;
+    }
+    return level;
+  },
+
+  /** 次のレベルまでの必要EXP */
+  calcExpToNext(totalExp) {
+    const level = this.calcLevel(totalExp);
+    if (level >= LEVEL_THRESHOLDS.length) return 0;
+    return LEVEL_THRESHOLDS[level] - totalExp;
+  },
+
+  /** レベルアップバナーを表示 */
+  showLevelUpBanner(oldLevel, newLevel) {
+    // 既存バナーがあれば削除
+    const existing = document.getElementById('levelup-banner');
+    if (existing) existing.remove();
+
+    const banner = document.createElement('div');
+    banner.id = 'levelup-banner';
+    banner.className = 'levelup-banner';
+    banner.innerHTML = `
+      <div class="levelup-content">
+        <span class="levelup-icon">🎉</span>
+        <span class="levelup-text">レベルアップ！ Lv.${oldLevel} → Lv.${newLevel}</span>
+      </div>
+    `;
+    document.body.appendChild(banner);
+
+    // 5秒後に自動消去
+    setTimeout(() => {
+      banner.classList.add('fadeout');
+      setTimeout(() => banner.remove(), 500);
+    }, 5000);
   }
 };
 

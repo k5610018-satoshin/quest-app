@@ -172,15 +172,22 @@ const Diary = {
 
   /** 投稿完了後のホーム遷移（キャッシュ更新で即遷移、API再取得はバックグラウンド） */
   goHome() {
-    // ローカルキャッシュのステータスを楽観的に更新
     const s = App.currentStudent;
+    const oldLevel = s.level || 1;
+    // 楽観的にEXP・投稿数を更新
+    const baseExp = s.diaryDoneToday ? 5 : 10;
+    const gained = baseExp * (s.isMonday ? 2 : 1);
+    s.totalExp = (s.totalExp || 0) + gained;
+    s.level = App.calcLevel(s.totalExp);
     s.totalDiaryPosts = (s.totalDiaryPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
     s.diaryDoneToday = true;
+    s.expToNext = App.calcExpToNext(s.totalExp);
     localStorage.setItem('quest_student_cache', JSON.stringify(s));
-    // 即座にホーム描画
     App.renderHome(s);
     App.showScreen('home');
+    // レベルアップしていたらバナー表示
+    if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     // バックグラウンドでAPI再取得（正確なデータに更新）
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {

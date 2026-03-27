@@ -285,7 +285,7 @@ const Reflection = {
     // ★即座にクライアント側で結果を予測して表示
     const detectedTypes = TYPES.detect(content);
     let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
-    if (plan && plan.length > 0) baseExp += 1; // 計画ボーナス
+    if (plan && plan.length > 0) baseExp += 2; // 計画ボーナス
     const hasMatrix = this.matrixPoints.length > 0;
     if (hasMatrix) baseExp += 3; // マトリクスボーナス
     const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
@@ -370,11 +370,24 @@ const Reflection = {
   goHome() {
     document.getElementById('ref-result').style.display = 'none';
     const s = App.currentStudent;
+    const oldLevel = s.level || 1;
+    // 楽観的にEXP更新（型数+計画+マトリクスで計算）
+    const content = document.getElementById('ref-content')?.value || '';
+    const plan = document.getElementById('ref-plan')?.value || '';
+    const types = TYPES.detect(content);
+    let base = types.length <= 1 ? 3 : types.length === 2 ? 5 : types.length === 3 ? 8 : 12;
+    if (plan.trim().length > 0) base += 2;
+    if (this.matrixPoints.length > 0) base += 3;
+    const gained = base * (s.isMonday ? 2 : 1);
+    s.totalExp = (s.totalExp || 0) + gained;
+    s.level = App.calcLevel(s.totalExp);
     s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
     s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    s.expToNext = App.calcExpToNext(s.totalExp);
     localStorage.setItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
+    if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;
