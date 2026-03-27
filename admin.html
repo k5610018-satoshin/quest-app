@@ -199,6 +199,25 @@ a{color:var(--primary);text-decoration:none}
 .proxy-form .field textarea{min-height:100px;resize:vertical}
 .proxy-form .type-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
 
+/* Matrix visualization */
+.matrix-card{position:relative;width:180px;height:180px;display:inline-block}
+.matrix-card img{width:100%;height:100%;border-radius:8px}
+.matrix-card canvas{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none}
+.matrix-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px}
+.matrix-item{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px;text-align:center}
+.matrix-item .mi-head{font-size:11px;font-weight:600;margin-bottom:4px;display:flex;justify-content:space-between}
+.matrix-item .mi-trail{font-size:10px;color:var(--text2);margin-top:4px;word-break:break-word}
+.zone-chip{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;margin:2px}
+.zone-chip.z-pos{background:#dcfce7;color:#15803d}
+.zone-chip.z-neg{background:#fee2e2;color:#b91c1c}
+.zone-chip.z-mid{background:#dbeafe;color:#1d4ed8}
+
+/* Student detail page */
+.student-detail-header{display:flex;align-items:center;gap:12px;margin-bottom:12px}
+.student-detail-header .sd-num{width:40px;height:40px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:16px}
+.student-detail-header .sd-info h2{font-size:16px;font-weight:700}
+.student-detail-header .sd-info span{font-size:12px;color:var(--text2)}
+
 /* Responsive */
 @media(max-width:768px){
   .content{padding:8px}
@@ -227,6 +246,8 @@ a{color:var(--primary);text-decoration:none}
   <div class="tab active" data-tab="dashboard">ダッシュボード</div>
   <div class="tab" data-tab="diary">📝 日記</div>
   <div class="tab" data-tab="reflection">🔄 振り返り</div>
+  <div class="tab" data-tab="matrix">🌍 心マトリクス</div>
+  <div class="tab" data-tab="analysis">📊 大分析</div>
   <div class="tab" data-tab="proxy">✍️ 代筆</div>
   <div class="tab" data-tab="newsletter">📰 通信用 <span class="badge badge-gray" id="newsletterBadge" style="display:none">0</span></div>
   <div class="tab" data-tab="missing">未提出 <span class="badge badge-red" id="missingBadge">0</span></div>
@@ -389,6 +410,9 @@ function render() {
     case 'dashboard': el.innerHTML = renderDashboard(); break;
     case 'diary': el.innerHTML = renderDiary(); break;
     case 'reflection': el.innerHTML = renderReflection(); break;
+    case 'matrix': el.innerHTML = renderMatrixTab(); setTimeout(drawAdminMatrixCanvases, 50); break;
+    case 'analysis': el.innerHTML = renderAnalysis(); break;
+    case 'student': el.innerHTML = renderStudentDetail(); setTimeout(drawAdminMatrixCanvases, 50); break;
     case 'proxy': el.innerHTML = renderProxy(); break;
     case 'newsletter': el.innerHTML = renderNewsletter(); break;
     case 'missing': el.innerHTML = renderMissing(); break;
@@ -591,7 +615,7 @@ function renderDashboard() {
     const streak = u.streak || u.login_streak || 0;
     const didToday = todayDiaryIds.has(sid) || todayRefIds.has(sid);
     return `
-      <div class="student-card" onclick="selectStudent('${sid}');currentTab='diary';document.querySelectorAll('.tab').forEach(t=>{t.classList.toggle('active',t.dataset.tab==='diary')});render()">
+      <div class="student-card" onclick="selectedStudentId='${sid}';currentTab='student';document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));render()">
         <div class="sc-top">
           <div class="sc-num" style="${didToday ? 'background:var(--success)' : ''}">${u.student_number || '?'}</div>
           <div>
@@ -928,7 +952,263 @@ async function saveRefComment(refId, textareaId, btn) {
 }
 
 // ============================================================
-// 3b. Proxy (代筆)
+// 3b. Matrix Tab (心マトリクス)
+// ============================================================
+function getZoneType(zone) {
+  if (!zone) return 'mid';
+  const pos = ['学びが生まれる','パワーアップ','太陽','星'];
+  const neg = ['イライラ','ダラダラ','不安・寂しい','たいくつ・どんより','人も自分もイヤな顔','沼','ブラックホール','曇','雷'];
+  if (pos.some(p => zone.includes(p))) return 'pos';
+  if (neg.some(n => zone.includes(n))) return 'neg';
+  return 'mid';
+}
+
+function renderMatrixTab() {
+  let records = [...DB.matrix_records];
+  if (selectedStudentId) records = records.filter(m => m.student_id === selectedStudentId);
+  records.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+
+  // ゾーン集計
+  const zoneCounts = {};
+  records.forEach(m => {
+    const z = m.dominant_zone || m.end_zone || '';
+    if (z) zoneCounts[z] = (zoneCounts[z] || 0) + 1;
+  });
+  const zoneBar = Object.entries(zoneCounts).sort((a,b) => b[1]-a[1]).map(([z,c]) =>
+    `<span class="zone-chip z-${getZoneType(z)}">${escHtml(z)} ×${c}</span>`
+  ).join(' ');
+
+  const cardsHtml = records.length === 0
+    ? '<div style="color:var(--text2);text-align:center;padding:30px">マトリクス記録がありません</div>'
+    : records.map((m, i) => {
+      const dt = new Date(m.created_at || m.date);
+      const days = ['日','月','火','水','木','金','土'];
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      return `<div class="matrix-item">
+        <div class="mi-head">
+          <span>${escHtml(getStudentName(m.student_id))} ${dateStr}</span>
+          <span>${escHtml(m.subject || '')}</span>
+        </div>
+        <div class="matrix-card">
+          <img src="assets/heart-matrix.png" draggable="false">
+          <canvas class="admin-matrix-canvas" data-midx="${i}"></canvas>
+        </div>
+        <div class="mi-trail">${escHtml(m.zone_sequence || m.dominant_zone || '')}</div>
+      </div>`;
+    }).join('');
+
+  return `
+    <div class="filter-bar">${activeFilterHtml()}<span style="color:var(--text2);font-size:12px">${records.length}件</span></div>
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><h3 style="font-size:13px;font-weight:700">ゾーン分布</h3></div>
+      <div class="card-body" style="padding:8px 12px">${zoneBar || '<span style="color:var(--text2)">データなし</span>'}</div>
+    </div>
+    <div class="matrix-grid">${cardsHtml}</div>`;
+}
+
+function drawAdminMatrixCanvases() {
+  const records = (() => {
+    if (currentTab === 'matrix') {
+      let r = [...DB.matrix_records];
+      if (selectedStudentId) r = r.filter(m => m.student_id === selectedStudentId);
+      r.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+      return r;
+    }
+    if (currentTab === 'student' && selectedStudentId) {
+      return DB.matrix_records.filter(m => m.student_id === selectedStudentId)
+        .sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+    }
+    return [];
+  })();
+
+  document.querySelectorAll('.admin-matrix-canvas').forEach(canvas => {
+    const idx = parseInt(canvas.dataset.midx);
+    const m = records[idx];
+    if (!m) return;
+    let points;
+    try { points = JSON.parse(m.points_json || '[]'); } catch { points = []; }
+    if (points.length === 0) return;
+
+    const wrap = canvas.parentElement;
+    const rect = wrap.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = rect.width * dpr;
+    canvas.height = rect.height * dpr;
+    canvas.style.width = rect.width + 'px';
+    canvas.style.height = rect.height + 'px';
+    const ctx = canvas.getContext('2d');
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    const w = rect.width, h = rect.height;
+
+    if (points.length >= 2) {
+      ctx.beginPath();
+      ctx.moveTo(points[0].px * w / 100, points[0].py * h / 100);
+      for (let i = 1; i < points.length; i++) ctx.lineTo(points[i].px * w / 100, points[i].py * h / 100);
+      ctx.strokeStyle = 'rgba(99,102,241,0.6)';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    }
+    points.forEach((p, i) => {
+      const x = p.px * w / 100, y = p.py * h / 100;
+      const t = i / Math.max(points.length - 1, 1);
+      ctx.beginPath();
+      ctx.arc(x, y, 5, 0, Math.PI * 2);
+      ctx.fillStyle = `rgb(${Math.round(99+t*140)},${Math.round(102-t*40)},${Math.round(241-t*100)})`;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+    });
+  });
+}
+
+// ============================================================
+// 3c. Analysis Tab (大分析)
+// ============================================================
+function renderAnalysis() {
+  const reviews = DB.weekly_reviews || [];
+  if (reviews.length === 0) {
+    return `
+      <div class="card">
+        <div class="card-header"><h3 style="font-size:14px;font-weight:700">📊 今週の大分析レポート</h3></div>
+        <div class="card-body" style="text-align:center;padding:30px">
+          <div style="font-size:32px;margin-bottom:8px">📊</div>
+          <div style="color:var(--text2);margin-bottom:12px">まだ大分析レポートが生成されていません</div>
+          <div style="font-size:12px;color:var(--text2);max-width:400px;margin:0 auto;text-align:left;background:#f8fafc;padding:12px;border-radius:8px">
+            <div style="font-weight:700;margin-bottom:4px">生成方法:</div>
+            <div>Claude Codeで以下を実行してください：</div>
+            <code style="display:block;background:#1e293b;color:#e2e8f0;padding:8px;border-radius:4px;margin-top:6px;font-size:11px">python scripts/ai_fukutannin.py --generate-reports --combined</code>
+          </div>
+        </div>
+      </div>`;
+  }
+
+  // 児童別にグループ化
+  const byStudent = {};
+  reviews.forEach(r => {
+    const sid = r.student_id;
+    if (!byStudent[sid]) byStudent[sid] = [];
+    byStudent[sid].push(r);
+  });
+
+  let html = '<h2 style="font-size:16px;font-weight:700;margin-bottom:12px">📊 大分析レポート</h2>';
+  html += `<div class="filter-bar">${activeFilterHtml()}<span style="color:var(--text2);font-size:12px">${reviews.length}件</span></div>`;
+
+  const studentIds = selectedStudentId ? [selectedStudentId] : Object.keys(byStudent);
+  studentIds.forEach(sid => {
+    const recs = byStudent[sid] || [];
+    if (recs.length === 0) return;
+    const latest = recs.sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''))[0];
+    html += `<div class="card" style="margin-bottom:10px">
+      <div class="card-header">
+        <h3 style="font-size:13px;font-weight:700">${getStudentNum(sid)}番 ${escHtml(getStudentName(sid))}</h3>
+        <span style="font-size:11px;color:var(--text2)">${fmtDate(latest.created_at)}</span>
+      </div>
+      <div class="card-body" style="font-size:12px;line-height:1.7;white-space:pre-wrap">${escHtml(latest.content || latest.review_text || JSON.stringify(latest))}</div>
+    </div>`;
+  });
+  return html;
+}
+
+// ============================================================
+// 3d. Student Detail (児童個人ページ)
+// ============================================================
+function renderStudentDetail() {
+  if (!selectedStudentId) { currentTab = 'dashboard'; return renderDashboard(); }
+  const u = getStudent(selectedStudentId);
+  if (!u) { currentTab = 'dashboard'; return renderDashboard(); }
+  const sid = selectedStudentId;
+
+  const diaries = DB.diaries.filter(d => d.student_id === sid).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+  const refs = DB.reflections.filter(r => r.student_id === sid).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+  const matrices = DB.matrix_records.filter(m => m.student_id === sid).sort((a,b) => (b.created_at||'').localeCompare(a.created_at||''));
+  const streak = u.streak || u.login_streak || 0;
+
+  // ゾーン集計
+  const zoneCounts = {};
+  matrices.forEach(m => { const z = m.dominant_zone || ''; if (z) zoneCounts[z] = (zoneCounts[z]||0)+1; });
+  const zoneBar = Object.entries(zoneCounts).sort((a,b)=>b[1]-a[1]).map(([z,c]) =>
+    `<span class="zone-chip z-${getZoneType(z)}">${escHtml(z)} ×${c}</span>`
+  ).join(' ');
+
+  // 日記カード
+  const diaryHtml = diaries.length === 0
+    ? '<div style="color:var(--text2);padding:10px">日記なし</div>'
+    : diaries.slice(0,10).map(d => `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="display:flex;justify-content:space-between"><span style="font-weight:600">${fmtDate(d.created_at)}</span></div>
+        <div style="line-height:1.5;white-space:pre-wrap;margin:2px 0">${escHtml((d.content||'').slice(0,150))}${(d.content||'').length > 150 ? '...' : ''}</div>
+        ${d.teacher_comment ? `<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:2px 6px;border-radius:4px;margin-top:2px">💬 ${escHtml(d.teacher_comment)}</div>` : ''}
+      </div>`).join('');
+
+  // 振り返りカード
+  const refHtml = refs.length === 0
+    ? '<div style="color:var(--text2);padding:10px">振り返りなし</div>'
+    : refs.slice(0,10).map(r => {
+      const starLabels = ['','⭐','⭐⭐','⭐⭐⭐'];
+      return `<div style="padding:6px 0;border-bottom:1px solid var(--border);font-size:12px">
+        <div style="display:flex;justify-content:space-between;gap:4px">
+          <span style="font-weight:600">${fmtDate(r.created_at)} ${escHtml(r.subject||'')}</span>
+          <span style="font-size:10px;color:var(--text2)">${escHtml(r.types||'')}</span>
+        </div>
+        ${r.plan ? `<div style="font-size:11px;color:#166534">📋 ${escHtml(r.plan)}</div>` : ''}
+        <div style="line-height:1.5;white-space:pre-wrap;margin:2px 0">${escHtml((r.content||'').slice(0,150))}${(r.content||'').length > 150 ? '...' : ''}</div>
+        ${r.star_rating ? `<div style="font-size:12px">${starLabels[r.star_rating]||''} ${escHtml(r.star_message||'')}</div>` : ''}
+        ${r.teacher_comment ? `<div style="font-size:11px;color:#92400e;background:#fef3c7;padding:2px 6px;border-radius:4px;margin-top:2px">💬 ${escHtml(r.teacher_comment)}</div>` : ''}
+      </div>`;
+    }).join('');
+
+  // マトリクス
+  const matrixHtml = matrices.length === 0
+    ? '<div style="color:var(--text2);padding:10px">記録なし</div>'
+    : `<div style="margin-bottom:6px">${zoneBar || ''}</div>
+       <div style="display:flex;flex-wrap:wrap;gap:8px">${matrices.slice(0,6).map((m,i) => {
+      const dt = new Date(m.created_at || m.date);
+      const days = ['日','月','火','水','木','金','土'];
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      return `<div style="text-align:center">
+        <div style="font-size:10px;margin-bottom:2px">${dateStr} ${escHtml(m.subject||'')}</div>
+        <div class="matrix-card" style="width:140px;height:140px">
+          <img src="assets/heart-matrix.png" draggable="false">
+          <canvas class="admin-matrix-canvas" data-midx="${i}"></canvas>
+        </div>
+      </div>`;
+    }).join('')}</div>`;
+
+  return `
+    <div style="margin-bottom:12px">
+      <button class="btn btn-sm btn-outline" onclick="selectedStudentId=null;currentTab='dashboard';document.querySelectorAll('.tab').forEach(t=>t.classList.toggle('active',t.dataset.tab==='dashboard'));render()">← ダッシュボードに戻る</button>
+    </div>
+    <div class="student-detail-header">
+      <div class="sd-num">${u.student_number || '?'}</div>
+      <div class="sd-info">
+        <h2>${escHtml(u.name)}</h2>
+        <span>Lv.${u.level||1} / ${u.exp||0} EXP / ストリーク ${streak}日 ${streak>=3?'🔥':''}</span>
+      </div>
+    </div>
+    <div class="stats-row" style="margin-bottom:12px">
+      <div class="stat-box"><div class="stat-val">${diaries.length}</div><div class="stat-label">日記</div></div>
+      <div class="stat-box"><div class="stat-val">${refs.length}</div><div class="stat-label">振り返り</div></div>
+      <div class="stat-box"><div class="stat-val">${matrices.length}</div><div class="stat-label">マトリクス</div></div>
+      <div class="stat-box"><div class="stat-val">${refs.filter(r=>r.star_rating>0).length}</div><div class="stat-label">星つき</div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:12px">
+      <div class="card">
+        <div class="card-header"><h3 style="font-size:13px;font-weight:700">📝 日記 (${diaries.length})</h3></div>
+        <div class="card-body" style="max-height:400px;overflow-y:auto;padding:8px 12px">${diaryHtml}</div>
+      </div>
+      <div class="card">
+        <div class="card-header"><h3 style="font-size:13px;font-weight:700">🔄 振り返り (${refs.length})</h3></div>
+        <div class="card-body" style="max-height:400px;overflow-y:auto;padding:8px 12px">${refHtml}</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 style="font-size:13px;font-weight:700">🌍 心マトリクス (${matrices.length})</h3></div>
+      <div class="card-body" style="padding:8px 12px">${matrixHtml}</div>
+    </div>`;
+}
+
+// ============================================================
+// 3e. Proxy (代筆)
 // ============================================================
 function renderProxy() {
   const studentOpts = DB.users.map(u => `<option value="${getStudentId(u)}">${u.student_number}番 ${escHtml(u.name)}</option>`).join('');
