@@ -522,11 +522,50 @@ const LEVEL_THRESHOLDS = [0,10,30,50,80,120,170,230,300,380,470,570,680,800,930,
 document.addEventListener('DOMContentLoaded', () => App.init());
 /**
  * 学びの冒険クエスト - 日記入力画面
+ * ★高速化: ガチャをクライアント側で即座実行→結果を先に表示→GAS保存はバックグラウンド
  */
+
+// クライアント側ガチャテーブル（code.jsと同じ）
+const CLIENT_GACHA = [
+  { id: 'mon_001', name: 'スライムン', rarity: 1, rate: 0.05 },
+  { id: 'mon_002', name: 'コモリ', rarity: 1, rate: 0.05 },
+  { id: 'mon_003', name: 'ヒノタマ', rarity: 1, rate: 0.05 },
+  { id: 'mon_004', name: 'モグリン', rarity: 1, rate: 0.05 },
+  { id: 'mon_005', name: 'フワリス', rarity: 1, rate: 0.05 },
+  { id: 'mon_006', name: 'カゲロウ', rarity: 2, rate: 0.03 },
+  { id: 'mon_007', name: 'コオリノ', rarity: 2, rate: 0.03 },
+  { id: 'mon_008', name: 'イカヅチ', rarity: 2, rate: 0.03 },
+  { id: 'mon_009', name: 'ハナビ', rarity: 2, rate: 0.03 },
+  { id: 'mon_010', name: 'ツキヨミ', rarity: 2, rate: 0.03 },
+  { id: 'mon_011', name: 'ゴーレム', rarity: 2, rate: 0.03 },
+  { id: 'mon_012', name: 'フェニリス', rarity: 3, rate: 0.01 },
+  { id: 'mon_013', name: 'リヴァイア', rarity: 3, rate: 0.01 },
+  { id: 'mon_014', name: 'ヤマタノ', rarity: 3, rate: 0.01 },
+  { id: 'mon_015', name: 'テンクウ', rarity: 3, rate: 0.01 }
+];
+
+function clientRollGacha(isFriday) {
+  const table = CLIENT_GACHA.map(m => ({
+    ...m,
+    effectiveRate: (isFriday && m.rarity >= 2) ? m.rate * 2 : m.rate
+  }));
+  const totalRate = table.reduce((sum, m) => sum + m.effectiveRate, 0);
+  const missRate = Math.max(0.10, 1 - totalRate);
+  const roll = Math.random() * (totalRate + missRate);
+  let cumulative = 0;
+  for (const m of table) {
+    cumulative += m.effectiveRate;
+    if (roll < cumulative) return m;
+  }
+  return null;
+}
 
 const Diary = {
   init() {
     const el = document.getElementById('screen-diary');
+    const s = App.currentStudent;
+    const alreadyDone = s.diaryDoneToday;
+
     el.innerHTML = `
       <div class="screen-header">
         <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
@@ -540,14 +579,13 @@ const Diary = {
           <span id="diary-chars">0</span>文字
         </div>
         <button id="diary-submit" class="submit-btn" onclick="Diary.submit()">
-          📮 送信してガチャを引く！
+          ${alreadyDone ? '📮 日記を追加する' : '📮 送信してガチャを引く！'}
         </button>
       </div>
 
       <div id="diary-result" class="result-area" style="display:none;"></div>
     `;
 
-    // 文字数カウント
     document.getElementById('diary-content').addEventListener('input', (e) => {
       document.getElementById('diary-chars').textContent = e.target.value.length;
     });
@@ -555,58 +593,58 @@ const Diary = {
 
   async submit() {
     const content = document.getElementById('diary-content').value.trim();
-    if (!content) {
-      App.showError('日記の内容を入力してください');
-      return;
-    }
+    if (!content) return App.showError('日記の内容を入力してください');
 
     const btn = document.getElementById('diary-submit');
     btn.disabled = true;
-    btn.textContent = '送信中...';
 
+    const s = App.currentStudent;
+    const alreadyDone = s.diaryDoneToday;
+    const isMon = s.isMonday;
+    const isFri = s.isFriday;
+
+    // ★即座にクライアント側で結果を予測して表示
+    const baseExp = alreadyDone ? 5 : 10;
+    const expGained = baseExp * (isMon ? 2 : 1);
+    const gachaResult = (!alreadyDone) ? clientRollGacha(isFri) : null;
+
+    // 即座に結果画面を表示（API応答を待たない）
+    this.showInstantResult(expGained, gachaResult, isMon, alreadyDone, s);
+
+    // バックグラウンドでGASに保存
     const result = await API.submitDiary(App.currentStudent.studentId, content);
 
     if (result.success) {
-      this.showResult(result);
+      // GASの正確な結果で更新（ストリーク報酬・マイルストーンなど）
+      this.updateWithServerResult(result);
     } else {
-      App.showError(result.error || '送信に失敗しました');
-      btn.disabled = false;
-      btn.textContent = '📮 送信してガチャを引く！';
+      App.showError('保存エラー: ' + (result.error || ''));
     }
   },
 
-  showResult(result) {
+  showInstantResult(expGained, gachaResult, isMonday, alreadyDone, student) {
     const area = document.getElementById('diary-result');
     area.style.display = 'block';
-
-    // 送信フォームを隠す
     document.querySelector('.diary-form').style.display = 'none';
-
-    const exp = result.exp;
-    const gacha = result.gacha;
-    const streak = result.streak;
 
     let html = `
       <div class="result-exp animate-pop">
-        <div class="exp-gain">+${exp.expGained} EXP${exp.isMonday ? ' (月曜2倍！)' : ''}</div>
-        ${exp.leveledUp ? `<div class="level-up">🎉 レベルアップ！ Lv.${exp.oldLevel} → Lv.${exp.newLevel}</div>` : ''}
+        <div class="exp-gain">+${expGained} EXP${isMonday ? ' (月曜2倍！)' : ''}</div>
       </div>
 
       <div class="result-streak">
-        🔥 連続 ${streak.streakDays} 日${streak.reviveUsed ? ' (復活チケット使用！)' : ''}
-        ${streak.newRewards.length > 0 ? '<br>🏆 ' + streak.newRewards.map(r => r.name).join(', ') + ' 獲得！' : ''}
+        🔥 連続 ${(student.streakDays || 0) + (student.streakDays === 0 ? 1 : 0)} 日
       </div>
     `;
 
-    // ガチャ結果
-    if (result.isFirstToday) {
-      if (gacha.item) {
-        const stars = '⭐'.repeat(gacha.item.rarity);
+    if (!alreadyDone) {
+      if (gachaResult) {
+        const stars = '⭐'.repeat(gachaResult.rarity);
         html += `
           <div class="gacha-result animate-gacha">
-            <div class="gacha-card rarity-${gacha.item.rarity}">
+            <div class="gacha-card rarity-${gachaResult.rarity}">
               <div class="gacha-stars">${stars}</div>
-              <div class="gacha-name">${gacha.item.name}</div>
+              <div class="gacha-name">${gachaResult.name}</div>
               <div class="gacha-new">NEW!</div>
             </div>
           </div>
@@ -619,27 +657,36 @@ const Diary = {
           </div>
         `;
       }
-    } else {
-      html += `<div class="gacha-info">（今日は2回目なのでガチャはなし）</div>`;
-    }
-
-    // マイルストーン報酬
-    if (result.milestones && result.milestones.length > 0) {
-      html += `
-        <div class="milestone-result">
-          🗡️ マイルストーン達成！
-          ${result.milestones.map(m => `<div class="milestone-item">${m.name} を手に入れた！</div>`).join('')}
-        </div>
-      `;
     }
 
     html += `
-      <button class="return-btn" onclick="App.showHome()">
-        🏠 ホームにもどる
-      </button>
+      <div id="diary-server-extras"></div>
+      <button class="return-btn" onclick="App.showHome()">🏠 ホームにもどる</button>
     `;
 
     area.innerHTML = html;
+  },
+
+  updateWithServerResult(result) {
+    // GASからの正確な結果でストリーク・マイルストーン等を追記
+    const extras = document.getElementById('diary-server-extras');
+    if (!extras) return;
+
+    let html = '';
+    const streak = result.streak;
+    if (streak && streak.newRewards && streak.newRewards.length > 0) {
+      html += `<div class="milestone-result">🏆 ${streak.newRewards.map(r => r.name).join(', ')} 獲得！</div>`;
+    }
+    if (result.milestones && result.milestones.length > 0) {
+      html += `<div class="milestone-result">🗡️ ${result.milestones.map(m => m.name).join(', ')} を手に入れた！</div>`;
+    }
+    if (result.exp && result.exp.leveledUp) {
+      const expEl = document.querySelector('.result-exp');
+      if (expEl) {
+        expEl.innerHTML += `<div class="level-up">🎉 レベルアップ！ Lv.${result.exp.oldLevel} → Lv.${result.exp.newLevel}</div>`;
+      }
+    }
+    extras.innerHTML = html;
   }
 };
 /**
@@ -926,29 +973,33 @@ const Reflection = {
     btn.disabled = true;
     btn.textContent = '送信中...';
 
+    // ★即座にクライアント側で結果を予測して表示
+    const detectedTypes = TYPES.detect(content);
+    let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
+    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
+    const hasMatrix = this.matrixPoints.length > 0;
+
+    // 即座に結果を表示（API応答を待たない）
+    this.showInstantResult(expGained, detectedTypes, hasMatrix);
+
+    // バックグラウンドでGASに保存
     let result;
-    if (this.matrixPoints.length > 0) {
-      // 振り返り+マトリクス同時投稿
+    if (hasMatrix) {
       const startZone = this.matrixPoints[0].zone;
       const endZone = this.matrixPoints[this.matrixPoints.length - 1].zone;
-      const zoneSeq = this.getZoneSequence();
-      const dominant = this.getDominantZone();
-
       result = await API.submitReflectionWithMatrix(
         App.currentStudent.studentId,
         { subject, period, plan, content },
-        { matrixPoints: this.matrixPoints, matrixStartZone: startZone, matrixEndZone: endZone, matrixZoneSequence: zoneSeq, matrixDominantZone: dominant }
+        { matrixPoints: this.matrixPoints, matrixStartZone: startZone, matrixEndZone: endZone, matrixZoneSequence: this.getZoneSequence(), matrixDominantZone: this.getDominantZone() }
       );
     } else {
       result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
     if (result.success) {
-      this.showResult(result);
+      this.updateWithServerResult(result);
     } else {
-      App.showError(result.error || '送信に失敗しました');
-      btn.disabled = false;
-      btn.textContent = '✏️ 振り返り＋マトリクスを送信';
+      App.showError('保存エラー: ' + (result.error || ''));
     }
   },
 
@@ -965,27 +1016,45 @@ const Reflection = {
     return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
   },
 
-  showResult(result) {
+  showInstantResult(expGained, detectedTypes, hasMatrix) {
     const area = document.getElementById('ref-result');
     area.style.display = 'flex';
-
-    const r = result.reflection || result;
-    const exp = r.exp || result.exp;
-    const types = r.detectedTypes || result.detectedTypes || [];
-    const skills = r.skills || result.skills || { updatedTypes: [], newBadges: [] };
 
     area.innerHTML = `
       <div class="result-card">
         <div class="result-exp animate-pop">
-          +${exp.expGained} EXP${exp.isMonday ? ' (月曜2倍！)' : ''}
-          ${exp.leveledUp ? '<br>🎉 Lv.' + exp.oldLevel + ' → Lv.' + exp.newLevel : ''}
+          +${expGained} EXP${App.currentStudent.isMonday ? ' (月曜2倍！)' : ''}
         </div>
-        ${types.length > 0 ? `<div class="result-types-line">${types.map(s => { const t = TYPES.getBySymbol(s); return `<span style="color:${t?.color||'#666'}">${s}${t?.name||''}</span>`; }).join(' ')}</div>` : ''}
-        ${skills.updatedTypes.filter(u => u.level > u.oldLevel).map(u => `<div>⬆️ ${TYPES.getBySymbol(u.symbol)?.name||u.symbol} Lv.${u.level}</div>`).join('')}
-        ${this.matrixPoints.length > 0 ? `<div>🌍 マトリクス記録済み（${this.matrixPoints.length}ポイント）</div>` : ''}
+        ${detectedTypes.length > 0 ? `<div class="result-types-line">${detectedTypes.map(s => { const t = TYPES.getBySymbol(s); return '<span style="color:' + (t?.color||'#666') + '">' + s + ' ' + (t?.name||'') + '</span>'; }).join(' ')}</div>` : ''}
+        ${hasMatrix ? '<div>🌍 マトリクス記録中...</div>' : ''}
+        <div id="ref-server-extras"></div>
         <button class="return-btn" onclick="document.getElementById('ref-result').style.display='none'; App.showHome()">🏠 ホームにもどる</button>
       </div>
     `;
+  },
+
+  updateWithServerResult(result) {
+    const extras = document.getElementById('ref-server-extras');
+    if (!extras) return;
+    let html = '';
+    const r = result.reflection || result;
+    const exp = r.exp || result.exp;
+    const skills = r.skills || result.skills || { updatedTypes: [], newBadges: [] };
+    if (exp && exp.leveledUp) {
+      html += `<div class="level-up">🎉 レベルアップ！ Lv.${exp.oldLevel} → Lv.${exp.newLevel}</div>`;
+    }
+    if (skills.updatedTypes) {
+      skills.updatedTypes.filter(u => u.level > u.oldLevel).forEach(u => {
+        html += `<div>⬆️ ${TYPES.getBySymbol(u.symbol)?.name||u.symbol} Lv.${u.level}</div>`;
+      });
+    }
+    extras.innerHTML = html;
+  },
+
+  showResult(result) {
+    // 旧互換（直接呼び出し用）
+    this.showInstantResult(0, [], false);
+    this.updateWithServerResult(result);
   }
 };
 /**

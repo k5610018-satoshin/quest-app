@@ -282,29 +282,33 @@ const Reflection = {
     btn.disabled = true;
     btn.textContent = '送信中...';
 
+    // ★即座にクライアント側で結果を予測して表示
+    const detectedTypes = TYPES.detect(content);
+    let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
+    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
+    const hasMatrix = this.matrixPoints.length > 0;
+
+    // 即座に結果を表示（API応答を待たない）
+    this.showInstantResult(expGained, detectedTypes, hasMatrix);
+
+    // バックグラウンドでGASに保存
     let result;
-    if (this.matrixPoints.length > 0) {
-      // 振り返り+マトリクス同時投稿
+    if (hasMatrix) {
       const startZone = this.matrixPoints[0].zone;
       const endZone = this.matrixPoints[this.matrixPoints.length - 1].zone;
-      const zoneSeq = this.getZoneSequence();
-      const dominant = this.getDominantZone();
-
       result = await API.submitReflectionWithMatrix(
         App.currentStudent.studentId,
         { subject, period, plan, content },
-        { matrixPoints: this.matrixPoints, matrixStartZone: startZone, matrixEndZone: endZone, matrixZoneSequence: zoneSeq, matrixDominantZone: dominant }
+        { matrixPoints: this.matrixPoints, matrixStartZone: startZone, matrixEndZone: endZone, matrixZoneSequence: this.getZoneSequence(), matrixDominantZone: this.getDominantZone() }
       );
     } else {
       result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
     if (result.success) {
-      this.showResult(result);
+      this.updateWithServerResult(result);
     } else {
-      App.showError(result.error || '送信に失敗しました');
-      btn.disabled = false;
-      btn.textContent = '✏️ 振り返り＋マトリクスを送信';
+      App.showError('保存エラー: ' + (result.error || ''));
     }
   },
 
@@ -321,26 +325,44 @@ const Reflection = {
     return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || '中心';
   },
 
-  showResult(result) {
+  showInstantResult(expGained, detectedTypes, hasMatrix) {
     const area = document.getElementById('ref-result');
     area.style.display = 'flex';
-
-    const r = result.reflection || result;
-    const exp = r.exp || result.exp;
-    const types = r.detectedTypes || result.detectedTypes || [];
-    const skills = r.skills || result.skills || { updatedTypes: [], newBadges: [] };
 
     area.innerHTML = `
       <div class="result-card">
         <div class="result-exp animate-pop">
-          +${exp.expGained} EXP${exp.isMonday ? ' (月曜2倍！)' : ''}
-          ${exp.leveledUp ? '<br>🎉 Lv.' + exp.oldLevel + ' → Lv.' + exp.newLevel : ''}
+          +${expGained} EXP${App.currentStudent.isMonday ? ' (月曜2倍！)' : ''}
         </div>
-        ${types.length > 0 ? `<div class="result-types-line">${types.map(s => { const t = TYPES.getBySymbol(s); return `<span style="color:${t?.color||'#666'}">${s}${t?.name||''}</span>`; }).join(' ')}</div>` : ''}
-        ${skills.updatedTypes.filter(u => u.level > u.oldLevel).map(u => `<div>⬆️ ${TYPES.getBySymbol(u.symbol)?.name||u.symbol} Lv.${u.level}</div>`).join('')}
-        ${this.matrixPoints.length > 0 ? `<div>🌍 マトリクス記録済み（${this.matrixPoints.length}ポイント）</div>` : ''}
+        ${detectedTypes.length > 0 ? `<div class="result-types-line">${detectedTypes.map(s => { const t = TYPES.getBySymbol(s); return '<span style="color:' + (t?.color||'#666') + '">' + s + ' ' + (t?.name||'') + '</span>'; }).join(' ')}</div>` : ''}
+        ${hasMatrix ? '<div>🌍 マトリクス記録中...</div>' : ''}
+        <div id="ref-server-extras"></div>
         <button class="return-btn" onclick="document.getElementById('ref-result').style.display='none'; App.showHome()">🏠 ホームにもどる</button>
       </div>
     `;
+  },
+
+  updateWithServerResult(result) {
+    const extras = document.getElementById('ref-server-extras');
+    if (!extras) return;
+    let html = '';
+    const r = result.reflection || result;
+    const exp = r.exp || result.exp;
+    const skills = r.skills || result.skills || { updatedTypes: [], newBadges: [] };
+    if (exp && exp.leveledUp) {
+      html += `<div class="level-up">🎉 レベルアップ！ Lv.${exp.oldLevel} → Lv.${exp.newLevel}</div>`;
+    }
+    if (skills.updatedTypes) {
+      skills.updatedTypes.filter(u => u.level > u.oldLevel).forEach(u => {
+        html += `<div>⬆️ ${TYPES.getBySymbol(u.symbol)?.name||u.symbol} Lv.${u.level}</div>`;
+      });
+    }
+    extras.innerHTML = html;
+  },
+
+  showResult(result) {
+    // 旧互換（直接呼び出し用）
+    this.showInstantResult(0, [], false);
+    this.updateWithServerResult(result);
   }
 };
