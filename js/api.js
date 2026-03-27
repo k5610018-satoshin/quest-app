@@ -70,8 +70,8 @@ const API = {
   },
 
   // === 振り返り ===
-  async submitReflection(studentId, subject, period, content) {
-    return this.post('submitReflection', { studentId, subject, period, content });
+  async submitReflection(studentId, subject, period, plan, content) {
+    return this.post('submitReflection', { studentId, subject, period, plan, content });
   },
 
   async getReflections(studentId) {

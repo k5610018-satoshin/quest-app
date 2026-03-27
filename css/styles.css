@@ -166,6 +166,14 @@ body {
 .sel-sm { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: white; }
 .back-link { margin-left: auto; background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 0.85rem; }
 
+.ref-plan-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
+.ref-label { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
+.ref-plan-input {
+  flex: 1; padding: 6px 10px; border: 2px solid var(--border); border-radius: 6px;
+  font-size: 0.9rem; font-family: inherit;
+}
+.ref-plan-input:focus { outline: none; border-color: var(--primary); }
+
 .type-toolbar { display: flex; gap: 3px; margin-bottom: 8px; flex-wrap: wrap; }
 .type-btn {
   display: flex; flex-direction: column; align-items: center; gap: 1px;

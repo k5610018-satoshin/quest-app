@@ -89,8 +89,8 @@ const API = {
   },
 
   // === 振り返り ===
-  async submitReflection(studentId, subject, period, content) {
-    return this.post('submitReflection', { studentId, subject, period, content });
+  async submitReflection(studentId, subject, period, plan, content) {
+    return this.post('submitReflection', { studentId, subject, period, plan, content });
   },
 
   async getReflections(studentId) {
@@ -670,6 +670,11 @@ const Reflection = {
             <button class="back-link" onclick="App.showHome(false)">← ホーム</button>
           </div>
 
+          <div class="ref-plan-row">
+            <label class="ref-label">📋 計画</label>
+            <input type="text" id="ref-plan" class="ref-plan-input" placeholder="今日の授業でがんばること・めあて">
+          </div>
+
           <div class="type-toolbar" id="type-toolbar">
             ${TYPES.definitions.map(t => `
               <button class="type-btn" data-symbol="${t.symbol}"
@@ -682,9 +687,9 @@ const Reflection = {
             `).join('')}
           </div>
 
-          <textarea id="ref-content" class="ref-textarea" rows="6"
+          <textarea id="ref-content" class="ref-textarea" rows="5"
             oninput="Reflection.onInput()"
-            placeholder="記号をタップ → 振り返りを書こう&#10;＋ できたこと &#10;− 難しかったこと&#10;→ 次の目標&#10;！ 気づき&#10;？ ギモン&#10;⭐ 成長&#10;☀️ 仲間から学んだこと"></textarea>
+            placeholder="記号をタップ → 振り返りを書こう&#10;＋ できたこと  − 難しかったこと&#10;→ 次の目標  ！ 気づき&#10;？ ギモン  ⭐ 成長  ☀️ 仲間"></textarea>
 
           <div class="detected-types" id="detected-types"></div>
 
@@ -880,6 +885,7 @@ const Reflection = {
   async submit() {
     const subject = document.getElementById('ref-subject').value;
     const period = document.getElementById('ref-period').value;
+    const plan = document.getElementById('ref-plan').value.trim();
     const content = document.getElementById('ref-content').value.trim();
 
     if (!subject) return App.showError('教科を選択してください');
@@ -899,11 +905,11 @@ const Reflection = {
 
       result = await API.submitReflectionWithMatrix(
         App.currentStudent.studentId,
-        { subject, period, content },
+        { subject, period, plan, content },
         { matrixPoints: this.matrixPoints, matrixStartZone: startZone, matrixEndZone: endZone, matrixZoneSequence: zoneSeq, matrixDominantZone: dominant }
       );
     } else {
-      result = await API.submitReflection(App.currentStudent.studentId, subject, period, content);
+      result = await API.submitReflection(App.currentStudent.studentId, subject, period, plan, content);
     }
 
     if (result.success) {
