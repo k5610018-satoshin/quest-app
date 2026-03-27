@@ -387,15 +387,24 @@ const App = {
 
       ${status.skillSummary && status.skillSummary.length > 0 ? `
       <div class="home-skills">
-        ${status.skillSummary.map(s => {
-          const type = TYPES.definitions.find(t => t.symbol === s.symbol);
-          const pct = s.count > 0 ? Math.min(s.count / (s.level < 5 ? [1,5,15,30,50][s.level] : 50) * 100, 100) : 0;
-          return '<div class="home-skill-item" style="--sk-color:' + (type ? type.color : '#999') + '">' +
-            '<span class="home-skill-sym">' + s.symbol + '</span>' +
-            '<div class="home-skill-bar"><div class="home-skill-fill" style="width:' + pct + '%"></div></div>' +
-            '<span class="home-skill-lv">Lv.' + s.level + '</span>' +
-            '</div>';
-        }).join('')}
+        <div class="home-skills-title">⚔️ スキルツリー</div>
+        <div class="home-skills-grid">
+          ${status.skillSummary.map(s => {
+            const type = TYPES.definitions.find(t => t.symbol === s.symbol);
+            const nextReq = s.level < 5 ? [1,5,15,30,50][s.level] : 50;
+            const pct = s.count > 0 ? Math.min(s.count / nextReq * 100, 100) : 0;
+            const lvlNames = ['', '見習い', '使い手', '達人', '名人', '伝説'];
+            return '<div class="home-skill-card" style="--sk-color:' + (type ? type.color : '#999') + '">' +
+              '<div class="home-skill-top">' +
+                '<span class="home-skill-sym">' + s.symbol + '</span>' +
+                '<span class="home-skill-name">' + (type ? type.name : '') + '</span>' +
+                '<span class="home-skill-lv">Lv.' + s.level + (lvlNames[s.level] ? ' ' + lvlNames[s.level] : '') + '</span>' +
+              '</div>' +
+              '<div class="home-skill-bar"><div class="home-skill-fill" style="width:' + pct + '%"></div></div>' +
+              '<div class="home-skill-count">' + s.count + ' / ' + nextReq + '</div>' +
+              '</div>';
+          }).join('')}
+        </div>
       </div>` : ''}
 
       <div class="sub-buttons">

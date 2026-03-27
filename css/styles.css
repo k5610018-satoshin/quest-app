@@ -120,16 +120,23 @@ body {
 }
 .sub-btn:hover { border-color: var(--primary); }
 
-/* ホーム内スキルツリー（コンパクト横並び） */
+/* ホーム内スキルツリー（詳細表示） */
 .home-skills {
-  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px; margin-bottom: 10px;
-  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px;
+  margin-bottom: 10px; background: var(--card-bg); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 8px 12px;
 }
-.home-skill-item { display: flex; align-items: center; gap: 4px; }
-.home-skill-sym { font-size: 1rem; width: 20px; text-align: center; }
-.home-skill-bar { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
-.home-skill-fill { height: 100%; background: var(--sk-color); border-radius: 3px; }
-.home-skill-lv { font-size: 0.65rem; color: var(--text-light); min-width: 28px; }
+.home-skills-title { font-size: 0.8rem; font-weight: 600; margin-bottom: 6px; color: var(--text-light); }
+.home-skills-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
+.home-skill-card {
+  border-left: 3px solid var(--sk-color); padding: 4px 8px; background: #fafbfc; border-radius: 4px;
+}
+.home-skill-top { display: flex; align-items: center; gap: 4px; margin-bottom: 3px; }
+.home-skill-sym { font-size: 1.1rem; }
+.home-skill-name { font-size: 0.75rem; font-weight: 600; flex: 1; }
+.home-skill-lv { font-size: 0.65rem; color: var(--sk-color); font-weight: 600; }
+.home-skill-bar { height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.home-skill-fill { height: 100%; background: var(--sk-color); border-radius: 3px; transition: width 0.3s; }
+.home-skill-count { font-size: 0.6rem; color: var(--text-light); text-align: right; margin-top: 1px; }
 
 .new-items-banner {
   background: linear-gradient(135deg, #fef3c7, #fff7ed); border: 1px solid #f59e0b;
