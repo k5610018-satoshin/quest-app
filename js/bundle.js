@@ -385,10 +385,20 @@ const App = {
         </button>
       </div>
 
+      ${status.skillSummary && status.skillSummary.length > 0 ? `
+      <div class="home-skills">
+        ${status.skillSummary.map(s => {
+          const type = TYPES.definitions.find(t => t.symbol === s.symbol);
+          const pct = s.count > 0 ? Math.min(s.count / (s.level < 5 ? [1,5,15,30,50][s.level] : 50) * 100, 100) : 0;
+          return '<div class="home-skill-item" style="--sk-color:' + (type ? type.color : '#999') + '">' +
+            '<span class="home-skill-sym">' + s.symbol + '</span>' +
+            '<div class="home-skill-bar"><div class="home-skill-fill" style="width:' + pct + '%"></div></div>' +
+            '<span class="home-skill-lv">Lv.' + s.level + '</span>' +
+            '</div>';
+        }).join('')}
+      </div>` : ''}
+
       <div class="sub-buttons">
-        <button class="sub-btn" onclick="App.showScreen('skill-tree')">
-          <span>⚔️</span><span>スキルツリー</span>
-        </button>
         <button class="sub-btn" onclick="App.showScreen('collection')">
           <span>📖</span><span>図鑑</span>
         </button>

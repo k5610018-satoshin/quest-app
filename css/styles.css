@@ -120,6 +120,17 @@ body {
 }
 .sub-btn:hover { border-color: var(--primary); }
 
+/* ホーム内スキルツリー（コンパクト横並び） */
+.home-skills {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px 8px; margin-bottom: 10px;
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius); padding: 8px 10px;
+}
+.home-skill-item { display: flex; align-items: center; gap: 4px; }
+.home-skill-sym { font-size: 1rem; width: 20px; text-align: center; }
+.home-skill-bar { flex: 1; height: 5px; background: var(--border); border-radius: 3px; overflow: hidden; }
+.home-skill-fill { height: 100%; background: var(--sk-color); border-radius: 3px; }
+.home-skill-lv { font-size: 0.65rem; color: var(--text-light); min-width: 28px; }
+
 .new-items-banner {
   background: linear-gradient(135deg, #fef3c7, #fff7ed); border: 1px solid #f59e0b;
   border-radius: var(--radius); padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;
