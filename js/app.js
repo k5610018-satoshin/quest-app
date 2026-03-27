@@ -28,6 +28,7 @@ const App = {
 
   /**
    * トークンでログイン（メイン認証方式）
+   * getStudentByTokenが認証+ステータスを一括返却するので、showHomeのAPI再取得は不要
    */
   async loginByToken(token) {
     this.showLoading('冒険者を確認中...');
@@ -41,7 +42,9 @@ const App = {
       if (window.location.search.includes('token=')) {
         window.history.replaceState({}, '', window.location.pathname);
       }
-      await this.showHome();
+      // API応答にフルステータスが含まれるので、そのままホーム描画（追加API不要）
+      this.renderHome(result.student);
+      this.showScreen('home');
     } else {
       this.showError('トークンが無効です。先生に確認してください。');
       localStorage.removeItem('quest_access_token');
@@ -152,9 +155,9 @@ const App = {
         </button>
       </div>
 
-      ${status.recentNewItems.length > 0 ? `
+      ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) ? `
         <div class="new-items-banner">
-          <span>🎁 新しいアイテムが${status.recentNewItems.length}個！</span>
+          <span>🎁 新しいアイテムが${status.newItemCount || status.recentNewItems.length}個！</span>
           <button onclick="App.showScreen('collection')">確認する</button>
         </div>
       ` : ''}
