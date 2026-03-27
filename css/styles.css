@@ -209,6 +209,19 @@ body {
 .history-exp { margin-left: auto; color: var(--success); font-weight: bold; }
 .history-gacha { color: var(--warning); }
 .history-card-body { line-height: 1.5; white-space: pre-wrap; word-break: break-word; overflow-wrap: break-word; }
+.history-star {
+  margin-top: 4px; padding: 5px 8px; background: #fff7ed; border-radius: 6px;
+  font-size: 0.85rem; color: #c2410c; border-left: 3px solid #fb923c;
+}
+.history-star.star-triple {
+  background: linear-gradient(135deg, #fef3c7, #fde68a); color: #b45309;
+  border-left: 3px solid #f59e0b; font-weight: bold;
+  animation: starGlow 2s ease-in-out infinite alternate;
+}
+@keyframes starGlow {
+  from { box-shadow: 0 0 2px rgba(251,146,60,0.3); }
+  to { box-shadow: 0 0 8px rgba(251,146,60,0.6); }
+}
 .history-comment {
   margin-top: 4px; padding: 5px 8px; background: #fef3c7; border-radius: 6px;
   font-size: 0.8rem; color: #92400e; border-left: 3px solid #f59e0b;

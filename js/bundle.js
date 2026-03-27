@@ -597,6 +597,7 @@ const App = {
         </div>
         ${r.plan ? '<div class="history-plan">📋 ' + this.escapeHtml(r.plan) + '</div>' : ''}
         <div class="history-card-body">${this.escapeHtml(r.content || '')}</div>
+        ${r.starRating && parseInt(r.starRating) > 0 ? '<div class="history-star' + (parseInt(r.starRating) >= 3 ? ' star-triple' : '') + '">⭐'.repeat(parseInt(r.starRating)) + ' ' + this.escapeHtml(r.starMessage || ['', 'いいね！', 'よくできたね！', '新しいね！'][parseInt(r.starRating)] || '') + '</div>' : ''}
         ${r.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(r.teacherComment) + '</div>' : ''}
         ${matPoints.length > 0 ? `
           <div class="history-matrix-fig">
@@ -1240,6 +1241,7 @@ const Reflection = {
           </div>
           ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
           <div class="history-card-body">${esc(r.content || '')}</div>
+          ${r.starRating && parseInt(r.starRating) > 0 ? '<div class="history-star' + (parseInt(r.starRating) >= 3 ? ' star-triple' : '') + '">⭐'.repeat(parseInt(r.starRating)) + ' ' + esc(r.starMessage || ['', 'いいね！', 'よくできたね！', '新しいね！'][parseInt(r.starRating)] || '') + '</div>' : ''}
           ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
           ${mat ? '<div class="history-matrix">🌍 ' + esc(App.convertZoneName(mat.zoneSequence || mat.dominantZone || '')) + '</div>' : ''}
         </div>`;

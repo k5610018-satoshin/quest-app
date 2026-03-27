@@ -165,6 +165,40 @@ a{color:var(--primary);text-decoration:none}
 .toast-success{background:var(--success)}
 .toast-error{background:var(--danger)}
 
+/* Entry cards (card-based view for reflections) */
+.entry-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;margin-bottom:10px;border-left:3px solid var(--primary)}
+.entry-card .ec-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.entry-card .ec-name{font-weight:700;font-size:13px}
+.entry-card .ec-date{font-size:11px;color:var(--text2)}
+.entry-card .ec-meta{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.entry-card .ec-content{font-size:13px;line-height:1.6;white-space:pre-wrap;word-break:break-word;padding:6px 0}
+.entry-card .ec-star{padding:4px 8px;background:#fff7ed;border-radius:6px;font-size:13px;color:#c2410c;border-left:3px solid #fb923c;margin-top:4px}
+.entry-card .ec-star.triple{background:linear-gradient(135deg,#fef3c7,#fde68a);color:#b45309;border-left-color:#f59e0b;font-weight:700}
+.entry-card .ec-comment-area{margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.entry-card .ec-existing{font-size:12px;color:#92400e;padding:4px 8px;background:#fef3c7;border-radius:6px;margin-bottom:6px}
+.entry-card .ec-input-row{display:flex;gap:6px}
+.entry-card .ec-input-row textarea{flex:1;padding:6px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;font-family:inherit;resize:vertical;min-height:32px}
+.entry-card .ec-input-row textarea:focus{outline:none;border-color:var(--primary)}
+.entry-card .ec-input-row button{padding:6px 14px;border:none;border-radius:6px;background:var(--primary);color:#fff;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
+.entry-card .ec-input-row button:hover{background:var(--primary-dark)}
+.entry-card .ec-saved{color:var(--success);font-size:11px;font-weight:600;margin-top:2px;display:none}
+.entry-card .ec-zone{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600;margin-left:4px}
+.entry-card .ec-checkbox{margin-right:8px}
+
+/* View toggle */
+.view-toggle{display:flex;gap:4px;margin-bottom:8px}
+.view-toggle button{padding:4px 10px;border:1.5px solid var(--border);border-radius:6px;background:#fff;font-size:11px;cursor:pointer;color:var(--text2)}
+.view-toggle button.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Proxy form */
+.proxy-form{max-width:600px}
+.proxy-form .field{margin-bottom:12px}
+.proxy-form .field label{display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:4px}
+.proxy-form .field select,.proxy-form .field input,.proxy-form .field textarea{width:100%;padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;font-family:inherit}
+.proxy-form .field select:focus,.proxy-form .field input:focus,.proxy-form .field textarea:focus{outline:none;border-color:var(--primary)}
+.proxy-form .field textarea{min-height:100px;resize:vertical}
+.proxy-form .type-chips{display:flex;flex-wrap:wrap;gap:4px;margin-top:4px}
+
 /* Responsive */
 @media(max-width:768px){
   .content{padding:8px}
@@ -193,6 +227,7 @@ a{color:var(--primary);text-decoration:none}
   <div class="tab active" data-tab="dashboard">ダッシュボード</div>
   <div class="tab" data-tab="diary">📝 日記</div>
   <div class="tab" data-tab="reflection">🔄 振り返り</div>
+  <div class="tab" data-tab="proxy">✍️ 代筆</div>
   <div class="tab" data-tab="newsletter">📰 通信用 <span class="badge badge-gray" id="newsletterBadge" style="display:none">0</span></div>
   <div class="tab" data-tab="missing">未提出 <span class="badge badge-red" id="missingBadge">0</span></div>
   <div class="tab" data-tab="pdf">PDF出力</div>
@@ -266,6 +301,7 @@ let diarySortKey = 'date';
 let diarySortAsc = false;
 let refSortKey = 'date';
 let refSortAsc = false;
+let refViewMode = 'card';
 
 // Newsletter check state (localStorage)
 const NL_DIARY_KEY = 'nl_checked_diaries';
@@ -351,6 +387,7 @@ function render() {
     case 'dashboard': el.innerHTML = renderDashboard(); break;
     case 'diary': el.innerHTML = renderDiary(); break;
     case 'reflection': el.innerHTML = renderReflection(); break;
+    case 'proxy': el.innerHTML = renderProxy(); break;
     case 'newsletter': el.innerHTML = renderNewsletter(); break;
     case 'missing': el.innerHTML = renderMissing(); break;
     case 'pdf': el.innerHTML = renderPDF(); break;
@@ -642,63 +679,242 @@ function renderReflection() {
     if (m.reflection_id) matrixMap[m.reflection_id] = m;
   });
 
-  const rowsHtml = refs.length === 0
-    ? `<tr><td colspan="8" style="color:var(--text2);padding:16px;text-align:center">振り返りがありません</td></tr>`
-    : refs.map(r => {
-      const cmt = r.teacher_comment || '';
+  const viewMode = refViewMode || 'card';
+
+  // View toggle
+  const viewToggle = `
+    <div class="view-toggle">
+      <button class="${viewMode === 'card' ? 'active' : ''}" onclick="refViewMode='card';render()">📋 カード</button>
+      <button class="${viewMode === 'table' ? 'active' : ''}" onclick="refViewMode='table';render()">📊 テーブル</button>
+    </div>
+  `;
+
+  if (viewMode === 'table') {
+    // テーブル表示（従来）
+    const rowsHtml = refs.length === 0
+      ? `<tr><td colspan="10" style="color:var(--text2);padding:16px;text-align:center">振り返りがありません</td></tr>`
+      : refs.map(r => {
+        const cmt = r.teacher_comment || '';
+        const matrix = matrixMap[r.id];
+        const typeSymbols = r.types || r.detected_types || '';
+        const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
+        const zoneHtml = matrix && matrix.zone ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
+        const isChecked = checkedIds.includes(String(r.id));
+        const starHtml = r.star_rating ? '⭐'.repeat(r.star_rating) : '';
+        return `
+          <tr class="${isChecked ? 'checked-row' : ''}">
+            <td class="col-check"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleRefCheck('${r.id}');render()"></td>
+            <td class="col-date">${fmtDate(r.created_at)}</td>
+            <td class="col-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</td>
+            <td class="col-subject">${escHtml(r.subject || '')}</td>
+            <td class="col-type">${tags.map(t => escHtml(t)).join(', ')}</td>
+            <td class="col-plan">${escHtml(r.plan || '')}</td>
+            <td class="col-content">${escHtml(r.content)}</td>
+            <td>${starHtml}</td>
+            <td class="col-zone">${zoneHtml}</td>
+            ${cmt ? `<td class="col-comment" style="font-size:10px">${escHtml(cmt)}</td>` : `<td class="col-comment"></td>`}
+          </tr>`;
+      }).join('');
+
+    return `${subjectChips}${viewToggle}
+      <div class="filter-bar">${activeFilterHtml()}<span style="color:var(--text2);font-size:12px">${refs.length}件</span></div>
+      <div class="card"><div style="overflow-x:auto">
+        <table class="data-table"><thead><tr>
+          <th class="col-check"></th>
+          <th class="sortable" onclick="toggleRefSort('date')">日付${sortArrow(refSortKey,'date',refSortAsc)}</th>
+          <th class="sortable" onclick="toggleRefSort('name')">名前${sortArrow(refSortKey,'name',refSortAsc)}</th>
+          <th class="sortable" onclick="toggleRefSort('subject')">教科${sortArrow(refSortKey,'subject',refSortAsc)}</th>
+          <th>型</th><th>計画</th><th>内容</th><th>星</th><th>ゾーン</th><th>コメント</th>
+        </tr></thead><tbody>${rowsHtml}</tbody></table>
+      </div></div>`;
+  }
+
+  // カード表示（旧にっきクエスト準拠）
+  const cardsHtml = refs.length === 0
+    ? '<div style="color:var(--text2);text-align:center;padding:20px">振り返りがありません</div>'
+    : refs.map((r, idx) => {
       const matrix = matrixMap[r.id];
       const typeSymbols = r.types || r.detected_types || '';
       const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
-      const zoneHtml = matrix && matrix.zone ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
+      const zoneHtml = matrix && matrix.zone ? `<span class="ec-zone ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
       const isChecked = checkedIds.includes(String(r.id));
+      const starLabels = ['', 'いいね！', 'よくできたね！', '新しいね！'];
+      const starHtml = r.star_rating && r.star_rating > 0
+        ? `<div class="ec-star${r.star_rating >= 3 ? ' triple' : ''}">⭐${'⭐'.repeat(r.star_rating - 1)} ${escHtml(r.star_message || starLabels[r.star_rating] || '')}</div>`
+        : '';
+      const cmt = r.teacher_comment || '';
+      const cardId = 'rc-' + idx;
 
       return `
-        <tr class="${isChecked ? 'checked-row' : ''}">
-          <td class="col-check"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleRefCheck('${r.id}');render()"></td>
-          <td class="col-date">${fmtDate(r.created_at)}</td>
-          <td class="col-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</td>
-          <td class="col-subject">${escHtml(r.subject || '')}</td>
-          <td class="col-type">${tags.map(t => escHtml(t)).join(', ')}</td>
-          <td class="col-plan">${escHtml(r.plan || '')}</td>
-          <td class="col-content">${escHtml(r.content)}</td>
-          <td class="col-zone">${zoneHtml}</td>
-          ${cmt ? `<td class="col-comment" style="font-size:10px">${escHtml(cmt)}</td>` : `<td class="col-comment"></td>`}
-        </tr>
-      `;
+        <div class="entry-card">
+          <div class="ec-header">
+            <span>
+              <input type="checkbox" class="ec-checkbox" ${isChecked ? 'checked' : ''} onchange="toggleRefCheck('${r.id}');render()">
+              <span class="ec-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</span>
+            </span>
+            <span class="ec-date">${fmtDateTime(r.created_at)}</span>
+          </div>
+          <div class="ec-meta">
+            ${r.subject ? `<span class="chip active" style="font-size:10px;padding:1px 8px">${escHtml(r.subject)}</span>` : ''}
+            ${tags.map(t => `<span class="chip" style="font-size:10px;padding:1px 6px">${escHtml(t)}</span>`).join('')}
+            ${zoneHtml}
+          </div>
+          ${r.plan ? `<div style="font-size:11px;color:#166534;background:rgba(22,101,52,.06);padding:3px 8px;border-radius:4px;margin-bottom:4px">📋 ${escHtml(r.plan)}</div>` : ''}
+          <div class="ec-content">${escHtml(r.content)}</div>
+          ${starHtml}
+          <div class="ec-comment-area">
+            ${cmt ? `<div class="ec-existing">💬 ${escHtml(cmt)}</div>` : ''}
+            <div class="ec-input-row">
+              <textarea id="${cardId}" rows="1" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
+              <button onclick="saveRefComment('${r.id}','${cardId}',this)">送信</button>
+            </div>
+            <div class="ec-saved" id="${cardId}-ok">✓ 保存しました</div>
+          </div>
+        </div>`;
     }).join('');
 
-  return `
-    ${subjectChips}
-    <div class="filter-bar">
-      ${activeFilterHtml()}
-      <span style="color:var(--text2);font-size:12px">${refs.length}件</span>
-    </div>
-    <div class="card">
-      <div style="overflow-x:auto">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th class="col-check"></th>
-              <th class="sortable" onclick="toggleRefSort('date')">日付${sortArrow(refSortKey,'date',refSortAsc)}</th>
-              <th class="sortable" onclick="toggleRefSort('name')">名前${sortArrow(refSortKey,'name',refSortAsc)}</th>
-              <th class="sortable" onclick="toggleRefSort('subject')">教科${sortArrow(refSortKey,'subject',refSortAsc)}</th>
-              <th>型</th>
-              <th>計画</th>
-              <th>内容</th>
-              <th>ゾーン</th>
-              <th>コメント</th>
-            </tr>
-          </thead>
-          <tbody>${rowsHtml}</tbody>
-        </table>
-      </div>
-    </div>
-  `;
+  return `${subjectChips}${viewToggle}
+    <div class="filter-bar">${activeFilterHtml()}<span style="color:var(--text2);font-size:12px">${refs.length}件</span></div>
+    ${cardsHtml}`;
 }
 
 function setSubjectFilter(subject) {
   selectedSubject = subject;
   render();
+}
+
+async function saveRefComment(refId, textareaId, btn) {
+  const textarea = document.getElementById(textareaId);
+  if (!textarea) return;
+  const comment = textarea.value.trim();
+  const oldText = btn.textContent;
+  btn.textContent = '...';
+  btn.disabled = true;
+  try {
+    await supaUpdate('reflections', refId, { teacher_comment: comment });
+    const r = DB.reflections.find(x => String(x.id) === String(refId));
+    if (r) r.teacher_comment = comment;
+    gasAddComment('reflection', refId, comment);
+    const ok = document.getElementById(textareaId + '-ok');
+    if (ok) { ok.style.display = 'block'; setTimeout(() => { ok.style.display = 'none'; }, 2000); }
+    showToast('コメントを保存しました');
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  }
+  btn.textContent = oldText;
+  btn.disabled = false;
+}
+
+// ============================================================
+// 3b. Proxy (代筆)
+// ============================================================
+function renderProxy() {
+  const studentOpts = DB.users.map(u => `<option value="${getStudentId(u)}">${u.student_number}番 ${escHtml(u.name)}</option>`).join('');
+  const subjectOpts = SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('');
+
+  return `
+    <div class="card" style="margin-bottom:12px">
+      <div class="card-header"><h3 style="font-size:14px;font-weight:700">✍️ 代筆入力</h3></div>
+      <div class="card-body">
+        <p style="font-size:12px;color:var(--text2);margin-bottom:12px">手書きの児童や欠席の児童の代わりに、日記や振り返りを入力できます。</p>
+        <div class="proxy-form">
+          <div class="field">
+            <label>種類</label>
+            <select id="proxy-type" onchange="toggleProxyFields()">
+              <option value="diary">📝 日記</option>
+              <option value="reflection">🔄 振り返り</option>
+            </select>
+          </div>
+          <div class="field">
+            <label>児童</label>
+            <select id="proxy-student"><option value="">選択してください</option>${studentOpts}</select>
+          </div>
+          <div id="proxy-ref-fields" style="display:none">
+            <div class="field">
+              <label>教科</label>
+              <select id="proxy-subject"><option value="">選択</option>${subjectOpts}</select>
+            </div>
+            <div class="field">
+              <label>計画（任意）</label>
+              <input type="text" id="proxy-plan" placeholder="今日の目標...">
+            </div>
+          </div>
+          <div class="field">
+            <label>内容</label>
+            <textarea id="proxy-content" placeholder="児童が書いた内容をここに入力..."></textarea>
+          </div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <button class="btn btn-primary" onclick="submitProxy()" id="proxy-submit">送信</button>
+            <span id="proxy-status" style="font-size:12px;color:var(--success);display:none">✓ 投稿しました</span>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h3 style="font-size:14px;font-weight:700">📋 最近の代筆履歴</h3></div>
+      <div class="card-body" id="proxy-history">
+        <p style="font-size:12px;color:var(--text2)">代筆した投稿は通常の日記・振り返りと同じように保存されます。</p>
+      </div>
+    </div>
+  `;
+}
+
+function toggleProxyFields() {
+  const type = document.getElementById('proxy-type').value;
+  document.getElementById('proxy-ref-fields').style.display = type === 'reflection' ? 'block' : 'none';
+}
+
+async function submitProxy() {
+  const type = document.getElementById('proxy-type').value;
+  const studentId = document.getElementById('proxy-student').value;
+  const content = document.getElementById('proxy-content').value.trim();
+
+  if (!studentId) return showToast('児童を選択してください', 'error');
+  if (!content) return showToast('内容を入力してください', 'error');
+
+  const btn = document.getElementById('proxy-submit');
+  btn.disabled = true;
+  btn.textContent = '送信中...';
+
+  try {
+    const data = { studentId, content };
+    if (type === 'reflection') {
+      const subject = document.getElementById('proxy-subject').value;
+      const plan = document.getElementById('proxy-plan').value.trim();
+      if (!subject) { showToast('教科を選択してください', 'error'); btn.disabled = false; btn.textContent = '送信'; return; }
+      data.subject = subject;
+      data.plan = plan;
+      data.period = '';
+    }
+
+    // GAS API経由で投稿（EXP・型検出・スキルツリー等の処理はGAS側で行う）
+    const action = type === 'diary' ? 'submitDiary' : 'submitReflection';
+    const res = await fetch(GAS_URL + '?action=' + action, {
+      method: 'POST',
+      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      redirect: 'follow'
+    });
+    const result = await res.json();
+
+    if (result.success) {
+      showToast('代筆投稿しました！');
+      const status = document.getElementById('proxy-status');
+      if (status) { status.style.display = 'inline'; setTimeout(() => { status.style.display = 'none'; }, 3000); }
+      document.getElementById('proxy-content').value = '';
+      if (type === 'reflection') {
+        document.getElementById('proxy-plan').value = '';
+      }
+      // データ再取得
+      refreshAll();
+    } else {
+      showToast('エラー: ' + (result.error || '不明'), 'error');
+    }
+  } catch (e) {
+    showToast('通信エラー: ' + e.message, 'error');
+  }
+  btn.disabled = false;
+  btn.textContent = '送信';
 }
 
 // ============================================================
