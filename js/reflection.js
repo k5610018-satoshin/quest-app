@@ -46,16 +46,22 @@ const Reflection = {
         <!-- 右: 振り返り入力 -->
         <div class="ref-right">
           <div class="ref-top-row">
-            <select id="ref-subject" class="sel-sm">
-              <option value="">教科</option>
-              ${CONFIG.subjects.map(s => `<option value="${s}">${s}</option>`).join('')}
-            </select>
-            <select id="ref-period" class="sel-sm">
-              <option value="">時間目</option>
-              ${CONFIG.periods.map(p => `<option value="${p}">${p}</option>`).join('')}
-            </select>
             <button class="back-link" onclick="App.showHome(false)">← ホーム</button>
           </div>
+          <div class="ref-chip-section">
+            <div class="ref-chip-label">教科</div>
+            <div class="ref-chips" id="ref-subject-chips">
+              ${CONFIG.subjects.map(s => `<button class="ref-chip" data-value="${s}" onclick="Reflection.selectSubject(this)">${s}</button>`).join('')}
+            </div>
+          </div>
+          <div class="ref-chip-section">
+            <div class="ref-chip-label">時間目</div>
+            <div class="ref-chips" id="ref-period-chips">
+              ${CONFIG.periods.map(p => `<button class="ref-chip" data-value="${p}" onclick="Reflection.selectPeriod(this)">${p.replace('時間目','')}</button>`).join('')}
+            </div>
+          </div>
+          <input type="hidden" id="ref-subject" value="">
+          <input type="hidden" id="ref-period" value="">
 
           <div class="ref-plan-row">
             <label class="ref-label">📋 計画</label>
@@ -225,6 +231,19 @@ const Reflection = {
     this.matrixPoints = [];
     this.drawPoints();
     this.updateTrail();
+  },
+
+  // === 教科・時間目の選択 ===
+  selectSubject(btn) {
+    document.querySelectorAll('#ref-subject-chips .ref-chip').forEach(c => c.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('ref-subject').value = btn.dataset.value;
+  },
+
+  selectPeriod(btn) {
+    document.querySelectorAll('#ref-period-chips .ref-chip').forEach(c => c.classList.remove('selected'));
+    btn.classList.add('selected');
+    document.getElementById('ref-period').value = btn.dataset.value;
   },
 
   // === 7つの型 ===

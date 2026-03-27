@@ -198,6 +198,17 @@ body {
 .sel-sm { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; font-size: 0.9rem; background: white; }
 .back-link { margin-left: auto; background: none; border: none; color: var(--text-light); cursor: pointer; font-size: 0.85rem; }
 
+/* 教科・時間目チップボタン */
+.ref-chip-section { margin-bottom: 6px; }
+.ref-chip-label { font-size: 0.7rem; color: var(--text-light); margin-bottom: 2px; }
+.ref-chips { display: flex; gap: 3px; flex-wrap: wrap; }
+.ref-chip {
+  padding: 4px 10px; border: 2px solid var(--border); border-radius: 16px;
+  background: white; cursor: pointer; font-size: 0.8rem; transition: all 0.1s;
+}
+.ref-chip:hover { border-color: var(--primary-light); background: #f5f3ff; }
+.ref-chip.selected { border-color: var(--primary); background: var(--primary); color: white; }
+
 .ref-plan-row { display: flex; align-items: center; gap: 6px; margin-bottom: 8px; }
 .ref-label { font-size: 0.85rem; font-weight: 600; white-space: nowrap; }
 .ref-plan-input {
