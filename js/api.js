@@ -48,6 +48,10 @@ const API = {
   },
 
   // === 児童認識 ===
+  async getStudentByToken(token) {
+    return this.post('getStudentByToken', { token });
+  },
+
   async getStudentByNumber(studentNumber) {
     return this.post('getStudentByNumber', { studentNumber });
   },

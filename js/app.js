@@ -9,24 +9,48 @@ const App = {
 
   /**
    * アプリ初期化
-   * 優先順位: URLパラメータ > localStorage > 出席番号選択画面
+   * 優先順位: URLの?token= > localStorageのtoken > 出席番号選択（フォールバック）
    */
   async init() {
     const params = new URLSearchParams(window.location.search);
-    const studentNum = params.get('student');
-    const saved = localStorage.getItem('quest_student_number');
+    const urlToken = params.get('token');
+    const savedToken = localStorage.getItem('quest_access_token');
 
-    if (studentNum) {
-      await this.loginByNumber(parseInt(studentNum));
-    } else if (saved) {
-      await this.loginByNumber(parseInt(saved));
+    if (urlToken) {
+      await this.loginByToken(urlToken);
+    } else if (savedToken) {
+      await this.loginByToken(savedToken);
     } else {
+      // トークンがない場合は出席番号選択（フォールバック）
       this.showScreen('select');
     }
   },
 
   /**
-   * 出席番号でログイン → localStorageに保存
+   * トークンでログイン（メイン認証方式）
+   */
+  async loginByToken(token) {
+    this.showLoading('冒険者を確認中...');
+    const result = await API.getStudentByToken(token);
+    this.hideLoading();
+
+    if (result.success) {
+      this.currentStudent = result.student;
+      localStorage.setItem('quest_access_token', token);
+      // URLからtokenパラメータを消す（履歴に残さない）
+      if (window.location.search.includes('token=')) {
+        window.history.replaceState({}, '', window.location.pathname);
+      }
+      await this.showHome();
+    } else {
+      this.showError('トークンが無効です。先生に確認してください。');
+      localStorage.removeItem('quest_access_token');
+      this.showScreen('select');
+    }
+  },
+
+  /**
+   * 出席番号でログイン（フォールバック — トークンがない場合）
    */
   async loginByNumber(num) {
     this.showLoading('冒険者を確認中...');
@@ -35,11 +59,9 @@ const App = {
 
     if (result.success) {
       this.currentStudent = result.student;
-      localStorage.setItem('quest_student_number', num);
       await this.showHome();
     } else {
       this.showError(result.error || 'ログインに失敗しました');
-      localStorage.removeItem('quest_student_number');
       this.showScreen('select');
     }
   },
