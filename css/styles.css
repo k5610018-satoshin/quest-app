@@ -118,7 +118,7 @@ body {
 .hm-fig-canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
 
 /* 振り返り画面: 教科別の過去記録 */
-.ref-past-section { margin-top: 6px; max-height: 200px; overflow-y: auto; }
+.ref-past-section { margin-top: 6px; max-height: 180px; overflow-y: auto; width: 100%; font-size: 0.78rem; }
 .ref-past-head { font-size: 0.8rem; font-weight: bold; color: var(--text-light); margin-bottom: 4px; }
 
 .main-buttons { display: flex; gap: 10px; margin-bottom: 12px; }
@@ -222,6 +222,7 @@ body {
 }
 .ref-left {
   flex: 0 0 auto; display: flex; flex-direction: column; align-items: center;
+  width: min(50vh, 440px); overflow: hidden;
 }
 .ref-right {
   flex: 1; display: flex; flex-direction: column; min-width: 0;
