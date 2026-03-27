@@ -70,11 +70,14 @@ const App = {
       this.hideLoading();
     } else {
       this.hideLoading();
-      this.showError('トークンが無効です。先生に確認してください。');
-      localStorage.removeItem('quest_access_token');
-      localStorage.removeItem('quest_student_cache');
-      this.currentStudent = null;
-      this.showScreen('select');
+      if (!this.currentStudent) {
+        // キャッシュもなくAPIも失敗 → ログイン画面に戻す
+        this.showError('トークンが無効です。先生に確認してください。');
+        localStorage.removeItem('quest_access_token');
+        localStorage.removeItem('quest_student_cache');
+        this.showScreen('select');
+      }
+      // キャッシュ表示済みの場合はそのまま続行（一時的なネットワークエラー）
     }
   },
 
@@ -267,12 +270,9 @@ const App = {
     body.innerHTML = '<div class="home-history-scroll">' + diaries.map(d => {
       const dt = new Date((d.createdAt || '').replace(' ', 'T'));
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
-      const gachaName = this.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${gachaName ? '<span class="history-gacha">🎰 ' + this.escapeHtml(gachaName) + '</span>' : ''}
-          <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${this.escapeHtml(d.content || '')}</div>
         ${d.teacherComment ? '<div class="history-comment">💬 ' + this.escapeHtml(d.teacherComment) + '</div>' : ''}

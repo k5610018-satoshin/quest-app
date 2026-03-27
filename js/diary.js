@@ -105,12 +105,9 @@ const Diary = {
       const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
       const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
 
-      const gachaName = App.resolveGachaName(d.gachaResult);
       return `<div class="history-card history-diary">
         <div class="history-card-head">
           <span class="history-date">${dateStr}</span>
-          ${gachaName ? '<span class="history-gacha">🎰 ' + esc(gachaName) + '</span>' : ''}
-          <span class="history-exp">+${d.expEarned || 10}</span>
         </div>
         <div class="history-card-body">${esc(d.content || '')}</div>
         ${d.teacherComment ? '<div class="history-comment">💬 ' + esc(d.teacherComment) + '</div>' : ''}
