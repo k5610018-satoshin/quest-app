@@ -1,0 +1,819 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>管理画面 - 学びの冒険クエスト</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--primary:#6366f1;--primary-light:#818cf8;--primary-dark:#4f46e5;--bg:#f8fafc;--card:#fff;--text:#1e293b;--text2:#64748b;--border:#e2e8f0;--danger:#ef4444;--success:#22c55e;--warning:#f59e0b;--radius:12px;--shadow:0 1px 3px rgba(0,0,0,.1),0 1px 2px rgba(0,0,0,.06)}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
+a{color:var(--primary);text-decoration:none}
+
+/* Header */
+.header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+.header h1{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px}
+.header-actions{display:flex;align-items:center;gap:12px}
+.header-actions .status{font-size:12px;opacity:.8}
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+.btn-white{background:#fff;color:var(--primary)}
+.btn-white:hover{background:#eef2ff}
+.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn-primary{background:var(--primary);color:#fff}
+.btn-primary:hover{background:var(--primary-dark)}
+.btn-success{background:var(--success);color:#fff}
+.btn-danger{background:var(--danger);color:#fff}
+.btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text2)}
+.btn-outline:hover{border-color:var(--primary);color:var(--primary)}
+
+/* Tabs */
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);overflow-x:auto;padding:0 16px}
+.tab{padding:12px 18px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:all .15s}
+.tab:hover{color:var(--primary)}
+.tab.active{color:var(--primary);border-bottom-color:var(--primary)}
+.tab .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px}
+.tab .badge-red{background:var(--danger);color:#fff}
+.tab .badge-gray{background:#e2e8f0;color:var(--text2)}
+
+/* Content */
+.content{padding:20px 24px;max-width:1400px;margin:0 auto}
+
+/* Cards */
+.card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
+.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:20px}
+
+/* Grid */
+.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
+.grid-4{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+
+/* Dashboard student cards */
+.student-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;cursor:pointer;transition:all .15s;border:2px solid transparent}
+.student-card:hover{border-color:var(--primary-light);transform:translateY(-2px);box-shadow:0 4px 12px rgba(99,102,241,.15)}
+.student-card.selected{border-color:var(--primary);background:#eef2ff}
+.student-card .sc-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+.student-card .sc-num{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
+.student-card .sc-name{font-weight:700;font-size:14px}
+.student-card .sc-lv{font-size:12px;color:var(--primary);font-weight:600}
+.student-card .sc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;color:var(--text2)}
+.student-card .sc-stats span{text-align:center}
+.student-card .sc-stats .val{font-weight:700;font-size:15px;color:var(--text);display:block}
+.student-card .sc-streak{display:flex;align-items:center;gap:4px;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.student-card .sc-streak.hot{color:var(--warning)}
+.student-card .sc-streak.cold{color:var(--text2)}
+
+/* Diary/Reflection cards */
+.entry-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
+.entry-card .ec-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:#fafbfc}
+.entry-card .ec-meta{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px}
+.entry-card .ec-name{font-weight:700;font-size:14px;color:var(--text)}
+.entry-card .ec-body{padding:14px 16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
+.entry-card .ec-tags{padding:0 16px 10px;display:flex;flex-wrap:wrap;gap:6px}
+.entry-card .ec-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
+.entry-card .ec-comment{padding:12px 16px;background:#fefce8;border-top:1px solid #fde68a}
+.entry-card .ec-comment textarea{width:100%;border:1.5px solid #fde68a;border-radius:8px;padding:10px;font-size:13px;resize:vertical;min-height:60px;font-family:inherit;background:#fffef5}
+.entry-card .ec-comment textarea:focus{outline:none;border-color:var(--warning)}
+.entry-card .ec-comment .comment-actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
+.entry-card .ec-comment .saved-msg{font-size:12px;color:var(--success);font-weight:600;display:none}
+
+/* Zone badge */
+.zone-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600}
+.zone-comfort{background:#dbeafe;color:#1d4ed8}
+.zone-stretch{background:#dcfce7;color:#15803d}
+.zone-panic{background:#fee2e2;color:#b91c1c}
+
+/* Subject chips */
+.chip-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
+.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text2);transition:all .15s}
+.chip:hover{border-color:var(--primary-light)}
+.chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
+
+/* Filter bar */
+.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar select,.filter-bar input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:var(--text)}
+.filter-bar select:focus,.filter-bar input:focus{outline:none;border-color:var(--primary)}
+.active-filter{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#eef2ff;border-radius:8px;font-size:13px;font-weight:600;color:var(--primary)}
+.active-filter button{background:none;border:none;color:var(--primary);cursor:pointer;font-size:16px;line-height:1}
+
+/* Missing list */
+.missing-section{margin-bottom:20px}
+.missing-section h3{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
+.missing-grid{display:flex;flex-wrap:wrap;gap:8px}
+.missing-chip{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+
+/* Token table */
+.token-table{width:100%;border-collapse:collapse;font-size:13px}
+.token-table th{background:#f8fafc;padding:10px 14px;text-align:left;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border)}
+.token-table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.token-table tr:hover td{background:#f8fafc}
+.token-url{font-family:'Courier New',monospace;font-size:12px;color:var(--text2);max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.copy-btn{padding:4px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;transition:all .15s}
+.copy-btn:hover{border-color:var(--primary);color:var(--primary)}
+.copy-btn.copied{background:var(--success);color:#fff;border-color:var(--success)}
+
+/* Stats row */
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
+.stat-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;text-align:center}
+.stat-box .stat-val{font-size:28px;font-weight:800;color:var(--primary)}
+.stat-box .stat-label{font-size:12px;color:var(--text2);margin-top:4px}
+
+/* Print */
+.print-area{display:none}
+@media print{
+  body>*:not(.print-area){display:none!important}
+  .print-area{display:block!important;padding:20px;font-size:12px}
+  .print-area h2{font-size:16px;margin-bottom:10px;border-bottom:2px solid #333;padding-bottom:4px}
+  .print-entry{margin-bottom:12px;page-break-inside:avoid;border:1px solid #ccc;padding:8px;border-radius:4px}
+  .print-entry .pe-header{display:flex;justify-content:space-between;font-weight:700;margin-bottom:4px;font-size:11px}
+  .print-entry .pe-body{font-size:12px;line-height:1.6;white-space:pre-wrap}
+  .print-entry .pe-comment{margin-top:6px;padding:4px 8px;background:#fef3c7;font-size:11px;border-radius:4px}
+}
+
+/* JSON area */
+.json-area{width:100%;min-height:400px;font-family:'Courier New',monospace;font-size:12px;padding:16px;border:1.5px solid var(--border);border-radius:8px;background:#1e293b;color:#e2e8f0;resize:vertical}
+
+/* Loading */
+.loading-bar{position:fixed;top:0;left:0;width:100%;height:3px;z-index:200;display:none}
+.loading-bar.active{display:block}
+.loading-bar::after{content:'';display:block;height:100%;background:var(--primary);animation:loading 1.2s ease infinite}
+@keyframes loading{0%{width:0}50%{width:70%}100%{width:100%;opacity:0}}
+.spinner{display:inline-block;width:18px;height:18px;border:2.5px solid var(--border);border-top-color:var(--primary);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Toast */
+.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;z-index:300;transform:translateY(100px);opacity:0;transition:all .3s}
+.toast.show{transform:translateY(0);opacity:1}
+.toast-success{background:var(--success)}
+.toast-error{background:var(--danger)}
+
+/* Responsive */
+@media(max-width:768px){
+  .content{padding:12px}
+  .header{padding:12px 16px}
+  .header h1{font-size:15px}
+  .tabs{padding:0 8px}
+  .tab{padding:10px 12px;font-size:12px}
+  .grid-4{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+}
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loadingBar"></div>
+
+<div class="header">
+  <h1>📊 学びの冒険クエスト 管理画面</h1>
+  <div class="header-actions">
+    <span class="status" id="lastUpdate"></span>
+    <button class="btn btn-white" onclick="refreshAll()">🔄 更新</button>
+  </div>
+</div>
+
+<div class="tabs" id="tabBar">
+  <div class="tab active" data-tab="dashboard">ダッシュボード</div>
+  <div class="tab" data-tab="diary">日記</div>
+  <div class="tab" data-tab="reflection">振り返り</div>
+  <div class="tab" data-tab="missing">未提出 <span class="badge badge-red" id="missingBadge">0</span></div>
+  <div class="tab" data-tab="pdf">PDF出力</div>
+  <div class="tab" data-tab="tokens">トークン</div>
+  <div class="tab" data-tab="export">データ出力</div>
+</div>
+
+<div class="content" id="mainContent"></div>
+
+<div id="toast" class="toast"></div>
+<div class="print-area" id="printArea"></div>
+
+<script>
+// ============================================================
+// Supabase Config
+// ============================================================
+const SUPABASE_URL = 'https://pqujtthiwbqizcjppean.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBxdWp0dGhpd2JxaXpjanBwZWFuIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NDU4OTEwOCwiZXhwIjoyMDkwMTY1MTA4fQ.MJKNPmabNAkZlhkQU11CSQtdR2tHbTArU10oEKgHQuY';
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbyOY7WrGPrPCUoVp6DAfaxo36ZKG1mL7vR6KJ4z6PYNiRmp9VNs-gBoDgqfcMy0FPDZBA/exec';
+const BASE_APP_URL = 'https://k5610018-satoshin.github.io/quest-app/';
+const SUBJECTS = ['国語','算数','理科','社会','体育','音楽','道徳','総合','図工','家庭科','外国語','学活','行事'];
+
+// ============================================================
+// API Layer
+// ============================================================
+async function supaGet(table, params = '') {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*${params}`, {
+    headers: { 'Authorization': `Bearer ${SUPABASE_KEY}`, 'apikey': SUPABASE_KEY }
+  });
+  if (!res.ok) throw new Error(`${table}: HTTP ${res.status}`);
+  return res.json();
+}
+
+async function supaUpdate(table, id, data) {
+  const res = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: {
+      'Authorization': `Bearer ${SUPABASE_KEY}`,
+      'apikey': SUPABASE_KEY,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=minimal'
+    },
+    body: JSON.stringify(data)
+  });
+  if (!res.ok) throw new Error(`PATCH ${table}: HTTP ${res.status}`);
+}
+
+async function gasAddComment(targetType, targetId, comment) {
+  try {
+    await fetch(GAS_URL + '?action=addComment', {
+      method: 'POST',
+      body: JSON.stringify({ targetType, targetId, comment }),
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      redirect: 'follow'
+    });
+  } catch (e) {
+    console.warn('GAS転記エラー（バックグラウンド）:', e);
+  }
+}
+
+// ============================================================
+// State
+// ============================================================
+let DB = { users: [], diaries: [], reflections: [], matrix_records: [], skill_tree: [], acquired_items: [], weekly_reviews: [] };
+let currentTab = 'dashboard';
+let selectedStudentId = null;
+let selectedSubject = null;
+
+// ============================================================
+// Init
+// ============================================================
+document.addEventListener('DOMContentLoaded', () => {
+  // Tab switching
+  document.querySelectorAll('.tab').forEach(t => {
+    t.addEventListener('click', () => {
+      currentTab = t.dataset.tab;
+      document.querySelectorAll('.tab').forEach(x => x.classList.remove('active'));
+      t.classList.add('active');
+      render();
+    });
+  });
+  refreshAll();
+});
+
+async function refreshAll() {
+  const bar = document.getElementById('loadingBar');
+  bar.classList.add('active');
+  try {
+    const [users, diaries, reflections, matrix_records, skill_tree, acquired_items, weekly_reviews] = await Promise.all([
+      supaGet('users', '&order=student_number.asc'),
+      supaGet('diaries', '&order=created_at.desc'),
+      supaGet('reflections', '&order=created_at.desc'),
+      supaGet('matrix_records', '&order=created_at.desc'),
+      supaGet('skill_tree'),
+      supaGet('acquired_items'),
+      supaGet('weekly_reviews', '&order=created_at.desc')
+    ]);
+    DB = { users, diaries, reflections, matrix_records, skill_tree, acquired_items, weekly_reviews };
+    document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+    updateMissingBadge();
+    render();
+    bar.classList.remove('active');
+  } catch (e) {
+    bar.classList.remove('active');
+    showToast('データ取得エラー: ' + e.message, 'error');
+    console.error(e);
+  }
+}
+
+// ============================================================
+// Render Router
+// ============================================================
+function render() {
+  const el = document.getElementById('mainContent');
+  switch (currentTab) {
+    case 'dashboard': el.innerHTML = renderDashboard(); break;
+    case 'diary': el.innerHTML = renderDiary(); break;
+    case 'reflection': el.innerHTML = renderReflection(); break;
+    case 'missing': el.innerHTML = renderMissing(); break;
+    case 'pdf': el.innerHTML = renderPDF(); break;
+    case 'tokens': el.innerHTML = renderTokens(); break;
+    case 'export': el.innerHTML = renderExport(); break;
+  }
+}
+
+// ============================================================
+// Helpers
+// ============================================================
+function getStudent(id) { return DB.users.find(u => u.student_id === id || u.id === id); }
+function getStudentName(id) { const u = getStudent(id); return u ? u.name : '不明'; }
+function getStudentNum(id) { const u = getStudent(id); return u ? u.student_number : '?'; }
+function fmtDate(d) { if (!d) return '-'; const dt = new Date(d); return `${dt.getMonth()+1}/${dt.getDate()}`; }
+function fmtDateTime(d) { if (!d) return '-'; const dt = new Date(d); return `${dt.getMonth()+1}/${dt.getDate()} ${dt.getHours()}:${String(dt.getMinutes()).padStart(2,'0')}`; }
+function todayStr() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; }
+function escHtml(s) { if (!s) return ''; return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  t.className = 'toast toast-' + type + ' show';
+  t.textContent = msg;
+  setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+function updateMissingBadge() {
+  const { missingDiary, missingReflection } = getMissing();
+  const total = missingDiary.length + missingReflection.length;
+  const badge = document.getElementById('missingBadge');
+  badge.textContent = total;
+  badge.style.display = total > 0 ? '' : 'none';
+}
+
+function getMissing() {
+  const today = todayStr();
+  const todayDiaryIds = new Set(DB.diaries.filter(d => d.created_at && d.created_at.startsWith(today)).map(d => d.student_id));
+  const todayRefIds = new Set(DB.reflections.filter(r => r.created_at && r.created_at.startsWith(today)).map(r => r.student_id));
+  const missingDiary = DB.users.filter(u => !todayDiaryIds.has(u.student_id) && !todayDiaryIds.has(u.id));
+  const missingReflection = DB.users.filter(u => !todayRefIds.has(u.student_id) && !todayRefIds.has(u.id));
+  return { missingDiary, missingReflection };
+}
+
+function selectStudent(studentId) {
+  if (selectedStudentId === studentId) {
+    selectedStudentId = null;
+  } else {
+    selectedStudentId = studentId;
+  }
+  render();
+}
+
+function clearFilter() {
+  selectedStudentId = null;
+  render();
+}
+
+function activeFilterHtml() {
+  if (!selectedStudentId) return '';
+  const s = getStudent(selectedStudentId);
+  if (!s) return '';
+  return `<div class="active-filter">
+    ${s.student_number}番 ${escHtml(s.name)} でフィルター中
+    <button onclick="clearFilter()" title="フィルター解除">&times;</button>
+  </div>`;
+}
+
+function getZoneClass(zone) {
+  if (!zone) return '';
+  const z = zone.toLowerCase();
+  if (z.includes('コンフォート') || z.includes('comfort')) return 'zone-comfort';
+  if (z.includes('ストレッチ') || z.includes('stretch')) return 'zone-stretch';
+  if (z.includes('パニック') || z.includes('panic')) return 'zone-panic';
+  return '';
+}
+
+function getStudentId(u) { return u.student_id || u.id; }
+
+// ============================================================
+// 1. Dashboard
+// ============================================================
+function renderDashboard() {
+  const diaryCountMap = {};
+  const refCountMap = {};
+  DB.diaries.forEach(d => { const sid = d.student_id; diaryCountMap[sid] = (diaryCountMap[sid] || 0) + 1; });
+  DB.reflections.forEach(r => { const sid = r.student_id; refCountMap[sid] = (refCountMap[sid] || 0) + 1; });
+
+  const statsHtml = `
+    <div class="stats-row">
+      <div class="stat-box"><div class="stat-val">${DB.users.length}</div><div class="stat-label">児童数</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.diaries.length}</div><div class="stat-label">日記総数</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.reflections.length}</div><div class="stat-label">振り返り総数</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.matrix_records.length}</div><div class="stat-label">マトリクス記録</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.diaries.filter(d => d.created_at && d.created_at.startsWith(todayStr())).length}</div><div class="stat-label">今日の日記</div></div>
+      <div class="stat-box"><div class="stat-val">${DB.reflections.filter(r => r.created_at && r.created_at.startsWith(todayStr())).length}</div><div class="stat-label">今日の振り返り</div></div>
+    </div>
+  `;
+
+  const cardsHtml = DB.users.map(u => {
+    const sid = getStudentId(u);
+    const dCount = diaryCountMap[sid] || 0;
+    const rCount = refCountMap[sid] || 0;
+    const streak = u.streak || u.login_streak || 0;
+    const selected = selectedStudentId === sid ? ' selected' : '';
+    return `
+      <div class="student-card${selected}" onclick="selectStudent('${sid}')">
+        <div class="sc-top">
+          <div class="sc-num">${u.student_number || '?'}</div>
+          <div>
+            <div class="sc-name">${escHtml(u.name)}</div>
+            <div class="sc-lv">Lv.${u.level || 1} / ${u.exp || 0} EXP</div>
+          </div>
+        </div>
+        <div class="sc-stats">
+          <span><span class="val">${dCount}</span>日記</span>
+          <span><span class="val">${rCount}</span>振返</span>
+          <span><span class="val">${u.total_submissions || (dCount + rCount)}</span>提出</span>
+        </div>
+        <div class="sc-streak ${streak >= 3 ? 'hot' : 'cold'}">
+          ${streak >= 3 ? '🔥' : '📝'} ストリーク: ${streak}日
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  return statsHtml + `
+    ${activeFilterHtml()}
+    <div class="grid-4" style="margin-top:12px">${cardsHtml}</div>
+  `;
+}
+
+// ============================================================
+// 2. Diary
+// ============================================================
+function renderDiary() {
+  let diaries = [...DB.diaries];
+  if (selectedStudentId) {
+    diaries = diaries.filter(d => d.student_id === selectedStudentId);
+  }
+
+  const cardsHtml = diaries.length === 0
+    ? '<p style="color:var(--text2);padding:20px;text-align:center">日記がありません</p>'
+    : diaries.map(d => {
+      const cmt = d.teacher_comment || '';
+      return `
+        <div class="entry-card">
+          <div class="ec-header">
+            <div class="ec-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</div>
+            <div class="ec-meta">${fmtDateTime(d.created_at)}</div>
+          </div>
+          <div class="ec-body">${escHtml(d.content)}</div>
+          <div class="ec-comment">
+            <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px">💬 先生コメント</div>
+            <textarea id="dc-${d.id}" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
+            <div class="comment-actions">
+              <span class="saved-msg" id="ds-${d.id}">保存しました</span>
+              <button class="btn btn-sm btn-success" onclick="saveDiaryComment('${d.id}')">保存</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  return `
+    <div class="filter-bar">
+      ${activeFilterHtml()}
+      <span style="color:var(--text2);font-size:13px">${diaries.length}件</span>
+    </div>
+    ${cardsHtml}
+  `;
+}
+
+async function saveDiaryComment(id) {
+  const ta = document.getElementById('dc-' + id);
+  const msg = document.getElementById('ds-' + id);
+  if (!ta) return;
+  const comment = ta.value.trim();
+  try {
+    await supaUpdate('diaries', id, { teacher_comment: comment });
+    // ローカルキャッシュ更新
+    const d = DB.diaries.find(x => String(x.id) === String(id));
+    if (d) d.teacher_comment = comment;
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+    showToast('日記コメントを保存しました');
+    // GAS転記（バックグラウンド）
+    gasAddComment('diary', id, comment);
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// 3. Reflection
+// ============================================================
+function renderReflection() {
+  let refs = [...DB.reflections];
+  if (selectedStudentId) {
+    refs = refs.filter(r => r.student_id === selectedStudentId);
+  }
+  if (selectedSubject) {
+    refs = refs.filter(r => r.subject === selectedSubject);
+  }
+
+  const subjectChips = `
+    <div class="chip-bar">
+      <div class="chip ${!selectedSubject ? 'active' : ''}" onclick="setSubjectFilter(null)">全て</div>
+      ${SUBJECTS.map(s => `<div class="chip ${selectedSubject === s ? 'active' : ''}" onclick="setSubjectFilter('${s}')">${s}</div>`).join('')}
+    </div>
+  `;
+
+  // マトリクスマップ（reflection_id → matrix_record）
+  const matrixMap = {};
+  DB.matrix_records.forEach(m => {
+    if (m.reflection_id) matrixMap[m.reflection_id] = m;
+  });
+
+  const cardsHtml = refs.length === 0
+    ? '<p style="color:var(--text2);padding:20px;text-align:center">振り返りがありません</p>'
+    : refs.map(r => {
+      const cmt = r.teacher_comment || '';
+      const matrix = matrixMap[r.id];
+      const typeSymbols = r.types || r.detected_types || '';
+      const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
+
+      return `
+        <div class="entry-card">
+          <div class="ec-header">
+            <div style="display:flex;align-items:center;gap:10px">
+              <div class="ec-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</div>
+              <span style="font-size:12px;font-weight:600;color:var(--primary);background:#eef2ff;padding:2px 8px;border-radius:4px">${escHtml(r.subject || '')}</span>
+              ${r.period ? `<span style="font-size:11px;color:var(--text2)">${escHtml(r.period)}</span>` : ''}
+            </div>
+            <div class="ec-meta">
+              ${matrix ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone || '')}</span>` : ''}
+              ${fmtDateTime(r.created_at)}
+            </div>
+          </div>
+          ${r.plan ? `<div style="padding:8px 16px;background:#f0fdf4;font-size:13px;color:#166534;border-bottom:1px solid #bbf7d0"><b>計画:</b> ${escHtml(r.plan)}</div>` : ''}
+          <div class="ec-body">${escHtml(r.content)}</div>
+          ${tags.length > 0 ? `<div class="ec-tags">${tags.map(t => `<span class="ec-tag" style="background:#eef2ff;color:var(--primary)">${escHtml(t)}</span>`).join('')}</div>` : ''}
+          <div class="ec-comment">
+            <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px">💬 先生コメント</div>
+            <textarea id="rc-${r.id}" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
+            <div class="comment-actions">
+              <span class="saved-msg" id="rs-${r.id}">保存しました</span>
+              <button class="btn btn-sm btn-success" onclick="saveRefComment('${r.id}')">保存</button>
+            </div>
+          </div>
+        </div>
+      `;
+    }).join('');
+
+  return `
+    ${subjectChips}
+    <div class="filter-bar">
+      ${activeFilterHtml()}
+      <span style="color:var(--text2);font-size:13px">${refs.length}件</span>
+    </div>
+    ${cardsHtml}
+  `;
+}
+
+function setSubjectFilter(subject) {
+  selectedSubject = subject;
+  render();
+}
+
+async function saveRefComment(id) {
+  const ta = document.getElementById('rc-' + id);
+  const msg = document.getElementById('rs-' + id);
+  if (!ta) return;
+  const comment = ta.value.trim();
+  try {
+    await supaUpdate('reflections', id, { teacher_comment: comment });
+    const r = DB.reflections.find(x => String(x.id) === String(id));
+    if (r) r.teacher_comment = comment;
+    msg.style.display = 'inline';
+    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+    showToast('振り返りコメントを保存しました');
+    gasAddComment('reflection', id, comment);
+  } catch (e) {
+    showToast('保存エラー: ' + e.message, 'error');
+  }
+}
+
+// ============================================================
+// 4. Missing
+// ============================================================
+function renderMissing() {
+  const { missingDiary, missingReflection } = getMissing();
+  const today = new Date();
+  const dateStr = `${today.getMonth()+1}月${today.getDate()}日`;
+
+  return `
+    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">📋 ${dateStr} 未提出一覧</h2>
+    <div class="missing-section">
+      <h3>📝 日記未提出 <span class="badge badge-red" style="font-size:13px;padding:2px 10px;border-radius:8px">${missingDiary.length}人</span></h3>
+      ${missingDiary.length === 0
+        ? '<p style="color:var(--success);font-weight:600;padding:8px 0">全員提出済み！</p>'
+        : `<div class="missing-grid">${missingDiary.map(u => `<div class="missing-chip">${u.student_number}番 ${escHtml(u.name)}</div>`).join('')}</div>`
+      }
+    </div>
+    <div class="missing-section" style="margin-top:24px">
+      <h3>📖 振り返り未提出 <span class="badge badge-red" style="font-size:13px;padding:2px 10px;border-radius:8px">${missingReflection.length}人</span></h3>
+      ${missingReflection.length === 0
+        ? '<p style="color:var(--success);font-weight:600;padding:8px 0">全員提出済み！</p>'
+        : `<div class="missing-grid">${missingReflection.map(u => `<div class="missing-chip">${u.student_number}番 ${escHtml(u.name)}</div>`).join('')}</div>`
+      }
+    </div>
+  `;
+}
+
+// ============================================================
+// 5. PDF
+// ============================================================
+function renderPDF() {
+  const subjectOpts = SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('');
+  const studentOpts = DB.users.map(u => `<option value="${getStudentId(u)}">${u.student_number}番 ${escHtml(u.name)}</option>`).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header"><h3 style="font-size:15px;font-weight:700">🖨️ 印刷用PDF出力</h3></div>
+      <div class="card-body">
+        <div class="filter-bar">
+          <select id="pdf-type">
+            <option value="diary">日記</option>
+            <option value="reflection">振り返り</option>
+          </select>
+          <select id="pdf-student">
+            <option value="">全員</option>
+            ${studentOpts}
+          </select>
+          <select id="pdf-subject">
+            <option value="">全教科</option>
+            ${subjectOpts}
+          </select>
+          <input type="date" id="pdf-from" placeholder="開始日">
+          <input type="date" id="pdf-to" placeholder="終了日">
+          <button class="btn btn-primary" onclick="generatePrint()">プレビュー＆印刷</button>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+function generatePrint() {
+  const type = document.getElementById('pdf-type').value;
+  const studentId = document.getElementById('pdf-student').value;
+  const subject = document.getElementById('pdf-subject').value;
+  const from = document.getElementById('pdf-from').value;
+  const to = document.getElementById('pdf-to').value;
+
+  let items = type === 'diary' ? [...DB.diaries] : [...DB.reflections];
+
+  if (studentId) items = items.filter(i => i.student_id === studentId);
+  if (subject && type === 'reflection') items = items.filter(i => i.subject === subject);
+  if (from) items = items.filter(i => i.created_at && i.created_at >= from);
+  if (to) items = items.filter(i => i.created_at && i.created_at <= to + 'T23:59:59');
+
+  const title = type === 'diary' ? '日記一覧' : '振り返り一覧';
+  const filterDesc = [
+    studentId ? getStudentName(studentId) : '全員',
+    subject || '',
+    from ? `${from}〜` : '',
+    to ? `〜${to}` : ''
+  ].filter(Boolean).join(' / ');
+
+  let html = `<h2>${title}</h2><p style="font-size:11px;color:#666;margin-bottom:12px">${filterDesc} (${items.length}件)</p>`;
+
+  items.forEach(item => {
+    const name = `${getStudentNum(item.student_id)}番 ${getStudentName(item.student_id)}`;
+    const date = fmtDateTime(item.created_at);
+    const subjectLabel = item.subject ? ` [${item.subject}]` : '';
+    html += `
+      <div class="print-entry">
+        <div class="pe-header"><span>${escHtml(name)}${escHtml(subjectLabel)}</span><span>${date}</span></div>
+        ${item.plan ? `<div style="font-size:11px;color:#166534;margin-bottom:2px">計画: ${escHtml(item.plan)}</div>` : ''}
+        <div class="pe-body">${escHtml(item.content)}</div>
+        ${item.teacher_comment ? `<div class="pe-comment">💬 ${escHtml(item.teacher_comment)}</div>` : ''}
+      </div>
+    `;
+  });
+
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
+    <style>
+      body{font-family:-apple-system,BlinkMacSystemFont,'Hiragino Sans',sans-serif;padding:20px;font-size:12px;color:#1e293b}
+      h2{font-size:16px;border-bottom:2px solid #333;padding-bottom:4px;margin-bottom:10px}
+      .print-entry{margin-bottom:12px;border:1px solid #ccc;padding:8px;border-radius:4px;page-break-inside:avoid}
+      .pe-header{display:flex;justify-content:space-between;font-weight:700;margin-bottom:4px;font-size:11px}
+      .pe-body{font-size:12px;line-height:1.6;white-space:pre-wrap}
+      .pe-comment{margin-top:6px;padding:4px 8px;background:#fef3c7;font-size:11px;border-radius:4px}
+    </style>
+  </head><body>${html}</body></html>`);
+  printWin.document.close();
+  setTimeout(() => printWin.print(), 300);
+}
+
+// ============================================================
+// 6. Tokens
+// ============================================================
+function renderTokens() {
+  const rows = DB.users.map(u => {
+    const sid = getStudentId(u);
+    const token = u.access_token || u.token || '';
+    const url = token ? `${BASE_APP_URL}?token=${token}` : '(トークン未設定)';
+    return `
+      <tr>
+        <td style="font-weight:700">${u.student_number || '?'}</td>
+        <td>${escHtml(u.name)}</td>
+        <td><span class="token-url" title="${escHtml(url)}">${escHtml(url)}</span></td>
+        <td>
+          ${token ? `<button class="copy-btn" onclick="copyToken(this, '${escHtml(url)}')">コピー</button>` : '-'}
+        </td>
+      </tr>
+    `;
+  }).join('');
+
+  return `
+    <div class="card">
+      <div class="card-header">
+        <h3 style="font-size:15px;font-weight:700">🔗 児童アクセスURL一覧</h3>
+        <button class="btn btn-sm btn-outline" onclick="copyAllTokens()">全URLコピー</button>
+      </div>
+      <div class="card-body" style="padding:0;overflow-x:auto">
+        <table class="token-table">
+          <thead><tr><th style="width:50px">番号</th><th style="width:100px">名前</th><th>URL</th><th style="width:80px">操作</th></tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function copyToken(btn, url) {
+  navigator.clipboard.writeText(url).then(() => {
+    btn.classList.add('copied');
+    btn.textContent = 'OK';
+    setTimeout(() => { btn.classList.remove('copied'); btn.textContent = 'コピー'; }, 1500);
+  });
+}
+
+function copyAllTokens() {
+  const lines = DB.users.map(u => {
+    const token = u.access_token || u.token || '';
+    const url = token ? `${BASE_APP_URL}?token=${token}` : '';
+    return `${u.student_number}\t${u.name}\t${url}`;
+  }).join('\n');
+  navigator.clipboard.writeText(lines).then(() => {
+    showToast('全URLをコピーしました');
+  });
+}
+
+// ============================================================
+// 7. Export
+// ============================================================
+function renderExport() {
+  return `
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <h3 style="font-size:15px;font-weight:700">📦 全データJSON出力（AI副担任用）</h3>
+        <div style="display:flex;gap:8px">
+          <button class="btn btn-sm btn-primary" onclick="exportJSON()">JSONを生成</button>
+          <button class="btn btn-sm btn-outline" onclick="copyJSON()">クリップボードにコピー</button>
+          <button class="btn btn-sm btn-outline" onclick="downloadJSON()">ダウンロード</button>
+        </div>
+      </div>
+      <div class="card-body" style="padding:12px">
+        <textarea class="json-area" id="jsonOutput" readonly placeholder="「JSONを生成」ボタンを押してください"></textarea>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header">
+        <h3 style="font-size:15px;font-weight:700">📊 テーブル別件数</h3>
+      </div>
+      <div class="card-body">
+        <table class="token-table">
+          <thead><tr><th>テーブル</th><th>件数</th></tr></thead>
+          <tbody>
+            ${Object.entries(DB).map(([k, v]) => `<tr><td style="font-weight:600">${k}</td><td>${v.length}</td></tr>`).join('')}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+function exportJSON() {
+  const output = {
+    exported_at: new Date().toISOString(),
+    summary: {
+      users: DB.users.length,
+      diaries: DB.diaries.length,
+      reflections: DB.reflections.length,
+      matrix_records: DB.matrix_records.length,
+      skill_tree: DB.skill_tree.length,
+      acquired_items: DB.acquired_items.length,
+      weekly_reviews: DB.weekly_reviews.length
+    },
+    data: DB
+  };
+  document.getElementById('jsonOutput').value = JSON.stringify(output, null, 2);
+  showToast('JSONを生成しました');
+}
+
+function copyJSON() {
+  const ta = document.getElementById('jsonOutput');
+  if (!ta.value) { exportJSON(); }
+  navigator.clipboard.writeText(ta.value).then(() => showToast('JSONをコピーしました'));
+}
+
+function downloadJSON() {
+  const ta = document.getElementById('jsonOutput');
+  if (!ta.value) { exportJSON(); }
+  const blob = new Blob([ta.value], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `quest-data-${todayStr()}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('ダウンロードしました');
+}
+</script>
+</body>
+</html>
