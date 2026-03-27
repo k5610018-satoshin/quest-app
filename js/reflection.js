@@ -96,6 +96,35 @@ const Reflection = {
     `;
 
     this.setupCanvas();
+    this.autoSelectPeriod();
+  },
+
+  /** 現在時刻から時間目を自動選択 */
+  autoSelectPeriod() {
+    const now = new Date();
+    const hhmm = ('0' + now.getHours()).slice(-2) + ':' + ('0' + now.getMinutes()).slice(-2);
+
+    let matchedPeriod = null;
+    for (const pt of (CONFIG.periodTimes || [])) {
+      // 授業中 or 授業終了直後（終了後15分以内 = 振り返り記入タイム）
+      if (hhmm >= pt.start && hhmm <= this.addMinutes(pt.end, 15)) {
+        matchedPeriod = pt.period;
+        break;
+      }
+    }
+
+    if (matchedPeriod) {
+      const btn = document.querySelector(`#ref-period-chips .ref-chip[data-value="${matchedPeriod}時間目"]`);
+      if (btn) {
+        this.selectPeriod(btn);
+      }
+    }
+  },
+
+  addMinutes(timeStr, min) {
+    const [h, m] = timeStr.split(':').map(Number);
+    const total = h * 60 + m + min;
+    return ('0' + Math.floor(total / 60)).slice(-2) + ':' + ('0' + (total % 60)).slice(-2);
   },
 
   setupCanvas() {
