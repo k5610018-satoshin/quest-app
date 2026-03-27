@@ -10,15 +10,15 @@
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','Hiragino Sans',sans-serif;background:var(--bg);color:var(--text);font-size:14px;min-height:100vh}
 a{color:var(--primary);text-decoration:none}
 
-/* Header */
-.header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(99,102,241,.3)}
-.header h1{font-size:18px;font-weight:700;display:flex;align-items:center;gap:8px}
-.header-actions{display:flex;align-items:center;gap:12px}
-.header-actions .status{font-size:12px;opacity:.8}
-.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;transition:all .15s}
+/* Header - compact */
+.header{background:linear-gradient(135deg,var(--primary),var(--primary-dark));color:#fff;padding:8px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 2px 8px rgba(99,102,241,.3)}
+.header h1{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.header-actions{display:flex;align-items:center;gap:10px}
+.header-actions .status{font-size:11px;opacity:.8}
+.btn{display:inline-flex;align-items:center;gap:4px;padding:5px 12px;border:none;border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;transition:all .15s}
 .btn-white{background:#fff;color:var(--primary)}
 .btn-white:hover{background:#eef2ff}
-.btn-sm{padding:5px 10px;font-size:12px;border-radius:6px}
+.btn-sm{padding:3px 8px;font-size:11px;border-radius:5px}
 .btn-primary{background:var(--primary);color:#fff}
 .btn-primary:hover{background:var(--primary-dark)}
 .btn-success{background:var(--success);color:#fff}
@@ -26,97 +26,115 @@ a{color:var(--primary);text-decoration:none}
 .btn-outline{background:transparent;border:1.5px solid var(--border);color:var(--text2)}
 .btn-outline:hover{border-color:var(--primary);color:var(--primary)}
 
-/* Tabs */
-.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);overflow-x:auto;padding:0 16px}
-.tab{padding:12px 18px;font-size:13px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:3px solid transparent;white-space:nowrap;transition:all .15s}
+/* Tabs - compact */
+.tabs{display:flex;background:#fff;border-bottom:1px solid var(--border);overflow-x:auto;padding:0 8px}
+.tab{padding:7px 12px;font-size:12px;font-weight:600;color:var(--text2);cursor:pointer;border-bottom:2px solid transparent;white-space:nowrap;transition:all .15s}
 .tab:hover{color:var(--primary)}
 .tab.active{color:var(--primary);border-bottom-color:var(--primary)}
-.tab .badge{display:inline-flex;align-items:center;justify-content:center;min-width:20px;height:20px;padding:0 6px;border-radius:10px;font-size:11px;font-weight:700;margin-left:6px}
+.tab .badge{display:inline-flex;align-items:center;justify-content:center;min-width:18px;height:18px;padding:0 5px;border-radius:9px;font-size:10px;font-weight:700;margin-left:4px}
 .tab .badge-red{background:var(--danger);color:#fff}
 .tab .badge-gray{background:#e2e8f0;color:var(--text2)}
 
 /* Content */
-.content{padding:20px 24px;max-width:1400px;margin:0 auto}
+.content{padding:10px 16px;max-width:1600px;margin:0 auto}
 
 /* Cards */
 .card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden}
-.card-header{padding:16px 20px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
-.card-body{padding:20px}
+.card-header{padding:10px 14px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.card-body{padding:14px}
 
 /* Grid */
-.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
-.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.grid-4{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:12px}
+.grid-2{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px}
+.grid-3{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px}
+.grid-4{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:8px}
 
 /* Dashboard student cards */
-.student-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;cursor:pointer;transition:all .15s;border:2px solid transparent}
-.student-card:hover{border-color:var(--primary-light);transform:translateY(-2px);box-shadow:0 4px 12px rgba(99,102,241,.15)}
+.student-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:12px;cursor:pointer;transition:all .15s;border:2px solid transparent}
+.student-card:hover{border-color:var(--primary-light);transform:translateY(-1px);box-shadow:0 4px 12px rgba(99,102,241,.15)}
 .student-card.selected{border-color:var(--primary);background:#eef2ff}
-.student-card .sc-top{display:flex;align-items:center;gap:10px;margin-bottom:10px}
-.student-card .sc-num{width:32px;height:32px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}
-.student-card .sc-name{font-weight:700;font-size:14px}
-.student-card .sc-lv{font-size:12px;color:var(--primary);font-weight:600}
-.student-card .sc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;font-size:12px;color:var(--text2)}
+.student-card .sc-top{display:flex;align-items:center;gap:8px;margin-bottom:8px}
+.student-card .sc-num{width:28px;height:28px;border-radius:50%;background:var(--primary);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px}
+.student-card .sc-name{font-weight:700;font-size:13px}
+.student-card .sc-lv{font-size:11px;color:var(--primary);font-weight:600}
+.student-card .sc-stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px;color:var(--text2)}
 .student-card .sc-stats span{text-align:center}
-.student-card .sc-stats .val{font-weight:700;font-size:15px;color:var(--text);display:block}
-.student-card .sc-streak{display:flex;align-items:center;gap:4px;font-size:12px;margin-top:8px;padding-top:8px;border-top:1px solid var(--border)}
+.student-card .sc-stats .val{font-weight:700;font-size:14px;color:var(--text);display:block}
+.student-card .sc-streak{display:flex;align-items:center;gap:4px;font-size:11px;margin-top:6px;padding-top:6px;border-top:1px solid var(--border)}
 .student-card .sc-streak.hot{color:var(--warning)}
 .student-card .sc-streak.cold{color:var(--text2)}
 
-/* Diary/Reflection cards */
-.entry-card{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);overflow:hidden;margin-bottom:14px}
-.entry-card .ec-header{padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border);background:#fafbfc}
-.entry-card .ec-meta{font-size:12px;color:var(--text2);display:flex;align-items:center;gap:8px}
-.entry-card .ec-name{font-weight:700;font-size:14px;color:var(--text)}
-.entry-card .ec-body{padding:14px 16px;font-size:14px;line-height:1.7;white-space:pre-wrap;word-break:break-word}
-.entry-card .ec-tags{padding:0 16px 10px;display:flex;flex-wrap:wrap;gap:6px}
-.entry-card .ec-tag{display:inline-block;padding:2px 8px;border-radius:4px;font-size:11px;font-weight:600}
-.entry-card .ec-comment{padding:12px 16px;background:#fefce8;border-top:1px solid #fde68a}
-.entry-card .ec-comment textarea{width:100%;border:1.5px solid #fde68a;border-radius:8px;padding:10px;font-size:13px;resize:vertical;min-height:60px;font-family:inherit;background:#fffef5}
-.entry-card .ec-comment textarea:focus{outline:none;border-color:var(--warning)}
-.entry-card .ec-comment .comment-actions{display:flex;align-items:center;justify-content:space-between;margin-top:8px}
-.entry-card .ec-comment .saved-msg{font-size:12px;color:var(--success);font-weight:600;display:none}
+/* Compact data table */
+.data-table{width:100%;border-collapse:collapse;font-size:12px;line-height:1.4}
+.data-table th{background:#f1f5f9;padding:4px 6px;text-align:left;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border);white-space:nowrap;position:sticky;top:0;z-index:10;font-size:11px}
+.data-table th.sortable{cursor:pointer;user-select:none}
+.data-table th.sortable:hover{color:var(--primary);background:#e8ecf4}
+.data-table td{padding:3px 6px;border-bottom:1px solid var(--border);vertical-align:top}
+.data-table tr:hover td{background:#f8fafc}
+.data-table .col-date{width:70px;white-space:nowrap;color:var(--text2)}
+.data-table .col-name{width:80px;white-space:nowrap;font-weight:600}
+.data-table .col-content{word-break:break-word;white-space:pre-wrap}
+.data-table .col-comment{font-size:11px;color:#92400e;max-width:200px;word-break:break-word}
+.data-table .col-subject{width:50px;white-space:nowrap;font-weight:600;color:var(--primary)}
+.data-table .col-type{width:60px;font-size:11px;color:var(--text2)}
+.data-table .col-plan{max-width:180px;word-break:break-word;color:#166534;font-size:11px}
+.data-table .col-zone{width:70px;white-space:nowrap}
+.data-table .col-check{width:28px;text-align:center}
+.data-table .col-check input{cursor:pointer}
+.data-table .inline-comment{display:flex;align-items:center;gap:4px}
+.data-table .inline-comment input{flex:1;padding:2px 4px;border:1px solid var(--border);border-radius:4px;font-size:11px;font-family:inherit;min-width:0}
+.data-table .inline-comment input:focus{outline:none;border-color:var(--primary)}
+.data-table .inline-comment button{padding:1px 6px;font-size:10px;border:1px solid var(--border);border-radius:3px;background:#fff;cursor:pointer;white-space:nowrap}
+.data-table .inline-comment button:hover{border-color:var(--primary);color:var(--primary)}
+.data-table .inline-comment .saved{color:var(--success);font-size:10px;font-weight:600;display:none}
+.sort-arrow{font-size:10px;margin-left:2px}
 
-/* Zone badge */
-.zone-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:6px;font-size:12px;font-weight:600}
+/* Zone badge - smaller */
+.zone-badge{display:inline-flex;align-items:center;gap:3px;padding:1px 6px;border-radius:4px;font-size:11px;font-weight:600}
 .zone-comfort{background:#dbeafe;color:#1d4ed8}
 .zone-stretch{background:#dcfce7;color:#15803d}
 .zone-panic{background:#fee2e2;color:#b91c1c}
 
 /* Subject chips */
-.chip-bar{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:16px}
-.chip{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text2);transition:all .15s}
+.chip-bar{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:8px}
+.chip{padding:3px 10px;border-radius:16px;font-size:11px;font-weight:600;cursor:pointer;border:1.5px solid var(--border);background:#fff;color:var(--text2);transition:all .15s}
 .chip:hover{border-color:var(--primary-light)}
 .chip.active{background:var(--primary);color:#fff;border-color:var(--primary)}
 
 /* Filter bar */
-.filter-bar{display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap}
-.filter-bar select,.filter-bar input{padding:8px 12px;border:1.5px solid var(--border);border-radius:8px;font-size:13px;background:#fff;color:var(--text)}
+.filter-bar{display:flex;align-items:center;gap:8px;margin-bottom:8px;flex-wrap:wrap}
+.filter-bar select,.filter-bar input{padding:4px 8px;border:1.5px solid var(--border);border-radius:6px;font-size:12px;background:#fff;color:var(--text)}
 .filter-bar select:focus,.filter-bar input:focus{outline:none;border-color:var(--primary)}
-.active-filter{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;background:#eef2ff;border-radius:8px;font-size:13px;font-weight:600;color:var(--primary)}
-.active-filter button{background:none;border:none;color:var(--primary);cursor:pointer;font-size:16px;line-height:1}
+.active-filter{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;background:#eef2ff;border-radius:6px;font-size:12px;font-weight:600;color:var(--primary)}
+.active-filter button{background:none;border:none;color:var(--primary);cursor:pointer;font-size:14px;line-height:1}
 
 /* Missing list */
-.missing-section{margin-bottom:20px}
-.missing-section h3{font-size:15px;font-weight:700;margin-bottom:10px;display:flex;align-items:center;gap:8px}
-.missing-grid{display:flex;flex-wrap:wrap;gap:8px}
-.missing-chip{padding:6px 14px;border-radius:8px;font-size:13px;font-weight:600;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
+.missing-section{margin-bottom:16px}
+.missing-section h3{font-size:14px;font-weight:700;margin-bottom:8px;display:flex;align-items:center;gap:6px}
+.missing-grid{display:flex;flex-wrap:wrap;gap:6px}
+.missing-chip{padding:4px 10px;border-radius:6px;font-size:12px;font-weight:600;background:#fee2e2;color:#b91c1c;border:1px solid #fecaca}
 
 /* Token table */
-.token-table{width:100%;border-collapse:collapse;font-size:13px}
-.token-table th{background:#f8fafc;padding:10px 14px;text-align:left;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border)}
-.token-table td{padding:10px 14px;border-bottom:1px solid var(--border)}
+.token-table{width:100%;border-collapse:collapse;font-size:12px}
+.token-table th{background:#f8fafc;padding:6px 10px;text-align:left;font-weight:600;color:var(--text2);border-bottom:2px solid var(--border)}
+.token-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
 .token-table tr:hover td{background:#f8fafc}
-.token-url{font-family:'Courier New',monospace;font-size:12px;color:var(--text2);max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
-.copy-btn{padding:4px 10px;font-size:11px;border:1px solid var(--border);border-radius:6px;background:#fff;cursor:pointer;transition:all .15s}
+.token-url{font-family:'Courier New',monospace;font-size:11px;color:var(--text2);max-width:400px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block}
+.copy-btn{padding:3px 8px;font-size:10px;border:1px solid var(--border);border-radius:5px;background:#fff;cursor:pointer;transition:all .15s}
 .copy-btn:hover{border-color:var(--primary);color:var(--primary)}
 .copy-btn.copied{background:var(--success);color:#fff;border-color:var(--success)}
 
 /* Stats row */
-.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:20px}
-.stat-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:16px;text-align:center}
-.stat-box .stat-val{font-size:28px;font-weight:800;color:var(--primary)}
-.stat-box .stat-label{font-size:12px;color:var(--text2);margin-top:4px}
+.stats-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:8px;margin-bottom:12px}
+.stat-box{background:var(--card);border-radius:var(--radius);box-shadow:var(--shadow);padding:10px;text-align:center}
+.stat-box .stat-val{font-size:24px;font-weight:800;color:var(--primary)}
+.stat-box .stat-label{font-size:11px;color:var(--text2);margin-top:2px}
+
+/* Newsletter tab */
+.newsletter-section{margin-bottom:16px}
+.newsletter-section h3{font-size:14px;font-weight:700;margin-bottom:8px}
+.newsletter-actions{display:flex;gap:8px;margin-bottom:12px}
+.newsletter-empty{color:var(--text2);text-align:center;padding:30px;font-size:13px}
+.checked-row{background:#fffbeb}
 
 /* Print */
 .print-area{display:none}
@@ -142,19 +160,20 @@ a{color:var(--primary);text-decoration:none}
 @keyframes spin{to{transform:rotate(360deg)}}
 
 /* Toast */
-.toast{position:fixed;bottom:24px;right:24px;padding:12px 20px;border-radius:8px;font-size:13px;font-weight:600;color:#fff;z-index:300;transform:translateY(100px);opacity:0;transition:all .3s}
+.toast{position:fixed;bottom:24px;right:24px;padding:10px 16px;border-radius:8px;font-size:12px;font-weight:600;color:#fff;z-index:300;transform:translateY(100px);opacity:0;transition:all .3s}
 .toast.show{transform:translateY(0);opacity:1}
 .toast-success{background:var(--success)}
 .toast-error{background:var(--danger)}
 
 /* Responsive */
 @media(max-width:768px){
-  .content{padding:12px}
-  .header{padding:12px 16px}
-  .header h1{font-size:15px}
-  .tabs{padding:0 8px}
-  .tab{padding:10px 12px;font-size:12px}
-  .grid-4{grid-template-columns:repeat(auto-fill,minmax(140px,1fr))}
+  .content{padding:8px}
+  .header{padding:6px 10px}
+  .header h1{font-size:13px}
+  .tabs{padding:0 4px}
+  .tab{padding:6px 8px;font-size:11px}
+  .grid-4{grid-template-columns:repeat(auto-fill,minmax(130px,1fr))}
+  .data-table{font-size:11px}
 }
 </style>
 </head>
@@ -163,7 +182,7 @@ a{color:var(--primary);text-decoration:none}
 <div class="loading-bar" id="loadingBar"></div>
 
 <div class="header">
-  <h1>📊 学びの冒険クエスト 管理画面</h1>
+  <h1>📊 管理画面</h1>
   <div class="header-actions">
     <span class="status" id="lastUpdate"></span>
     <button class="btn btn-white" onclick="refreshAll()">🔄 更新</button>
@@ -172,8 +191,9 @@ a{color:var(--primary);text-decoration:none}
 
 <div class="tabs" id="tabBar">
   <div class="tab active" data-tab="dashboard">ダッシュボード</div>
-  <div class="tab" data-tab="diary">日記</div>
-  <div class="tab" data-tab="reflection">振り返り</div>
+  <div class="tab" data-tab="diary">📝 日記</div>
+  <div class="tab" data-tab="reflection">🔄 振り返り</div>
+  <div class="tab" data-tab="newsletter">📰 通信用 <span class="badge badge-gray" id="newsletterBadge" style="display:none">0</span></div>
   <div class="tab" data-tab="missing">未提出 <span class="badge badge-red" id="missingBadge">0</span></div>
   <div class="tab" data-tab="pdf">PDF出力</div>
   <div class="tab" data-tab="tokens">トークン</div>
@@ -241,11 +261,49 @@ let currentTab = 'dashboard';
 let selectedStudentId = null;
 let selectedSubject = null;
 
+// Sort state
+let diarySortKey = 'date';
+let diarySortAsc = false;
+let refSortKey = 'date';
+let refSortAsc = false;
+
+// Newsletter check state (localStorage)
+const NL_DIARY_KEY = 'nl_checked_diaries';
+const NL_REF_KEY = 'nl_checked_reflections';
+function getCheckedDiaries() { try { return JSON.parse(localStorage.getItem(NL_DIARY_KEY) || '[]'); } catch { return []; } }
+function getCheckedRefs() { try { return JSON.parse(localStorage.getItem(NL_REF_KEY) || '[]'); } catch { return []; } }
+function setCheckedDiaries(arr) { localStorage.setItem(NL_DIARY_KEY, JSON.stringify(arr)); updateNewsletterBadge(); }
+function setCheckedRefs(arr) { localStorage.setItem(NL_REF_KEY, JSON.stringify(arr)); updateNewsletterBadge(); }
+
+function toggleDiaryCheck(id) {
+  const arr = getCheckedDiaries();
+  const sid = String(id);
+  const idx = arr.indexOf(sid);
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(sid);
+  setCheckedDiaries(arr);
+}
+
+function toggleRefCheck(id) {
+  const arr = getCheckedRefs();
+  const sid = String(id);
+  const idx = arr.indexOf(sid);
+  if (idx >= 0) arr.splice(idx, 1); else arr.push(sid);
+  setCheckedRefs(arr);
+}
+
+function updateNewsletterBadge() {
+  const total = getCheckedDiaries().length + getCheckedRefs().length;
+  const badge = document.getElementById('newsletterBadge');
+  if (badge) {
+    badge.textContent = total;
+    badge.style.display = total > 0 ? '' : 'none';
+  }
+}
+
 // ============================================================
 // Init
 // ============================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Tab switching
   document.querySelectorAll('.tab').forEach(t => {
     t.addEventListener('click', () => {
       currentTab = t.dataset.tab;
@@ -254,6 +312,7 @@ document.addEventListener('DOMContentLoaded', () => {
       render();
     });
   });
+  updateNewsletterBadge();
   refreshAll();
 });
 
@@ -271,8 +330,9 @@ async function refreshAll() {
       supaGet('weekly_reviews', '&order=created_at.desc')
     ]);
     DB = { users, diaries, reflections, matrix_records, skill_tree, acquired_items, weekly_reviews };
-    document.getElementById('lastUpdate').textContent = '最終更新: ' + new Date().toLocaleTimeString('ja-JP');
+    document.getElementById('lastUpdate').textContent = '更新: ' + new Date().toLocaleTimeString('ja-JP');
     updateMissingBadge();
+    updateNewsletterBadge();
     render();
     bar.classList.remove('active');
   } catch (e) {
@@ -291,6 +351,7 @@ function render() {
     case 'dashboard': el.innerHTML = renderDashboard(); break;
     case 'diary': el.innerHTML = renderDiary(); break;
     case 'reflection': el.innerHTML = renderReflection(); break;
+    case 'newsletter': el.innerHTML = renderNewsletter(); break;
     case 'missing': el.innerHTML = renderMissing(); break;
     case 'pdf': el.innerHTML = renderPDF(); break;
     case 'tokens': el.innerHTML = renderTokens(); break;
@@ -368,6 +429,11 @@ function getZoneClass(zone) {
 
 function getStudentId(u) { return u.student_id || u.id; }
 
+function sortArrow(currentKey, targetKey, asc) {
+  if (currentKey !== targetKey) return '';
+  return `<span class="sort-arrow">${asc ? '▲' : '▼'}</span>`;
+}
+
 // ============================================================
 // 1. Dashboard
 // ============================================================
@@ -417,65 +483,104 @@ function renderDashboard() {
 
   return statsHtml + `
     ${activeFilterHtml()}
-    <div class="grid-4" style="margin-top:12px">${cardsHtml}</div>
+    <div class="grid-4" style="margin-top:8px">${cardsHtml}</div>
   `;
 }
 
 // ============================================================
-// 2. Diary
+// 2. Diary (table view + checkbox + sort + inline comment)
 // ============================================================
+function sortDiaries(arr) {
+  const sorted = [...arr];
+  sorted.sort((a, b) => {
+    let cmp = 0;
+    if (diarySortKey === 'date') {
+      cmp = (a.created_at || '').localeCompare(b.created_at || '');
+    } else if (diarySortKey === 'name') {
+      const na = getStudentNum(a.student_id);
+      const nb = getStudentNum(b.student_id);
+      cmp = (na === '?' ? 999 : Number(na)) - (nb === '?' ? 999 : Number(nb));
+    }
+    return diarySortAsc ? cmp : -cmp;
+  });
+  return sorted;
+}
+
+function toggleDiarySort(key) {
+  if (diarySortKey === key) {
+    diarySortAsc = !diarySortAsc;
+  } else {
+    diarySortKey = key;
+    diarySortAsc = key === 'name';
+  }
+  render();
+}
+
 function renderDiary() {
   let diaries = [...DB.diaries];
   if (selectedStudentId) {
     diaries = diaries.filter(d => d.student_id === selectedStudentId);
   }
+  diaries = sortDiaries(diaries);
+  const checkedIds = getCheckedDiaries();
 
-  const cardsHtml = diaries.length === 0
-    ? '<p style="color:var(--text2);padding:20px;text-align:center">日記がありません</p>'
+  const rowsHtml = diaries.length === 0
+    ? `<tr><td colspan="5" style="color:var(--text2);padding:16px;text-align:center">日記がありません</td></tr>`
     : diaries.map(d => {
       const cmt = d.teacher_comment || '';
+      const isChecked = checkedIds.includes(String(d.id));
       return `
-        <div class="entry-card">
-          <div class="ec-header">
-            <div class="ec-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</div>
-            <div class="ec-meta">${fmtDateTime(d.created_at)}</div>
-          </div>
-          <div class="ec-body">${escHtml(d.content)}</div>
-          <div class="ec-comment">
-            <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px">💬 先生コメント</div>
-            <textarea id="dc-${d.id}" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
-            <div class="comment-actions">
-              <span class="saved-msg" id="ds-${d.id}">保存しました</span>
-              <button class="btn btn-sm btn-success" onclick="saveDiaryComment('${d.id}')">保存</button>
+        <tr class="${isChecked ? 'checked-row' : ''}">
+          <td class="col-check"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleDiaryCheck('${d.id}');render()"></td>
+          <td class="col-date">${fmtDate(d.created_at)}</td>
+          <td class="col-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</td>
+          <td class="col-content">${escHtml(d.content)}</td>
+          <td class="col-comment">
+            <div class="inline-comment">
+              <input type="text" id="dc-${d.id}" value="${escHtml(cmt)}" placeholder="コメント...">
+              <button onclick="saveDiaryComment('${d.id}')">保存</button>
+              <span class="saved" id="ds-${d.id}">OK</span>
             </div>
-          </div>
-        </div>
+          </td>
+        </tr>
       `;
     }).join('');
 
   return `
     <div class="filter-bar">
       ${activeFilterHtml()}
-      <span style="color:var(--text2);font-size:13px">${diaries.length}件</span>
+      <span style="color:var(--text2);font-size:12px">${diaries.length}件</span>
     </div>
-    ${cardsHtml}
+    <div class="card">
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="sortable" onclick="toggleDiarySort('date')">日付${sortArrow(diarySortKey,'date',diarySortAsc)}</th>
+              <th class="sortable" onclick="toggleDiarySort('name')">名前${sortArrow(diarySortKey,'name',diarySortAsc)}</th>
+              <th>内容</th>
+              <th>コメント</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
 async function saveDiaryComment(id) {
-  const ta = document.getElementById('dc-' + id);
+  const inp = document.getElementById('dc-' + id);
   const msg = document.getElementById('ds-' + id);
-  if (!ta) return;
-  const comment = ta.value.trim();
+  if (!inp) return;
+  const comment = inp.value.trim();
   try {
     await supaUpdate('diaries', id, { teacher_comment: comment });
-    // ローカルキャッシュ更新
     const d = DB.diaries.find(x => String(x.id) === String(id));
     if (d) d.teacher_comment = comment;
-    msg.style.display = 'inline';
-    setTimeout(() => { msg.style.display = 'none'; }, 2500);
+    if (msg) { msg.style.display = 'inline'; setTimeout(() => { msg.style.display = 'none'; }, 2000); }
     showToast('日記コメントを保存しました');
-    // GAS転記（バックグラウンド）
     gasAddComment('diary', id, comment);
   } catch (e) {
     showToast('保存エラー: ' + e.message, 'error');
@@ -483,8 +588,36 @@ async function saveDiaryComment(id) {
 }
 
 // ============================================================
-// 3. Reflection
+// 3. Reflection (table view + checkbox + sort + no comment input)
 // ============================================================
+function sortRefs(arr) {
+  const sorted = [...arr];
+  sorted.sort((a, b) => {
+    let cmp = 0;
+    if (refSortKey === 'date') {
+      cmp = (a.created_at || '').localeCompare(b.created_at || '');
+    } else if (refSortKey === 'name') {
+      const na = getStudentNum(a.student_id);
+      const nb = getStudentNum(b.student_id);
+      cmp = (na === '?' ? 999 : Number(na)) - (nb === '?' ? 999 : Number(nb));
+    } else if (refSortKey === 'subject') {
+      cmp = (a.subject || '').localeCompare(b.subject || '');
+    }
+    return refSortAsc ? cmp : -cmp;
+  });
+  return sorted;
+}
+
+function toggleRefSort(key) {
+  if (refSortKey === key) {
+    refSortAsc = !refSortAsc;
+  } else {
+    refSortKey = key;
+    refSortAsc = key === 'name' || key === 'subject';
+  }
+  render();
+}
+
 function renderReflection() {
   let refs = [...DB.reflections];
   if (selectedStudentId) {
@@ -493,6 +626,8 @@ function renderReflection() {
   if (selectedSubject) {
     refs = refs.filter(r => r.subject === selectedSubject);
   }
+  refs = sortRefs(refs);
+  const checkedIds = getCheckedRefs();
 
   const subjectChips = `
     <div class="chip-bar">
@@ -501,45 +636,34 @@ function renderReflection() {
     </div>
   `;
 
-  // マトリクスマップ（reflection_id → matrix_record）
+  // matrix map
   const matrixMap = {};
   DB.matrix_records.forEach(m => {
     if (m.reflection_id) matrixMap[m.reflection_id] = m;
   });
 
-  const cardsHtml = refs.length === 0
-    ? '<p style="color:var(--text2);padding:20px;text-align:center">振り返りがありません</p>'
+  const rowsHtml = refs.length === 0
+    ? `<tr><td colspan="8" style="color:var(--text2);padding:16px;text-align:center">振り返りがありません</td></tr>`
     : refs.map(r => {
       const cmt = r.teacher_comment || '';
       const matrix = matrixMap[r.id];
       const typeSymbols = r.types || r.detected_types || '';
       const tags = typeof typeSymbols === 'string' ? typeSymbols.split(',').filter(Boolean) : (Array.isArray(typeSymbols) ? typeSymbols : []);
+      const zoneHtml = matrix && matrix.zone ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone)}</span>` : '';
+      const isChecked = checkedIds.includes(String(r.id));
 
       return `
-        <div class="entry-card">
-          <div class="ec-header">
-            <div style="display:flex;align-items:center;gap:10px">
-              <div class="ec-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</div>
-              <span style="font-size:12px;font-weight:600;color:var(--primary);background:#eef2ff;padding:2px 8px;border-radius:4px">${escHtml(r.subject || '')}</span>
-              ${r.period ? `<span style="font-size:11px;color:var(--text2)">${escHtml(r.period)}</span>` : ''}
-            </div>
-            <div class="ec-meta">
-              ${matrix ? `<span class="zone-badge ${getZoneClass(matrix.zone)}">${escHtml(matrix.zone || '')}</span>` : ''}
-              ${fmtDateTime(r.created_at)}
-            </div>
-          </div>
-          ${r.plan ? `<div style="padding:8px 16px;background:#f0fdf4;font-size:13px;color:#166534;border-bottom:1px solid #bbf7d0"><b>計画:</b> ${escHtml(r.plan)}</div>` : ''}
-          <div class="ec-body">${escHtml(r.content)}</div>
-          ${tags.length > 0 ? `<div class="ec-tags">${tags.map(t => `<span class="ec-tag" style="background:#eef2ff;color:var(--primary)">${escHtml(t)}</span>`).join('')}</div>` : ''}
-          <div class="ec-comment">
-            <div style="font-size:12px;font-weight:600;color:#92400e;margin-bottom:6px">💬 先生コメント</div>
-            <textarea id="rc-${r.id}" placeholder="コメントを入力...">${escHtml(cmt)}</textarea>
-            <div class="comment-actions">
-              <span class="saved-msg" id="rs-${r.id}">保存しました</span>
-              <button class="btn btn-sm btn-success" onclick="saveRefComment('${r.id}')">保存</button>
-            </div>
-          </div>
-        </div>
+        <tr class="${isChecked ? 'checked-row' : ''}">
+          <td class="col-check"><input type="checkbox" ${isChecked ? 'checked' : ''} onchange="toggleRefCheck('${r.id}');render()"></td>
+          <td class="col-date">${fmtDate(r.created_at)}</td>
+          <td class="col-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</td>
+          <td class="col-subject">${escHtml(r.subject || '')}</td>
+          <td class="col-type">${tags.map(t => escHtml(t)).join(', ')}</td>
+          <td class="col-plan">${escHtml(r.plan || '')}</td>
+          <td class="col-content">${escHtml(r.content)}</td>
+          <td class="col-zone">${zoneHtml}</td>
+          ${cmt ? `<td class="col-comment" style="font-size:10px">${escHtml(cmt)}</td>` : `<td class="col-comment"></td>`}
+        </tr>
       `;
     }).join('');
 
@@ -547,9 +671,28 @@ function renderReflection() {
     ${subjectChips}
     <div class="filter-bar">
       ${activeFilterHtml()}
-      <span style="color:var(--text2);font-size:13px">${refs.length}件</span>
+      <span style="color:var(--text2);font-size:12px">${refs.length}件</span>
     </div>
-    ${cardsHtml}
+    <div class="card">
+      <div style="overflow-x:auto">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th class="col-check"></th>
+              <th class="sortable" onclick="toggleRefSort('date')">日付${sortArrow(refSortKey,'date',refSortAsc)}</th>
+              <th class="sortable" onclick="toggleRefSort('name')">名前${sortArrow(refSortKey,'name',refSortAsc)}</th>
+              <th class="sortable" onclick="toggleRefSort('subject')">教科${sortArrow(refSortKey,'subject',refSortAsc)}</th>
+              <th>型</th>
+              <th>計画</th>
+              <th>内容</th>
+              <th>ゾーン</th>
+              <th>コメント</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
   `;
 }
 
@@ -558,26 +701,119 @@ function setSubjectFilter(subject) {
   render();
 }
 
-async function saveRefComment(id) {
-  const ta = document.getElementById('rc-' + id);
-  const msg = document.getElementById('rs-' + id);
-  if (!ta) return;
-  const comment = ta.value.trim();
-  try {
-    await supaUpdate('reflections', id, { teacher_comment: comment });
-    const r = DB.reflections.find(x => String(x.id) === String(id));
-    if (r) r.teacher_comment = comment;
-    msg.style.display = 'inline';
-    setTimeout(() => { msg.style.display = 'none'; }, 2500);
-    showToast('振り返りコメントを保存しました');
-    gasAddComment('reflection', id, comment);
-  } catch (e) {
-    showToast('保存エラー: ' + e.message, 'error');
+// ============================================================
+// 4. Newsletter (checked items)
+// ============================================================
+function renderNewsletter() {
+  const checkedDiaryIds = getCheckedDiaries();
+  const checkedRefIds = getCheckedRefs();
+
+  const checkedDiaries = DB.diaries.filter(d => checkedDiaryIds.includes(String(d.id)));
+  const checkedRefs = DB.reflections.filter(r => checkedRefIds.includes(String(r.id)));
+
+  const total = checkedDiaries.length + checkedRefs.length;
+
+  if (total === 0) {
+    return `
+      <div class="newsletter-empty">
+        <div style="font-size:32px;margin-bottom:8px">📰</div>
+        <div>チェックされた項目がありません</div>
+        <div style="margin-top:4px;font-size:12px">日記タブ・振り返りタブで行のチェックボックスを選択してください</div>
+      </div>
+    `;
   }
+
+  let diaryRowsHtml = '';
+  if (checkedDiaries.length > 0) {
+    diaryRowsHtml = `
+      <div class="newsletter-section">
+        <h3>📝 日記 (${checkedDiaries.length}件)</h3>
+        <table class="data-table">
+          <thead><tr><th>日付</th><th>名前</th><th>内容</th></tr></thead>
+          <tbody>
+            ${checkedDiaries.map(d => `
+              <tr>
+                <td class="col-date">${fmtDate(d.created_at)}</td>
+                <td class="col-name">${getStudentNum(d.student_id)}番 ${escHtml(getStudentName(d.student_id))}</td>
+                <td class="col-content">${escHtml(d.content)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  let refRowsHtml = '';
+  if (checkedRefs.length > 0) {
+    refRowsHtml = `
+      <div class="newsletter-section">
+        <h3>🔄 振り返り (${checkedRefs.length}件)</h3>
+        <table class="data-table">
+          <thead><tr><th>日付</th><th>名前</th><th>教科</th><th>内容</th></tr></thead>
+          <tbody>
+            ${checkedRefs.map(r => `
+              <tr>
+                <td class="col-date">${fmtDate(r.created_at)}</td>
+                <td class="col-name">${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</td>
+                <td class="col-subject">${escHtml(r.subject || '')}</td>
+                <td class="col-content">${escHtml(r.content)}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="newsletter-actions">
+      <button class="btn btn-primary" onclick="copyNewsletter()">📋 コピー</button>
+      <button class="btn btn-danger" onclick="clearNewsletter()">🗑 クリア</button>
+      <span style="color:var(--text2);font-size:12px;margin-left:8px">${total}件 選択中</span>
+    </div>
+    ${diaryRowsHtml}
+    ${refRowsHtml}
+  `;
+}
+
+function copyNewsletter() {
+  const checkedDiaryIds = getCheckedDiaries();
+  const checkedRefIds = getCheckedRefs();
+  const checkedDiaries = DB.diaries.filter(d => checkedDiaryIds.includes(String(d.id)));
+  const checkedRefs = DB.reflections.filter(r => checkedRefIds.includes(String(r.id)));
+
+  let text = '';
+  if (checkedDiaries.length > 0) {
+    text += '【日記】\n';
+    checkedDiaries.forEach(d => {
+      text += `${fmtDate(d.created_at)} ${getStudentName(d.student_id)}\n${d.content || ''}\n\n`;
+    });
+  }
+  if (checkedRefs.length > 0) {
+    text += '【振り返り】\n';
+    checkedRefs.forEach(r => {
+      text += `${fmtDate(r.created_at)} ${getStudentName(r.student_id)} [${r.subject || ''}]\n`;
+      if (r.plan) text += `計画: ${r.plan}\n`;
+      text += `${r.content || ''}\n\n`;
+    });
+  }
+
+  navigator.clipboard.writeText(text.trim()).then(() => {
+    showToast('通信用テキストをコピーしました');
+  });
+}
+
+function clearNewsletter() {
+  if (!confirm('全てのチェックを解除しますか？')) return;
+  setCheckedDiaries([]);
+  setCheckedRefs([]);
+  render();
+  showToast('チェックを全解除しました');
 }
 
 // ============================================================
-// 4. Missing
+// 5. Missing
 // ============================================================
 function renderMissing() {
   const { missingDiary, missingReflection } = getMissing();
@@ -585,18 +821,18 @@ function renderMissing() {
   const dateStr = `${today.getMonth()+1}月${today.getDate()}日`;
 
   return `
-    <h2 style="font-size:18px;font-weight:700;margin-bottom:16px">📋 ${dateStr} 未提出一覧</h2>
+    <h2 style="font-size:16px;font-weight:700;margin-bottom:12px">📋 ${dateStr} 未提出一覧</h2>
     <div class="missing-section">
-      <h3>📝 日記未提出 <span class="badge badge-red" style="font-size:13px;padding:2px 10px;border-radius:8px">${missingDiary.length}人</span></h3>
+      <h3>📝 日記未提出 <span class="badge badge-red" style="font-size:12px;padding:2px 8px;border-radius:8px">${missingDiary.length}人</span></h3>
       ${missingDiary.length === 0
-        ? '<p style="color:var(--success);font-weight:600;padding:8px 0">全員提出済み！</p>'
+        ? '<p style="color:var(--success);font-weight:600;padding:6px 0">全員提出済み！</p>'
         : `<div class="missing-grid">${missingDiary.map(u => `<div class="missing-chip">${u.student_number}番 ${escHtml(u.name)}</div>`).join('')}</div>`
       }
     </div>
-    <div class="missing-section" style="margin-top:24px">
-      <h3>📖 振り返り未提出 <span class="badge badge-red" style="font-size:13px;padding:2px 10px;border-radius:8px">${missingReflection.length}人</span></h3>
+    <div class="missing-section" style="margin-top:16px">
+      <h3>📖 振り返り未提出 <span class="badge badge-red" style="font-size:12px;padding:2px 8px;border-radius:8px">${missingReflection.length}人</span></h3>
       ${missingReflection.length === 0
-        ? '<p style="color:var(--success);font-weight:600;padding:8px 0">全員提出済み！</p>'
+        ? '<p style="color:var(--success);font-weight:600;padding:6px 0">全員提出済み！</p>'
         : `<div class="missing-grid">${missingReflection.map(u => `<div class="missing-chip">${u.student_number}番 ${escHtml(u.name)}</div>`).join('')}</div>`
       }
     </div>
@@ -604,7 +840,7 @@ function renderMissing() {
 }
 
 // ============================================================
-// 5. PDF
+// 6. PDF
 // ============================================================
 function renderPDF() {
   const subjectOpts = SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('');
@@ -612,7 +848,7 @@ function renderPDF() {
 
   return `
     <div class="card">
-      <div class="card-header"><h3 style="font-size:15px;font-weight:700">🖨️ 印刷用PDF出力</h3></div>
+      <div class="card-header"><h3 style="font-size:14px;font-weight:700">🖨️ 印刷用PDF出力</h3></div>
       <div class="card-body">
         <div class="filter-bar">
           <select id="pdf-type">
@@ -690,7 +926,7 @@ function generatePrint() {
 }
 
 // ============================================================
-// 6. Tokens
+// 7. Tokens
 // ============================================================
 function renderTokens() {
   const rows = DB.users.map(u => {
@@ -712,12 +948,12 @@ function renderTokens() {
   return `
     <div class="card">
       <div class="card-header">
-        <h3 style="font-size:15px;font-weight:700">🔗 児童アクセスURL一覧</h3>
+        <h3 style="font-size:14px;font-weight:700">🔗 児童アクセスURL一覧</h3>
         <button class="btn btn-sm btn-outline" onclick="copyAllTokens()">全URLコピー</button>
       </div>
       <div class="card-body" style="padding:0;overflow-x:auto">
         <table class="token-table">
-          <thead><tr><th style="width:50px">番号</th><th style="width:100px">名前</th><th>URL</th><th style="width:80px">操作</th></tr></thead>
+          <thead><tr><th style="width:50px">番号</th><th style="width:100px">名前</th><th>URL</th><th style="width:70px">操作</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
       </div>
@@ -745,26 +981,26 @@ function copyAllTokens() {
 }
 
 // ============================================================
-// 7. Export
+// 8. Export
 // ============================================================
 function renderExport() {
   return `
-    <div class="card" style="margin-bottom:16px">
+    <div class="card" style="margin-bottom:12px">
       <div class="card-header">
-        <h3 style="font-size:15px;font-weight:700">📦 全データJSON出力（AI副担任用）</h3>
-        <div style="display:flex;gap:8px">
+        <h3 style="font-size:14px;font-weight:700">📦 全データJSON出力（AI副担任用）</h3>
+        <div style="display:flex;gap:6px">
           <button class="btn btn-sm btn-primary" onclick="exportJSON()">JSONを生成</button>
           <button class="btn btn-sm btn-outline" onclick="copyJSON()">クリップボードにコピー</button>
           <button class="btn btn-sm btn-outline" onclick="downloadJSON()">ダウンロード</button>
         </div>
       </div>
-      <div class="card-body" style="padding:12px">
+      <div class="card-body" style="padding:10px">
         <textarea class="json-area" id="jsonOutput" readonly placeholder="「JSONを生成」ボタンを押してください"></textarea>
       </div>
     </div>
     <div class="card">
       <div class="card-header">
-        <h3 style="font-size:15px;font-weight:700">📊 テーブル別件数</h3>
+        <h3 style="font-size:14px;font-weight:700">📊 テーブル別件数</h3>
       </div>
       <div class="card-body">
         <table class="token-table">
