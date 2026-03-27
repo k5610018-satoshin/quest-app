@@ -1511,28 +1511,61 @@ function renderMissing() {
 function renderPDF() {
   const subjectOpts = SUBJECTS.map(s => `<option value="${s}">${s}</option>`).join('');
   const studentOpts = DB.users.map(u => `<option value="${getStudentId(u)}">${u.student_number}番 ${escHtml(u.name)}</option>`).join('');
+  const periodOpts = ['1','2','3','4','5','6'].map(p => `<option value="${p}">${p}時間目</option>`).join('');
 
   return `
-    <div class="card">
+    <div class="card" style="margin-bottom:12px">
       <div class="card-header"><h3 style="font-size:14px;font-weight:700">🖨️ 印刷用PDF出力</h3></div>
       <div class="card-body">
-        <div class="filter-bar">
-          <select id="pdf-type">
-            <option value="diary">日記</option>
-            <option value="reflection">振り返り</option>
-          </select>
-          <select id="pdf-student">
-            <option value="">全員</option>
-            ${studentOpts}
-          </select>
-          <select id="pdf-subject">
-            <option value="">全教科</option>
-            ${subjectOpts}
-          </select>
-          <input type="date" id="pdf-from" placeholder="開始日">
-          <input type="date" id="pdf-to" placeholder="終了日">
-          <button class="btn btn-primary" onclick="generatePrint()">プレビュー＆印刷</button>
+        <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:8px;margin-bottom:10px">
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">種類</label>
+            <select id="pdf-type" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <option value="diary">📝 日記</option>
+              <option value="reflection">🔄 振り返り</option>
+              <option value="analysis">📊 大分析レポート</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">児童</label>
+            <select id="pdf-student" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <option value="">全員</option>
+              ${studentOpts}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">教科</label>
+            <select id="pdf-subject" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <option value="">全教科</option>
+              ${subjectOpts}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">時間目</label>
+            <select id="pdf-period" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <option value="">全て</option>
+              ${periodOpts}
+            </select>
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">開始日</label>
+            <input type="date" id="pdf-from" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">終了日</label>
+            <input type="date" id="pdf-to" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+          </div>
+          <div>
+            <label style="font-size:11px;font-weight:600;color:var(--text2)">絞り込み</label>
+            <select id="pdf-filter" style="width:100%;padding:6px;border:1.5px solid var(--border);border-radius:6px;font-size:12px">
+              <option value="">なし</option>
+              <option value="starred">⭐ 星つきのみ</option>
+              <option value="uncommented">💬 未コメントのみ</option>
+              <option value="commented">💬 コメント済みのみ</option>
+            </select>
+          </div>
         </div>
+        <button class="btn btn-primary" onclick="generatePrint()">🖨️ プレビュー＆印刷</button>
       </div>
     </div>
   `;
@@ -1542,22 +1575,48 @@ function generatePrint() {
   const type = document.getElementById('pdf-type').value;
   const studentId = document.getElementById('pdf-student').value;
   const subject = document.getElementById('pdf-subject').value;
+  const period = document.getElementById('pdf-period').value;
   const from = document.getElementById('pdf-from').value;
   const to = document.getElementById('pdf-to').value;
+  const filter = document.getElementById('pdf-filter').value;
+
+  // 大分析レポート
+  if (type === 'analysis') {
+    let reviews = [...(DB.weekly_reviews || [])];
+    if (studentId) reviews = reviews.filter(r => r.student_id === studentId);
+    if (reviews.length === 0) { showToast('大分析レポートがありません', 'error'); return; }
+    const title = '大分析レポート';
+    let html = `<h2>${title}</h2><p style="font-size:11px;color:#666;margin-bottom:12px">${studentId ? getStudentName(studentId) : '全員'} (${reviews.length}件)</p>`;
+    reviews.forEach(r => {
+      html += `<div class="print-entry">
+        <div class="pe-header"><span>${getStudentNum(r.student_id)}番 ${escHtml(getStudentName(r.student_id))}</span><span>${fmtDate(r.created_at)}</span></div>
+        <div class="pe-body">${escHtml(r.content || '')}</div>
+      </div>`;
+    });
+    openPrintWindow(title, html);
+    return;
+  }
 
   let items = type === 'diary' ? [...DB.diaries] : [...DB.reflections];
 
   if (studentId) items = items.filter(i => i.student_id === studentId);
   if (subject && type === 'reflection') items = items.filter(i => i.subject === subject);
+  if (period && type === 'reflection') items = items.filter(i => i.period === period);
   if (from) items = items.filter(i => i.created_at && i.created_at >= from);
   if (to) items = items.filter(i => i.created_at && i.created_at <= to + 'T23:59:59');
+  if (filter === 'starred') items = items.filter(i => i.star_rating && i.star_rating > 0);
+  if (filter === 'uncommented') items = items.filter(i => !i.teacher_comment);
+  if (filter === 'commented') items = items.filter(i => i.teacher_comment);
 
-  const title = type === 'diary' ? '日記一覧' : '振り返り一覧';
+  if (items.length === 0) { showToast('該当するデータがありません', 'error'); return; }
+
+  const titles = { diary: '日記一覧', reflection: '振り返り一覧' };
+  const title = titles[type] || type;
   const filterDesc = [
     studentId ? getStudentName(studentId) : '全員',
-    subject || '',
-    from ? `${from}〜` : '',
-    to ? `〜${to}` : ''
+    subject || '', period ? period + '時間目' : '',
+    from ? `${from}〜` : '', to ? `〜${to}` : '',
+    filter === 'starred' ? '星つき' : filter === 'uncommented' ? '未コメント' : filter === 'commented' ? 'コメント済' : ''
   ].filter(Boolean).join(' / ');
 
   let html = `<h2>${title}</h2><p style="font-size:11px;color:#666;margin-bottom:12px">${filterDesc} (${items.length}件)</p>`;
@@ -1566,9 +1625,10 @@ function generatePrint() {
     const name = `${getStudentNum(item.student_id)}番 ${getStudentName(item.student_id)}`;
     const date = fmtDateTime(item.created_at);
     const subjectLabel = item.subject ? ` [${item.subject}]` : '';
+    const starLabel = item.star_rating ? ' ⭐'.repeat(item.star_rating) : '';
     html += `
       <div class="print-entry">
-        <div class="pe-header"><span>${escHtml(name)}${escHtml(subjectLabel)}</span><span>${date}</span></div>
+        <div class="pe-header"><span>${escHtml(name)}${escHtml(subjectLabel)}${starLabel}</span><span>${date}</span></div>
         ${item.plan ? `<div style="font-size:11px;color:#166534;margin-bottom:2px">計画: ${escHtml(item.plan)}</div>` : ''}
         <div class="pe-body">${escHtml(item.content)}</div>
         ${item.teacher_comment ? `<div class="pe-comment">💬 ${escHtml(item.teacher_comment)}</div>` : ''}
@@ -1576,6 +1636,10 @@ function generatePrint() {
     `;
   });
 
+  openPrintWindow(title, html);
+}
+
+function openPrintWindow(title, html) {
   const printWin = window.open('', '_blank');
   printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${title}</title>
     <style>
