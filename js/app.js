@@ -189,6 +189,10 @@ const App = {
         </div>
       </div>` : ''}
 
+      <button class="weekly-btn" onclick="App.showScreen('weekly')">
+        <span>📊</span> 今週の大分析 <span class="weekly-badge">+5 EXP</span>
+      </button>
+
       <div class="home-bottom-row">
         <button class="home-collection-btn" onclick="App.showScreen('collection')">
           <span class="hcb-icon">📖</span>
@@ -241,6 +245,9 @@ const App = {
         break;
       case 'matrix':
         Matrix.init();
+        break;
+      case 'weekly':
+        Weekly.init();
         break;
       case 'skill-tree':
         SkillTree.init();

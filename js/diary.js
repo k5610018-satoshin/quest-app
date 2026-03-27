@@ -1,6 +1,7 @@
 /**
  * 学びの冒険クエスト - 日記入力画面
  * ★高速化: ガチャをクライアント側で即座実行→結果を先に表示→GAS保存はバックグラウンド
+ * ★左: 過去の日記一覧（先生コメント付き）、右: 入力フォーム
  */
 
 // クライアント側ガチャテーブル（code.jsと同じ）
@@ -39,34 +40,81 @@ function clientRollGacha(isFriday) {
 }
 
 const Diary = {
+  pastDiaries: null,
+
   init() {
+    this.pastDiaries = null;
     const el = document.getElementById('screen-diary');
     const s = App.currentStudent;
     const alreadyDone = s.diaryDoneToday;
 
     el.innerHTML = `
-      <div class="screen-header">
-        <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
-        <h2>📝 日記を書く</h2>
-      </div>
-
-      <div class="diary-form">
-        <textarea id="diary-content" class="text-input" rows="8"
-          placeholder="今日あったこと、思ったこと、感じたことを自由に書いてね！"></textarea>
-        <div class="char-count">
-          <span id="diary-chars">0</span>文字
+      <div class="diary-layout">
+        <!-- 左: 過去の日記一覧 -->
+        <div class="diary-left">
+          <div class="diary-left-head">📖 過去の日記</div>
+          <div class="diary-history" id="diary-history">
+            <div class="loading-inline">読み込み中...</div>
+          </div>
         </div>
-        <button id="diary-submit" class="submit-btn" onclick="Diary.submit()">
-          ${alreadyDone ? '📮 日記を追加する' : '📮 送信してガチャを引く！'}
-        </button>
-      </div>
 
-      <div id="diary-result" class="result-area" style="display:none;"></div>
+        <!-- 右: 入力フォーム -->
+        <div class="diary-right">
+          <div class="screen-header">
+            <button class="back-btn" onclick="App.showHome(false)">← もどる</button>
+            <h2>📝 日記を書く</h2>
+          </div>
+          <div class="diary-form">
+            <textarea id="diary-content" class="text-input" rows="8"
+              placeholder="今日あったこと、思ったこと、感じたことを自由に書いてね！"></textarea>
+            <div class="char-count">
+              <span id="diary-chars">0</span>文字
+            </div>
+            <button id="diary-submit" class="submit-btn" onclick="Diary.submit()">
+              ${alreadyDone ? '📮 日記を追加する' : '📮 送信してガチャを引く！'}
+            </button>
+          </div>
+          <div id="diary-result" class="result-area" style="display:none;"></div>
+        </div>
+      </div>
     `;
 
     document.getElementById('diary-content').addEventListener('input', (e) => {
       document.getElementById('diary-chars').textContent = e.target.value.length;
     });
+
+    // 過去の日記をバックグラウンドで読み込み
+    this.loadPastDiaries();
+  },
+
+  async loadPastDiaries() {
+    const result = await API.getDiaries(App.currentStudent.studentId);
+    const container = document.getElementById('diary-history');
+    if (!container) return;
+
+    if (!result.success || !result.diaries || result.diaries.length === 0) {
+      container.innerHTML = '<div class="history-empty">まだ日記がありません</div>';
+      return;
+    }
+
+    this.pastDiaries = result.diaries;
+    const days = ['日','月','火','水','木','金','土'];
+
+    container.innerHTML = result.diaries.map(d => {
+      const dt = new Date((d.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
+
+      return `<div class="history-card history-diary">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          ${d.gachaResult ? '<span class="history-gacha">🎰</span>' : ''}
+          <span class="history-exp">+${d.expEarned || 10}</span>
+        </div>
+        <div class="history-card-body">${esc(d.content || '')}</div>
+        ${d.teacherComment ? '<div class="history-comment">💬 ' + esc(d.teacherComment) + '</div>' : ''}
+      </div>`;
+    }).join('');
   },
 
   async submit() {
@@ -93,7 +141,6 @@ const Diary = {
     const result = await API.submitDiary(App.currentStudent.studentId, content);
 
     if (result.success) {
-      // 新アイテム通知をリセット（次回ホームで表示されるように）
       if ((result.milestones && result.milestones.length > 0) || (result.gacha && result.gacha.item)) {
         localStorage.removeItem('quest_new_items_seen');
       }
@@ -149,7 +196,6 @@ const Diary = {
   },
 
   updateWithServerResult(result) {
-    // GASからの正確な結果でストリーク・マイルストーン等を追記
     const extras = document.getElementById('diary-server-extras');
     if (!extras) return;
 
@@ -170,11 +216,9 @@ const Diary = {
     extras.innerHTML = html;
   },
 
-  /** 投稿完了後のホーム遷移（キャッシュ更新で即遷移、API再取得はバックグラウンド） */
   goHome() {
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
-    // 楽観的にEXP・投稿数を更新
     const baseExp = s.diaryDoneToday ? 5 : 10;
     const gained = baseExp * (s.isMonday ? 2 : 1);
     s.totalExp = (s.totalExp || 0) + gained;
@@ -186,9 +230,7 @@ const Diary = {
     localStorage.setItem('quest_student_cache', JSON.stringify(s));
     App.renderHome(s);
     App.showScreen('home');
-    // レベルアップしていたらバナー表示
     if (s.level > oldLevel) App.showLevelUpBanner(oldLevel, s.level);
-    // バックグラウンドでAPI再取得（正確なデータに更新）
     API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
       if (r.success) {
         App.currentStudent = r.student;

@@ -104,6 +104,15 @@ const API = {
     return this.post('getCollection', { studentId });
   },
 
+  // === 週次振り返り ===
+  async getWeeklyData(studentId) {
+    return this.post('getWeeklyData', { studentId });
+  },
+
+  async submitWeeklyReview(studentId, weekStart, weekEnd, content) {
+    return this.post('submitWeeklyReview', { studentId, weekStart, weekEnd, content });
+  },
+
   // === 管理 ===
   async getUsers() {
     return this.post('getUsers', {});

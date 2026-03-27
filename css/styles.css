@@ -158,6 +158,49 @@ body {
 }
 .new-items-banner button { background: var(--warning); color: white; border: none; border-radius: 6px; padding: 4px 10px; cursor: pointer; font-size: 0.8rem; }
 
+/* === 過去の記録カード（日記・振り返り共通） === */
+.history-card {
+  background: var(--card-bg); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 8px 10px; margin-bottom: 6px; font-size: 0.82rem;
+}
+.history-diary { border-left: 3px solid #3b82f6; }
+.history-ref { border-left: 3px solid #22c55e; }
+.history-card-head {
+  display: flex; align-items: center; gap: 6px; margin-bottom: 3px;
+  font-size: 0.75rem; color: var(--text-light);
+}
+.history-date { font-weight: bold; }
+.history-subject { color: var(--primary); font-weight: bold; }
+.history-types { color: var(--primary); }
+.history-exp { margin-left: auto; color: var(--success); font-weight: bold; }
+.history-gacha { color: var(--warning); }
+.history-card-body { line-height: 1.5; white-space: pre-wrap; }
+.history-comment {
+  margin-top: 4px; padding: 5px 8px; background: #fef3c7; border-radius: 6px;
+  font-size: 0.8rem; color: #92400e; border-left: 3px solid #f59e0b;
+}
+.history-plan {
+  font-size: 0.78rem; color: var(--primary); background: rgba(99,102,241,0.06);
+  padding: 2px 6px; border-radius: 4px; margin-bottom: 3px;
+}
+.history-matrix {
+  font-size: 0.75rem; color: #d97706; margin-top: 3px;
+}
+.history-empty { text-align: center; color: var(--text-light); padding: 20px; font-size: 0.85rem; }
+
+/* === 振り返り左パネルタブ === */
+.ref-left-tabs {
+  display: flex; gap: 2px; margin-bottom: 6px;
+}
+.ref-left-tab {
+  flex: 1; padding: 5px 4px; border: none; background: transparent;
+  font-size: 0.78rem; font-weight: bold; color: var(--text-light);
+  cursor: pointer; border-bottom: 2px solid transparent;
+}
+.ref-left-tab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.ref-left-panel { display: flex; flex-direction: column; flex: 1; min-height: 0; }
+.ref-history-scroll { flex: 1; overflow-y: auto; }
+
 /* === 振り返り+マトリクス統合画面（2カラム） === */
 .ref-layout {
   display: flex; gap: 16px; flex: 1; min-height: 0;
@@ -261,8 +304,17 @@ body {
   border-radius: var(--radius); font-size: 0.95rem; cursor: pointer; margin-top: 16px;
 }
 
-/* === 日記画面 === */
-#screen-diary { padding: 16px 24px; max-width: 640px; margin: 0 auto; }
+/* === 日記画面（2カラム: 左=過去の日記、右=入力） === */
+.diary-layout { display: flex; gap: 16px; flex: 1; min-height: 0; }
+.diary-left {
+  flex: 0 0 340px; display: flex; flex-direction: column; min-height: 0;
+}
+.diary-left-head {
+  font-size: 0.85rem; font-weight: bold; color: var(--text-light); padding: 4px 0 6px;
+}
+.diary-history { flex: 1; overflow-y: auto; }
+.diary-right { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+#screen-diary { padding: 16px 24px; }
 .screen-header { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
 .screen-header h2 { font-size: 1.1rem; }
 .back-btn {

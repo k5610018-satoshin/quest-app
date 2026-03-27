@@ -1,6 +1,6 @@
 /**
  * 学びの冒険クエスト - 振り返り+心マトリクス統合画面
- * PC最適化: 左に心マトリクス、右に振り返り入力
+ * PC最適化: 左に心マトリクス＋過去の記録、右に振り返り入力
  */
 
 const Reflection = {
@@ -10,6 +10,8 @@ const Reflection = {
   canvas: null,
   ctx: null,
   CIRCLE: { cx: 50, cy: 50, r: 42 },
+  pastData: null,
+  showingHistory: false,
 
   ZONES: [
     { name: 'パワーアップ', center: 0 },
@@ -25,22 +27,35 @@ const Reflection = {
   init() {
     this.usedSymbols.clear();
     this.matrixPoints = [];
+    this.pastData = null;
+    this.showingHistory = false;
     const el = document.getElementById('screen-reflection');
 
     el.innerHTML = `
       <div class="ref-layout">
-        <!-- 左: 心マトリクス -->
+        <!-- 左: 心マトリクス + 過去の記録 -->
         <div class="ref-left">
-          <div class="matrix-wrap">
-            <img src="assets/heart-matrix.png" class="matrix-bg" alt="心マトリクス" draggable="false">
-            <canvas id="matrix-canvas"></canvas>
+          <div class="ref-left-tabs">
+            <button class="ref-left-tab active" onclick="Reflection.showLeftTab('matrix')">🌍 マトリクス</button>
+            <button class="ref-left-tab" onclick="Reflection.showLeftTab('history')">📖 過去の記録</button>
           </div>
-          <div class="matrix-bar">
-            <button class="ctrl-btn-sm" onclick="Reflection.undoPoint()">↩ もどす</button>
-            <span class="matrix-count" id="matrix-count">タップ: 0</span>
-            <button class="ctrl-btn-sm" onclick="Reflection.resetPoints()">🔄 リセット</button>
+          <div class="ref-left-panel" id="ref-left-matrix">
+            <div class="matrix-wrap">
+              <img src="assets/heart-matrix.png" class="matrix-bg" alt="心マトリクス" draggable="false">
+              <canvas id="matrix-canvas"></canvas>
+            </div>
+            <div class="matrix-bar">
+              <button class="ctrl-btn-sm" onclick="Reflection.undoPoint()">↩ もどす</button>
+              <span class="matrix-count" id="matrix-count">タップ: 0</span>
+              <button class="ctrl-btn-sm" onclick="Reflection.resetPoints()">🔄 リセット</button>
+            </div>
+            <div class="matrix-trail" id="matrix-trail"></div>
           </div>
-          <div class="matrix-trail" id="matrix-trail"></div>
+          <div class="ref-left-panel" id="ref-left-history" style="display:none;">
+            <div class="ref-history-scroll" id="ref-history-content">
+              <div class="loading-inline">読み込み中...</div>
+            </div>
+          </div>
         </div>
 
         <!-- 右: 振り返り入力 -->
@@ -99,6 +114,66 @@ const Reflection = {
     this.autoSelectPeriod();
   },
 
+  // === 左パネルのタブ切替 ===
+  showLeftTab(tab) {
+    document.querySelectorAll('.ref-left-tab').forEach(t => t.classList.remove('active'));
+    if (tab === 'matrix') {
+      document.querySelectorAll('.ref-left-tab')[0].classList.add('active');
+      document.getElementById('ref-left-matrix').style.display = '';
+      document.getElementById('ref-left-history').style.display = 'none';
+    } else {
+      document.querySelectorAll('.ref-left-tab')[1].classList.add('active');
+      document.getElementById('ref-left-matrix').style.display = 'none';
+      document.getElementById('ref-left-history').style.display = '';
+      if (!this.pastData) this.loadPastData();
+    }
+  },
+
+  async loadPastData() {
+    const sid = App.currentStudent.studentId;
+    const [refResult, matResult] = await Promise.all([
+      API.getReflections(sid),
+      API.getMatrixHistory(sid)
+    ]);
+
+    const container = document.getElementById('ref-history-content');
+    if (!container) return;
+
+    const refs = (refResult.success && refResult.reflections) ? refResult.reflections : [];
+    const mats = (matResult.success && matResult.records) ? matResult.records : [];
+    this.pastData = { refs, mats };
+
+    if (refs.length === 0) {
+      container.innerHTML = '<div class="history-empty">まだ振り返りがありません</div>';
+      return;
+    }
+
+    // マトリクスをreflectionIdで紐づけ
+    const matByRef = {};
+    for (const m of mats) { if (m.reflectionId) matByRef[m.reflectionId] = m; }
+
+    const days = ['日','月','火','水','木','金','土'];
+    const esc = s => { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; };
+
+    container.innerHTML = refs.map(r => {
+      const dt = new Date((r.createdAt || '').replace(' ', 'T'));
+      const dateStr = !isNaN(dt) ? `${dt.getMonth()+1}/${dt.getDate()}(${days[dt.getDay()]})` : '';
+      const mat = matByRef[r.id];
+
+      return `<div class="history-card history-ref">
+        <div class="history-card-head">
+          <span class="history-date">${dateStr}</span>
+          <span class="history-subject">${esc(r.subject || '')}</span>
+          ${r.types ? '<span class="history-types">' + r.types + '</span>' : ''}
+        </div>
+        ${r.plan ? '<div class="history-plan">📋 ' + esc(r.plan) + '</div>' : ''}
+        <div class="history-card-body">${esc(r.content || '')}</div>
+        ${r.teacherComment ? '<div class="history-comment">💬 ' + esc(r.teacherComment) + '</div>' : ''}
+        ${mat ? '<div class="history-matrix">🌍 ' + esc(mat.zoneSequence || mat.dominantZone || '') + '</div>' : ''}
+      </div>`;
+    }).join('');
+  },
+
   /** 現在時刻から時間目を自動選択 */
   autoSelectPeriod() {
     const now = new Date();
@@ -106,7 +181,6 @@ const Reflection = {
 
     let matchedPeriod = null;
     for (const pt of (CONFIG.periodTimes || [])) {
-      // 授業中 or 授業終了直後（終了後15分以内 = 振り返り記入タイム）
       if (hhmm >= pt.start && hhmm <= this.addMinutes(pt.end, 15)) {
         matchedPeriod = pt.period;
         break;
@@ -146,7 +220,6 @@ const Reflection = {
     resize();
     window.addEventListener('resize', resize);
 
-    // タップ / クリック
     this.canvas.addEventListener('click', (e) => this.onTap(e));
     this.canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
@@ -194,7 +267,6 @@ const Reflection = {
 
     if (this.matrixPoints.length === 0) return;
 
-    // 線
     if (this.matrixPoints.length >= 2) {
       this.ctx.beginPath();
       this.ctx.moveTo(this.matrixPoints[0].px * w / 100, this.matrixPoints[0].py * h / 100);
@@ -206,7 +278,6 @@ const Reflection = {
       this.ctx.stroke();
     }
 
-    // ポイント
     this.matrixPoints.forEach((p, i) => {
       const x = p.px * w / 100;
       const y = p.py * h / 100;
@@ -223,7 +294,6 @@ const Reflection = {
       this.ctx.lineWidth = 2;
       this.ctx.stroke();
 
-      // ラベル
       this.ctx.font = 'bold 12px sans-serif';
       if (i === 0) {
         this.ctx.fillStyle = '#6366f1';
@@ -330,18 +400,15 @@ const Reflection = {
     btn.disabled = true;
     btn.textContent = '送信中...';
 
-    // ★即座にクライアント側で結果を予測して表示
     const detectedTypes = TYPES.detect(content);
     let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
-    if (plan && plan.length > 0) baseExp += 2; // 計画ボーナス
+    if (plan && plan.length > 0) baseExp += 2;
     const hasMatrix = this.matrixPoints.length > 0;
-    if (hasMatrix) baseExp += 3; // マトリクスボーナス
+    if (hasMatrix) baseExp += 3;
     const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
 
-    // 即座に結果を表示（API応答を待たない）
     this.showInstantResult(expGained, detectedTypes, hasMatrix);
 
-    // バックグラウンドでGASに保存
     let result;
     if (hasMatrix) {
       const startZone = this.matrixPoints[0].zone;
@@ -419,7 +486,6 @@ const Reflection = {
     document.getElementById('ref-result').style.display = 'none';
     const s = App.currentStudent;
     const oldLevel = s.level || 1;
-    // 楽観的にEXP更新（型数+計画+マトリクスで計算）
     const content = document.getElementById('ref-content')?.value || '';
     const plan = document.getElementById('ref-plan')?.value || '';
     const types = TYPES.detect(content);
