@@ -138,6 +138,20 @@ body {
 .home-skill-fill { height: 100%; background: var(--sk-color); border-radius: 3px; transition: width 0.3s; }
 .home-skill-count { font-size: 0.6rem; color: var(--text-light); text-align: right; margin-top: 1px; }
 
+/* ホーム下段（図鑑+マイページ） */
+.home-bottom-row { display: flex; gap: 8px; margin-bottom: 10px; }
+.home-collection-btn {
+  flex: 2; display: flex; align-items: center; gap: 10px; padding: 10px 14px;
+  border: 1px solid var(--border); border-radius: var(--radius); background: var(--card-bg);
+  cursor: pointer; text-align: left;
+}
+.home-collection-btn:hover { border-color: var(--primary); }
+.hcb-icon { font-size: 1.4rem; }
+.hcb-info { flex: 1; }
+.hcb-label { font-weight: 600; font-size: 0.9rem; }
+.hcb-bars { font-size: 0.7rem; color: var(--text-light); display: flex; gap: 10px; }
+.hcb-arrow { color: var(--text-light); font-size: 1.1rem; }
+
 .new-items-banner {
   background: linear-gradient(135deg, #fef3c7, #fff7ed); border: 1px solid #f59e0b;
   border-radius: var(--radius); padding: 8px 14px; display: flex; justify-content: space-between; align-items: center; font-size: 0.9rem;

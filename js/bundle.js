@@ -162,22 +162,22 @@ const TYPES = {
       keywords: ['次は','目標','やってみたい','挑戦','もっと','知りたい','調べたい','頑張']
     },
     {
-      symbol: '！', name: 'わかった', color: '#f59e0b',
-      meaning: '驚き・気づき',
-      hint: '新しい発見、気持ちの変化',
-      keywords: ['気づいた','変わった','びっくり','初めて','実は','最初は']
+      symbol: '！', name: '発見', color: '#f59e0b',
+      meaning: '気づき・発見',
+      hint: '新しく気づいたこと、発見したこと',
+      keywords: ['気づいた','発見','変わった','びっくり','初めて','実は','最初は','そうか','なるほど']
     },
     {
       symbol: '？', name: 'ギモン', color: '#8b5cf6',
       meaning: '問い・なぜ',
       hint: '疑問に思ったこと、さらに調べたいこと',
-      keywords: ['なぜ','どうして','疑問','不思議','調べたい']
+      keywords: ['なぜ','どうして','疑問','不思議','調べたい','知りたい']
     },
     {
       symbol: '⭐', name: '成長', color: '#eab308',
       meaning: '自分の成長',
       hint: '前よりできるようになったこと',
-      keywords: ['成長','前より','上手に','できるようになった','伸びた','自信']
+      keywords: ['成長','前より','上手に','できるようになった','伸びた','自信','レベルアップ']
     },
     {
       symbol: '☀️', name: '仲間', color: '#f97316',
@@ -391,7 +391,11 @@ const App = {
         <div class="home-skills-grid">
           ${status.skillSummary.map(s => {
             const type = TYPES.definitions.find(t => t.symbol === s.symbol);
-            const nextReq = s.level < 5 ? [1,5,15,30,50][s.level] : 50;
+            const isRare = ['！','？','⭐'].includes(s.symbol);
+            const normalReqs = [1,5,15,30,50];
+            const rareReqs = [1,3,8,15,25];
+            const reqs = isRare ? rareReqs : normalReqs;
+            const nextReq = s.level < 5 ? reqs[s.level] : reqs[4];
             const pct = s.count > 0 ? Math.min(s.count / nextReq * 100, 100) : 0;
             const lvlNames = ['', '見習い', '使い手', '達人', '名人', '伝説'];
             return '<div class="home-skill-card" style="--sk-color:' + (type ? type.color : '#999') + '">' +
@@ -407,9 +411,17 @@ const App = {
         </div>
       </div>` : ''}
 
-      <div class="sub-buttons">
-        <button class="sub-btn" onclick="App.showScreen('collection')">
-          <span>📖</span><span>図鑑</span>
+      <div class="home-bottom-row">
+        <button class="home-collection-btn" onclick="App.showScreen('collection')">
+          <span class="hcb-icon">📖</span>
+          <div class="hcb-info">
+            <span class="hcb-label">図鑑</span>
+            <div class="hcb-bars">
+              <span title="武器">🗡️${status.totalPosts || 0}投稿</span>
+              <span title="モンスター">🐉${status.totalDiaryPosts || 0}ガチャ</span>
+            </div>
+          </div>
+          <span class="hcb-arrow">→</span>
         </button>
         <button class="sub-btn" onclick="App.showScreen('mypage')">
           <span>👤</span><span>マイページ</span>
