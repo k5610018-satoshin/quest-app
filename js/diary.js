@@ -93,7 +93,10 @@ const Diary = {
     const result = await API.submitDiary(App.currentStudent.studentId, content);
 
     if (result.success) {
-      // GASの正確な結果で更新（ストリーク報酬・マイルストーンなど）
+      // 新アイテム通知をリセット（次回ホームで表示されるように）
+      if ((result.milestones && result.milestones.length > 0) || (result.gacha && result.gacha.item)) {
+        localStorage.removeItem('quest_new_items_seen');
+      }
       this.updateWithServerResult(result);
     } else {
       App.showError('保存エラー: ' + (result.error || ''));
@@ -139,7 +142,7 @@ const Diary = {
 
     html += `
       <div id="diary-server-extras"></div>
-      <button class="return-btn" onclick="App.showHome()">🏠 ホームにもどる</button>
+      <button class="return-btn" onclick="Diary.goHome()">🏠 ホームにもどる</button>
     `;
 
     area.innerHTML = html;
@@ -165,5 +168,26 @@ const Diary = {
       }
     }
     extras.innerHTML = html;
+  },
+
+  /** 投稿完了後のホーム遷移（キャッシュ更新で即遷移、API再取得はバックグラウンド） */
+  goHome() {
+    // ローカルキャッシュのステータスを楽観的に更新
+    const s = App.currentStudent;
+    s.totalDiaryPosts = (s.totalDiaryPosts || 0) + 1;
+    s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    s.diaryDoneToday = true;
+    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    // 即座にホーム描画
+    App.renderHome(s);
+    App.showScreen('home');
+    // バックグラウンドでAPI再取得（正確なデータに更新）
+    API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
+      if (r.success) {
+        App.currentStudent = r.student;
+        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.renderHome(r.student);
+      }
+    });
   }
 };

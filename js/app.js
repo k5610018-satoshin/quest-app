@@ -157,7 +157,7 @@ const App = {
         <button class="main-btn reflection-btn" onclick="App.showScreen('reflection')">
           <span class="btn-icon">🔄</span>
           <span class="btn-label">振り返り＋心マトリクス</span>
-          <span class="btn-badge">+3〜14 EXP</span>
+          <span class="btn-badge">+3〜16 EXP</span>
         </button>
       </div>
 
@@ -167,10 +167,12 @@ const App = {
         <div class="home-skills-grid">
           ${status.skillSummary.map(s => {
             const type = TYPES.definitions.find(t => t.symbol === s.symbol);
-            const isRare = ['！','？','⭐'].includes(s.symbol);
+            const isSuperRare = s.symbol === '⭐';
+            const isRare = ['！','？'].includes(s.symbol);
             const normalReqs = [1,5,15,30,50];
             const rareReqs = [1,3,8,15,25];
-            const reqs = isRare ? rareReqs : normalReqs;
+            const superRareReqs = [1,2,5,10,18];
+            const reqs = isSuperRare ? superRareReqs : isRare ? rareReqs : normalReqs;
             const nextReq = s.level < 5 ? reqs[s.level] : reqs[4];
             const pct = s.count > 0 ? Math.min(s.count / nextReq * 100, 100) : 0;
             const lvlNames = ['', '見習い', '使い手', '達人', '名人', '伝説'];
@@ -204,10 +206,11 @@ const App = {
         </button>
       </div>
 
-      ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) ? `
+      ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) && !localStorage.getItem('quest_new_items_seen') ? `
         <div class="new-items-banner">
           <span>🎁 新しいアイテムが${status.newItemCount || status.recentNewItems.length}個！</span>
-          <button onclick="App.showScreen('collection')">確認する</button>
+          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
+          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
         </div>
       ` : ''}
     `;

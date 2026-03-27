@@ -381,7 +381,7 @@ const App = {
         <button class="main-btn reflection-btn" onclick="App.showScreen('reflection')">
           <span class="btn-icon">🔄</span>
           <span class="btn-label">振り返り＋心マトリクス</span>
-          <span class="btn-badge">+3〜14 EXP</span>
+          <span class="btn-badge">+3〜16 EXP</span>
         </button>
       </div>
 
@@ -391,10 +391,12 @@ const App = {
         <div class="home-skills-grid">
           ${status.skillSummary.map(s => {
             const type = TYPES.definitions.find(t => t.symbol === s.symbol);
-            const isRare = ['！','？','⭐'].includes(s.symbol);
+            const isSuperRare = s.symbol === '⭐';
+            const isRare = ['！','？'].includes(s.symbol);
             const normalReqs = [1,5,15,30,50];
             const rareReqs = [1,3,8,15,25];
-            const reqs = isRare ? rareReqs : normalReqs;
+            const superRareReqs = [1,2,5,10,18];
+            const reqs = isSuperRare ? superRareReqs : isRare ? rareReqs : normalReqs;
             const nextReq = s.level < 5 ? reqs[s.level] : reqs[4];
             const pct = s.count > 0 ? Math.min(s.count / nextReq * 100, 100) : 0;
             const lvlNames = ['', '見習い', '使い手', '達人', '名人', '伝説'];
@@ -428,10 +430,11 @@ const App = {
         </button>
       </div>
 
-      ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) ? `
+      ${(status.newItemCount || (status.recentNewItems && status.recentNewItems.length)) && !localStorage.getItem('quest_new_items_seen') ? `
         <div class="new-items-banner">
           <span>🎁 新しいアイテムが${status.newItemCount || status.recentNewItems.length}個！</span>
-          <button onclick="App.showScreen('collection')">確認する</button>
+          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove(); App.showScreen('collection')">確認する</button>
+          <button onclick="localStorage.setItem('quest_new_items_seen','1'); this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1.1rem;">✕</button>
         </div>
       ` : ''}
     `;
@@ -615,7 +618,10 @@ const Diary = {
     const result = await API.submitDiary(App.currentStudent.studentId, content);
 
     if (result.success) {
-      // GASの正確な結果で更新（ストリーク報酬・マイルストーンなど）
+      // 新アイテム通知をリセット（次回ホームで表示されるように）
+      if ((result.milestones && result.milestones.length > 0) || (result.gacha && result.gacha.item)) {
+        localStorage.removeItem('quest_new_items_seen');
+      }
       this.updateWithServerResult(result);
     } else {
       App.showError('保存エラー: ' + (result.error || ''));
@@ -661,7 +667,7 @@ const Diary = {
 
     html += `
       <div id="diary-server-extras"></div>
-      <button class="return-btn" onclick="App.showHome()">🏠 ホームにもどる</button>
+      <button class="return-btn" onclick="Diary.goHome()">🏠 ホームにもどる</button>
     `;
 
     area.innerHTML = html;
@@ -687,6 +693,27 @@ const Diary = {
       }
     }
     extras.innerHTML = html;
+  },
+
+  /** 投稿完了後のホーム遷移（キャッシュ更新で即遷移、API再取得はバックグラウンド） */
+  goHome() {
+    // ローカルキャッシュのステータスを楽観的に更新
+    const s = App.currentStudent;
+    s.totalDiaryPosts = (s.totalDiaryPosts || 0) + 1;
+    s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    s.diaryDoneToday = true;
+    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    // 即座にホーム描画
+    App.renderHome(s);
+    App.showScreen('home');
+    // バックグラウンドでAPI再取得（正確なデータに更新）
+    API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
+      if (r.success) {
+        App.currentStudent = r.student;
+        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.renderHome(r.student);
+      }
+    });
   }
 };
 /**
@@ -976,8 +1003,10 @@ const Reflection = {
     // ★即座にクライアント側で結果を予測して表示
     const detectedTypes = TYPES.detect(content);
     let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
-    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
+    if (plan && plan.length > 0) baseExp += 1; // 計画ボーナス
     const hasMatrix = this.matrixPoints.length > 0;
+    if (hasMatrix) baseExp += 3; // マトリクスボーナス
+    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
 
     // 即座に結果を表示（API応答を待たない）
     this.showInstantResult(expGained, detectedTypes, hasMatrix);
@@ -1028,7 +1057,7 @@ const Reflection = {
         ${detectedTypes.length > 0 ? `<div class="result-types-line">${detectedTypes.map(s => { const t = TYPES.getBySymbol(s); return '<span style="color:' + (t?.color||'#666') + '">' + s + ' ' + (t?.name||'') + '</span>'; }).join(' ')}</div>` : ''}
         ${hasMatrix ? '<div>🌍 マトリクス記録中...</div>' : ''}
         <div id="ref-server-extras"></div>
-        <button class="return-btn" onclick="document.getElementById('ref-result').style.display='none'; App.showHome()">🏠 ホームにもどる</button>
+        <button class="return-btn" onclick="Reflection.goHome()">🏠 ホームにもどる</button>
       </div>
     `;
   },
@@ -1052,9 +1081,25 @@ const Reflection = {
   },
 
   showResult(result) {
-    // 旧互換（直接呼び出し用）
     this.showInstantResult(0, [], false);
     this.updateWithServerResult(result);
+  },
+
+  goHome() {
+    document.getElementById('ref-result').style.display = 'none';
+    const s = App.currentStudent;
+    s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
+    s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.renderHome(s);
+    App.showScreen('home');
+    API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
+      if (r.success) {
+        App.currentStudent = r.student;
+        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.renderHome(r.student);
+      }
+    });
   }
 };
 /**

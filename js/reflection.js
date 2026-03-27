@@ -285,8 +285,10 @@ const Reflection = {
     // ★即座にクライアント側で結果を予測して表示
     const detectedTypes = TYPES.detect(content);
     let baseExp = detectedTypes.length <= 1 ? 3 : detectedTypes.length === 2 ? 5 : detectedTypes.length === 3 ? 8 : 12;
-    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
+    if (plan && plan.length > 0) baseExp += 1; // 計画ボーナス
     const hasMatrix = this.matrixPoints.length > 0;
+    if (hasMatrix) baseExp += 3; // マトリクスボーナス
+    const expGained = baseExp * (App.currentStudent.isMonday ? 2 : 1);
 
     // 即座に結果を表示（API応答を待たない）
     this.showInstantResult(expGained, detectedTypes, hasMatrix);
@@ -337,7 +339,7 @@ const Reflection = {
         ${detectedTypes.length > 0 ? `<div class="result-types-line">${detectedTypes.map(s => { const t = TYPES.getBySymbol(s); return '<span style="color:' + (t?.color||'#666') + '">' + s + ' ' + (t?.name||'') + '</span>'; }).join(' ')}</div>` : ''}
         ${hasMatrix ? '<div>🌍 マトリクス記録中...</div>' : ''}
         <div id="ref-server-extras"></div>
-        <button class="return-btn" onclick="document.getElementById('ref-result').style.display='none'; App.showHome()">🏠 ホームにもどる</button>
+        <button class="return-btn" onclick="Reflection.goHome()">🏠 ホームにもどる</button>
       </div>
     `;
   },
@@ -361,8 +363,24 @@ const Reflection = {
   },
 
   showResult(result) {
-    // 旧互換（直接呼び出し用）
     this.showInstantResult(0, [], false);
     this.updateWithServerResult(result);
+  },
+
+  goHome() {
+    document.getElementById('ref-result').style.display = 'none';
+    const s = App.currentStudent;
+    s.totalReflectionPosts = (s.totalReflectionPosts || 0) + 1;
+    s.totalPosts = (s.totalDiaryPosts || 0) + (s.totalReflectionPosts || 0);
+    localStorage.setItem('quest_student_cache', JSON.stringify(s));
+    App.renderHome(s);
+    App.showScreen('home');
+    API.getStudentByToken(localStorage.getItem('quest_access_token')).then(r => {
+      if (r.success) {
+        App.currentStudent = r.student;
+        localStorage.setItem('quest_student_cache', JSON.stringify(r.student));
+        App.renderHome(r.student);
+      }
+    });
   }
 };
