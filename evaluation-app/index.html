@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5年4組 観点別評価記録</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- =================== C連続アラートバナー =================== -->
+<div id="alertBanner" class="alert-banner hidden"></div>
+
+<header class="app-header">
+  <div class="header-left">
+    <h1>5年4組 観点別評価記録</h1>
+    <span class="today" id="todayLabel"></span>
+    <span class="health-badge" id="healthBadge" title="累計件数 / 最終バックアップからの日数"></span>
+  </div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="record">記録</button>
+    <button class="tab-btn" data-tab="summary">集計</button>
+    <button class="tab-btn" data-tab="distribution">分布</button>
+    <button class="tab-btn" data-tab="heatmap">ヒートマップ</button>
+    <button class="tab-btn" data-tab="growth">成長推移</button>
+    <button class="tab-btn" data-tab="history">履歴</button>
+    <button class="tab-btn" data-tab="units">単元管理</button>
+    <button class="tab-btn" data-tab="settings">設定</button>
+    <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
+  </nav>
+</header>
+
+<!-- =================== 記録タブ =================== -->
+<section class="tab-panel active" id="tab-record">
+  <div class="record-toolbar">
+    <div class="toolbar-group">
+      <label>教科</label>
+      <div class="subject-buttons" id="subjectButtons"></div>
+    </div>
+    <div class="toolbar-group">
+      <label>単元</label>
+      <select id="unitSelect" class="unit-select"></select>
+      <button class="ghost small" id="newUnitBtn" title="新しい単元を追加">＋ 新規</button>
+    </div>
+    <div class="toolbar-group">
+      <label>モード</label>
+      <div class="mode-switch">
+        <button class="mode-btn active" data-mode="viewpoint">観点軸<small>1観点で全員</small></button>
+        <button class="mode-btn" data-mode="student">児童軸<small>1児童で3観点</small></button>
+      </div>
+    </div>
+    <div class="toolbar-group right">
+      <button class="ghost" id="undoBtn" title="直前の評価を取り消す (Ctrl+Z)">↶ 取消</button>
+    </div>
+  </div>
+
+  <!-- 観点軸モードの観点切替 -->
+  <div class="viewpoint-tabs" id="viewpointTabs"></div>
+
+  <!-- 評価基準カード -->
+  <div class="criteria-card" id="criteriaCard">
+    <div class="criteria-header">
+      <span class="criteria-label" id="criteriaLabel">評価基準</span>
+      <span class="criteria-meta" id="criteriaMeta"></span>
+    </div>
+    <div class="criteria-text" id="criteriaText">単元と観点を選択すると評価基準が表示されます</div>
+  </div>
+
+  <!-- 児童グリッド -->
+  <div class="grid-area">
+    <div class="student-grid eval-grid" id="studentGrid"></div>
+
+    <div class="record-footer">
+      <div class="progress-line" id="progressLine">
+        <span class="progress-stat">進捗: <b id="progressCount">0</b>/28人</span>
+        <span class="progress-stat grade-a">A: <b id="countA">0</b></span>
+        <span class="progress-stat grade-b">B: <b id="countB">0</b></span>
+        <span class="progress-stat grade-c">C: <b id="countC">0</b></span>
+      </div>
+      <div class="bulk-actions">
+        <button class="ghost grade-btn-a" id="bulkABtn" title="未評価の児童を全員Aに（誤操作防止のため確認あり）">全員A</button>
+        <button class="ghost grade-btn-b" id="bulkBBtn">全員B</button>
+        <button class="ghost grade-btn-c" id="bulkCBtn">全員C</button>
+        <button class="ghost danger" id="bulkClearBtn" title="この観点・単元の評価を全クリア">一括クリア</button>
+      </div>
+    </div>
+    <div class="action-hint">
+      数字直打ち=児童選択 / A B C=評価入力 / Space=次の未評価へ / Tab=モード切替 / F1〜F3=観点切替 / Ctrl+Z=取消
+    </div>
+  </div>
+</section>
+
+<!-- =================== 集計タブ =================== -->
+<section class="tab-panel" id="tab-summary">
+  <div class="filter-bar">
+    <label>教科:
+      <select id="summarySubject"></select>
+    </label>
+    <label>単元:
+      <select id="summaryUnit"><option value="">すべて</option></select>
+    </label>
+    <span class="filter-info" id="summaryInfo"></span>
+    <button class="ghost" id="summaryCsvBtn">📊 CSV出力</button>
+    <button class="ghost" id="summaryPrintBtn">🖨 児童別レポート印刷</button>
+  </div>
+  <div class="summary-table-wrap">
+    <table class="summary-table" id="summaryTable"></table>
+  </div>
+  <div class="legend-row">
+    <span class="legend-item"><span class="cell-mini grade-A">A</span>十分満足</span>
+    <span class="legend-item"><span class="cell-mini grade-B">B</span>おおむね満足</span>
+    <span class="legend-item"><span class="cell-mini grade-C">C</span>努力を要する</span>
+    <span class="legend-item"><span class="cell-mini grade-none">—</span>未評価</span>
+    <span class="legend-item"><span class="hl-tag">●</span>要配慮児童は黄色枠</span>
+  </div>
+</section>
+
+<!-- =================== ヒートマップタブ =================== -->
+<section class="tab-panel" id="tab-heatmap">
+  <div class="filter-bar">
+    <label>教科:
+      <select id="hmSubject"></select>
+    </label>
+    <label>
+      <input type="checkbox" id="hmIncludeArchived"> アーカイブ含む
+    </label>
+    <label>
+      <input type="checkbox" id="hmLatestOnly" checked> 最新評価のみ
+    </label>
+    <span class="filter-info" id="hmInfo"></span>
+  </div>
+  <div class="heatmap-wrap" id="heatmapWrap">
+    <div class="muted" style="padding:24px;text-align:center">教科を選択してください</div>
+  </div>
+  <div class="legend-row">
+    <span class="legend-item"><span class="hm-cell-demo hm-A">A</span>十分満足（濃緑）</span>
+    <span class="legend-item"><span class="hm-cell-demo hm-B">B</span>おおむね満足（青）</span>
+    <span class="legend-item"><span class="hm-cell-demo hm-C">C</span>努力を要する（黄）</span>
+    <span class="legend-item"><span class="hm-cell-demo hm-none">—</span>未評価（灰）</span>
+    <span class="legend-item"><span style="color:#d4a017;font-weight:700">▌</span>要配慮児童（黄枠行）</span>
+  </div>
+</section>
+
+<!-- =================== 成長推移タブ =================== -->
+<section class="tab-panel" id="tab-growth">
+  <div class="filter-bar">
+    <label>児童:
+      <select id="growthStudent"></select>
+    </label>
+    <label>教科:
+      <select id="growthSubject"><option value="">すべて</option></select>
+    </label>
+    <span class="filter-info" id="growthInfo"></span>
+  </div>
+  <div id="growthAlertPanel" class="growth-alert-panel hidden"></div>
+  <div id="growthChartArea" class="growth-chart-area"></div>
+</section>
+
+<!-- =================== 分布タブ =================== -->
+<section class="tab-panel" id="tab-distribution">
+  <div class="filter-bar">
+    <label>教科:
+      <select id="distSubject"></select>
+    </label>
+    <label>単元:
+      <select id="distUnit"><option value="">すべて</option></select>
+    </label>
+    <span class="filter-info" id="distInfo"></span>
+  </div>
+  <div class="dist-area" id="distArea"></div>
+  <div class="dist-attention" id="distAttention"></div>
+</section>
+
+<!-- =================== 履歴タブ =================== -->
+<section class="tab-panel" id="tab-history">
+  <div class="filter-bar">
+    <label>児童:
+      <select id="historyStudent"><option value="">すべて</option></select>
+    </label>
+    <label>教科:
+      <select id="historySubject"><option value="">すべて</option></select>
+    </label>
+    <label>観点:
+      <select id="historyViewpoint"><option value="">すべて</option></select>
+    </label>
+    <label>表示:
+      <select id="historyShowSuperseded">
+        <option value="0">最新のみ</option>
+        <option value="1">上書き履歴も含む</option>
+      </select>
+    </label>
+    <span class="filter-info" id="historyInfo"></span>
+    <button class="ghost danger" id="deleteSelectedBtn" disabled>選択を削除</button>
+  </div>
+  <table class="history-table" id="historyTable"></table>
+</section>
+
+<!-- =================== 単元管理タブ =================== -->
+<section class="tab-panel" id="tab-units">
+  <div class="filter-bar">
+    <label>教科:
+      <select id="unitMgmtSubject"></select>
+    </label>
+    <label>表示:
+      <select id="unitMgmtShowArchived">
+        <option value="0">アクティブのみ</option>
+        <option value="1">アーカイブ含む</option>
+      </select>
+    </label>
+    <button class="primary" id="addUnitBtn">＋ 新しい単元を追加</button>
+  </div>
+  <div class="unit-list" id="unitList"></div>
+
+  <!-- 単元編集モーダル -->
+  <div class="modal-backdrop hidden" id="unitModal">
+    <div class="modal unit-modal">
+      <h2 id="unitModalTitle">単元を追加</h2>
+      <div class="form-row">
+        <label>教科</label>
+        <select id="unitFormSubject"></select>
+      </div>
+      <div class="form-row">
+        <label>単元名</label>
+        <input type="text" id="unitFormName" placeholder="例: 銀河 / 整数と小数 / 流れる水のはたらき">
+      </div>
+      <div class="form-row">
+        <label>知識・技能 の評価基準</label>
+        <textarea id="unitFormKnowledge" rows="2" placeholder="例: 物語の場面の様子を表す言葉を理解している"></textarea>
+      </div>
+      <div class="form-row">
+        <label>思考・判断・表現 の評価基準</label>
+        <textarea id="unitFormThinking" rows="2" placeholder="例: 登場人物の心情を場面の様子と関連付けて読んでいる"></textarea>
+      </div>
+      <div class="form-row">
+        <label>主体的に学習に取り組む態度 の評価基準</label>
+        <textarea id="unitFormAttitude" rows="2" placeholder="例: 進んで読み、感想を交流しようとしている"></textarea>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost" id="unitFormCancelBtn">キャンセル</button>
+        <button class="primary" id="unitFormSaveBtn">保存</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 設定タブ =================== -->
+<section class="tab-panel" id="tab-settings">
+  <div class="settings-grid">
+    <div class="card">
+      <h3>データのバックアップ・復元</h3>
+      <p class="muted">アプリのデータはお使いのブラウザに保存されています。定期的にエクスポートして保管してください。</p>
+      <div class="btn-row">
+        <button class="primary" id="exportBtn">📥 JSONエクスポート</button>
+        <button class="ghost" id="importBtn">📤 JSONインポート</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+      <div class="btn-row">
+        <button class="ghost" id="exportCsvBtn">📊 CSVエクスポート</button>
+        <button class="ghost" id="exportFukutanninBtn" title="AI副担任 student-cards-enriched.json と統合できる形式">🤖 AI副担任向け出力</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>統計</h3>
+      <table class="stats-table">
+        <tr><td>累計評価件数（最新のみ）</td><td><b id="statsTotal">0</b></td></tr>
+        <tr><td>累計評価件数（履歴含む）</td><td><b id="statsTotalRaw">0</b></td></tr>
+        <tr><td>登録単元数</td><td><b id="statsUnits">0</b></td></tr>
+        <tr><td>評価実施日数</td><td><b id="statsDays">0</b></td></tr>
+        <tr><td>評価された児童数</td><td><b id="statsStudents">0</b> / 28</td></tr>
+        <tr><td>初回評価日</td><td id="statsFirstDate">—</td></tr>
+        <tr><td>最終評価日</td><td id="statsLastDate">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>教科別 集計</h3>
+      <table class="stats-table" id="subjectStatsTable"></table>
+    </div>
+
+    <div class="card">
+      <h3>交友関係データ連携</h3>
+      <p class="muted">interaction-enriched-*.json を取り込むと、集計タブの児童欄に孤立度・主な相手が表示されます。</p>
+      <div class="btn-row">
+        <button class="ghost" id="importInteractionBtn">👥 交友関係JSONを取り込み</button>
+        <button class="ghost danger" id="clearInteractionBtn">クリア</button>
+        <input type="file" id="importInteractionFile" accept=".json" hidden>
+      </div>
+      <div id="interactionStatus" class="muted" style="font-size:12px;margin-top:6px"></div>
+    </div>
+
+    <!-- ===== クラウド同期カード (cloud-sync.js が中身を注入) ===== -->
+    <div class="card" id="syncSettingsCard">
+      <p class="muted">読み込み中…</p>
+    </div>
+
+    <div class="card danger-card">
+      <h3>⚠ 危険な操作</h3>
+      <p class="muted">すべての評価記録を削除します。事前にエクスポートしてください。単元定義も同時に初期化されます。</p>
+      <button class="danger" id="resetBtn">全データを削除</button>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 児童軸モード ポップオーバー =================== -->
+<div class="popover-backdrop hidden" id="studentPopoverBackdrop">
+  <div class="popover" id="studentPopover">
+    <div class="popover-header">
+      <span class="popover-title" id="popoverTitle"></span>
+      <button class="popover-close" id="popoverCloseBtn">×</button>
+    </div>
+    <div class="popover-body" id="popoverBody"></div>
+    <div class="popover-footer">
+      <span class="muted small">クリックで評価。同じボタン再クリックで取消。</span>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<!-- ヘルプモーダル -->
+<div class="modal-backdrop hidden" id="helpModal">
+  <div class="modal">
+    <h2>キーボードショートカット</h2>
+    <table>
+      <tr><th>キー</th><th>動作</th></tr>
+      <tr><td><kbd>1</kbd>〜<kbd>28</kbd></td><td>出席番号で児童を選択（1,2は350ms待ち、3〜9は即確定、2桁で確定）</td></tr>
+      <tr><td><kbd>A</kbd> / <kbd>B</kbd> / <kbd>C</kbd></td><td>選択中の児童に評価を入力（観点軸モード）</td></tr>
+      <tr><td><kbd>Space</kbd></td><td>次の未評価児童へフォーカス移動（観点軸モード）</td></tr>
+      <tr><td><kbd>F1</kbd> / <kbd>F2</kbd> / <kbd>F3</kbd></td><td>観点切替（知識・思考・態度）</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>モード切替（観点軸 ↔ 児童軸）</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>選択クリア / ポップオーバーを閉じる</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>直前の評価を取り消し</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>?</kbd></td><td>このヘルプを表示</td></tr>
+    </table>
+    <h2 style="margin-top:18px;">運用のコツ</h2>
+    <ul style="font-size:13px; line-height:1.7;">
+      <li><b>1単元1観点で全員一気に評価</b>するのが速い。観点軸モードで観点を切替えながら使う</li>
+      <li>同じ児童・観点を再評価すると古い記録は<b>履歴として残り</b>、最新が有効になる</li>
+      <li>児童ボタン左下の<b>緑●</b>=今日評価済み、<b>赤い破線枠</b>=要配慮児童で未評価</li>
+      <li>マーク<b>●</b>=要配慮児童、<b>■</b>=観察優先児童</li>
+      <li>週1回は <b>設定タブ→JSONエクスポート</b>でバックアップ推奨</li>
+      <li>AI副担任に評価データを連携するときは <b>🤖 AI副担任向け出力</b> を使う</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="primary" id="closeHelpBtn">閉じる (Esc)</button>
+    </div>
+  </div>
+</div>
+
+<script src="data.js"></script>
+<script src="app.js"></script>
+<script src="cloud-sync.js"></script>
+</body>
+</html>

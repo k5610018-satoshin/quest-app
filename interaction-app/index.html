@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>5年4組 交友関係記録</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-left">
+    <h1>5年4組 交友関係記録</h1>
+    <span class="today" id="todayLabel"></span>
+    <span class="health-badge" id="healthBadge" title="累計件数 / 最終バックアップからの日数"></span>
+  </div>
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="record">記録</button>
+    <button class="tab-btn" data-tab="summary">集計</button>
+    <button class="tab-btn" data-tab="compare">比較</button>
+    <button class="tab-btn" data-tab="socio">ソシオグラム</button>
+    <button class="tab-btn" data-tab="centrality">中心性</button>
+    <button class="tab-btn" data-tab="timeline">時系列</button>
+    <button class="tab-btn" data-tab="heatmap">観察分布</button>
+    <button class="tab-btn" data-tab="seating">席替え</button>
+    <button class="tab-btn" data-tab="history">履歴</button>
+    <button class="tab-btn" data-tab="settings">設定</button>
+    <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
+  </nav>
+</header>
+
+<!-- =================== 記録タブ =================== -->
+<section class="tab-panel active" id="tab-record">
+  <div class="record-toolbar">
+    <div class="toolbar-group">
+      <label>シーン</label>
+      <div class="scene-buttons" id="sceneButtons"></div>
+    </div>
+    <div class="toolbar-group">
+      <label>モード</label>
+      <div class="mode-switch">
+        <button class="mode-btn active" data-mode="simple">シンプル<small>相手のみ</small></button>
+        <button class="mode-btn" data-mode="activity">相手×活動</button>
+      </div>
+    </div>
+    <div class="toolbar-group right">
+      <button class="ghost" id="undoBtn" title="直前の記録を取り消す (Ctrl+Z)">↶ 取り消し</button>
+      <button class="ghost" id="quickRepeatBtn" title="直前メンバーを保ったまま、別の児童を主役にして連続記録">↻ 同じメンバーで再記録</button>
+    </div>
+  </div>
+
+  <div class="record-main">
+    <!-- 左: 児童グリッド -->
+    <div class="grid-area">
+      <div class="grid-header">
+        <div class="status-line" id="statusLine">
+          <span class="status-label">主役を選んでください</span>
+        </div>
+        <div class="selected-chips" id="selectedChips"></div>
+      </div>
+      <div class="student-grid" id="studentGrid"></div>
+
+      <div class="special-row">
+        <button class="special-btn" data-special="alone">🚶 一人で過ごしていた</button>
+        <button class="special-btn" data-special="with_teacher">👨‍🏫 先生と</button>
+        <button class="special-btn" data-special="other_class">🌐 他クラスの子と</button>
+      </div>
+
+      <div class="activity-row hidden" id="activityRow">
+        <label>活動</label>
+        <div class="activity-buttons" id="activityButtons"></div>
+      </div>
+
+      <div class="note-row">
+        <input type="text" id="noteInput" placeholder="質的観察メモ (任意): 例「下釜が長田にボールを譲った」" maxlength="200">
+      </div>
+      <div class="action-row">
+        <span class="action-hint">数字=児童 / Enter=保存 / Esc=クリア / Ctrl+Z=取消 / A=一人で T=先生と O=他クラス / 児童ボタン右クリック=個別分析</span>
+        <div style="display:flex; gap:8px;">
+          <button class="ghost" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
+          <button class="primary" id="saveBtn" disabled>💾 保存して次へ (Enter)</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 右: サイドパネル -->
+    <aside class="side-panel">
+      <div class="card today-stats">
+        <h3>今日の記録</h3>
+        <div><span class="big-number" id="todayCount">0</span> 件 ・ <b id="todayCovered">0</b>/28人観察</div>
+      </div>
+
+      <div class="card">
+        <h3>最近観察していない子 TOP3</h3>
+        <ol class="watch-list" id="watchList"></ol>
+        <div class="muted small">最終記録から日数の多い順</div>
+      </div>
+
+      <div class="card">
+        <h3>直近の記録</h3>
+        <ul class="recent-list" id="recentList"></ul>
+      </div>
+    </aside>
+  </div>
+</section>
+
+<!-- =================== 集計タブ =================== -->
+<section class="tab-panel" id="tab-summary">
+  <div class="filter-bar">
+    <label>シーン:
+      <select id="summaryScene"><option value="">すべて</option></select>
+    </label>
+    <label>カテゴリ:
+      <select id="summaryCategory">
+        <option value="">すべて</option>
+        <option value="rest">休み時間</option>
+        <option value="class">授業時間</option>
+        <option value="other">その他</option>
+      </select>
+    </label>
+    <label>期間:
+      <select id="summaryPeriod">
+        <option value="all">すべて</option>
+        <option value="today">今日</option>
+        <option value="7">直近7日</option>
+        <option value="30">直近30日</option>
+      </select>
+    </label>
+    <span class="filter-info" id="summaryInfo"></span>
+    <button class="ghost" id="printSummaryBtn" title="ブラウザの印刷ダイアログ。PDFとして保存も可">🖨 印刷/PDF</button>
+    <button class="ghost" id="printIndividualBtn" title="児童1人1ページの28ページPDF">📑 28枚一括PDF</button>
+  </div>
+  <div class="card group-stats hidden" id="genderGroupStats"></div>
+
+  <div class="summary-grid" id="summaryGrid"></div>
+</section>
+
+<!-- =================== 比較タブ =================== -->
+<section class="tab-panel" id="tab-compare">
+  <div class="compare-intro">
+    <p>休み時間と授業時間で <b>同じ相手と関わっているか</b> を Jaccard係数 (0〜1) で表示します。<br>
+       1.0 に近いほど「関わる相手が同じ」、0.0 に近いほど「全く違う相手」。</p>
+  </div>
+  <div class="compare-table-wrap">
+    <table class="compare-table" id="compareTable"></table>
+  </div>
+</section>
+
+<!-- =================== ソシオグラムタブ =================== -->
+<section class="tab-panel" id="tab-socio">
+  <div class="filter-bar">
+    <label>シーン:
+      <select id="socioScene"><option value="">すべて</option></select>
+    </label>
+    <label>カテゴリ:
+      <select id="socioCategory">
+        <option value="">すべて</option>
+        <option value="rest">休み時間</option>
+        <option value="class">授業時間</option>
+      </select>
+    </label>
+    <label>最低共起回数:
+      <input type="number" id="socioMin" value="2" min="1" max="50" style="width:60px">
+    </label>
+    <button class="ghost" id="socioRedraw">再描画</button>
+  </div>
+  <div class="socio-wrap">
+    <svg id="socioSvg" width="900" height="700"></svg>
+    <div class="socio-legend">
+      <div><span class="dot highlight"></span>要配慮児童</div>
+      <div><span class="dot watch"></span>観察優先</div>
+      <div>線の太さ = 一緒にいた回数</div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 中心性タブ =================== -->
+<section class="tab-panel" id="tab-centrality">
+  <div class="filter-bar">
+    <label>カテゴリ:
+      <select id="centralityCategory">
+        <option value="">すべて</option>
+        <option value="rest">休み時間</option>
+        <option value="class">授業時間</option>
+      </select>
+    </label>
+    <label>期間:
+      <select id="centralityPeriod">
+        <option value="all">すべて</option>
+        <option value="7">直近7日</option>
+        <option value="30">直近30日</option>
+      </select>
+    </label>
+    <span class="filter-info" id="centralityInfo"></span>
+  </div>
+  <div class="centrality-intro card">
+    <p><b>degree</b> = 関わったユニーク相手数 (max 27) ／ <b>total</b> = 関わり総回数 ／ <b>asymmetry</b> = (主役で選ぶ - 他人主役で選ばれる)。
+    asymmetry &gt; 0 = 積極的に近寄る／&lt; 0 = 受け身。<b>クラスタ</b> = 共起≥3のグループ。</p>
+  </div>
+  <div class="centrality-grid">
+    <div class="card">
+      <h3>孤立順 TOP (degreeが低い)</h3>
+      <table class="centrality-table" id="centralityIsolatedTable"></table>
+    </div>
+    <div class="card">
+      <h3>ハブ順 TOP (degreeが高い)</h3>
+      <table class="centrality-table" id="centralityHubTable"></table>
+    </div>
+    <div class="card">
+      <h3>非対称性が極端 (要注意)</h3>
+      <table class="centrality-table" id="centralityAsymmetryTable"></table>
+    </div>
+    <div class="card">
+      <h3>自然発生クラスタ (共起≥3)</h3>
+      <div id="centralityClusters"></div>
+    </div>
+  </div>
+</section>
+
+<!-- =================== 時系列タブ =================== -->
+<section class="tab-panel" id="tab-timeline">
+  <div class="filter-bar">
+    <label>比較粒度:
+      <select id="timelineGranularity">
+        <option value="month">月別</option>
+        <option value="week">週別</option>
+      </select>
+    </label>
+    <label>カテゴリ:
+      <select id="timelineCategory">
+        <option value="">すべて</option>
+        <option value="rest">休み時間</option>
+        <option value="class">授業時間</option>
+      </select>
+    </label>
+    <span class="filter-info" id="timelineInfo"></span>
+  </div>
+  <div class="card">
+    <h3>期間別 記録数推移</h3>
+    <svg id="timelineChart" width="100%" height="200"></svg>
+  </div>
+  <div class="card">
+    <h3>関係性の変化（直近2期間の差分）</h3>
+    <div id="timelineDiff"></div>
+  </div>
+</section>
+
+<!-- =================== 観察分布タブ =================== -->
+<section class="tab-panel" id="tab-heatmap">
+  <div class="filter-bar">
+    <label>表示:
+      <select id="heatmapView">
+        <option value="density">観察密度（カレンダー）</option>
+        <option value="pair">ペア関係タイムライン</option>
+      </select>
+    </label>
+    <label class="pair-only hidden">児童A:
+      <select id="pairA"></select>
+    </label>
+    <label class="pair-only hidden">児童B:
+      <select id="pairB"></select>
+    </label>
+    <span class="filter-info" id="heatmapInfo"></span>
+  </div>
+  <div class="card" id="heatmapCard">
+    <h3 id="heatmapTitle">観察密度ヒートマップ</h3>
+    <div id="heatmapBody"></div>
+  </div>
+</section>
+
+<!-- =================== 席替えタブ =================== -->
+<section class="tab-panel" id="tab-seating">
+  <div class="filter-bar">
+    <label>班数:
+      <input type="number" id="seatingGroupCount" value="7" min="2" max="14" style="width:60px">
+    </label>
+    <label>1班あたり:
+      <input type="number" id="seatingPerGroup" value="4" min="2" max="6" style="width:60px">
+    </label>
+    <label>方針:
+      <select id="seatingPolicy">
+        <option value="diverse">多様化（普段関わらない子と組ませる）</option>
+        <option value="similar">仲良し優先（普段関わる子で固める）</option>
+        <option value="mixed">バランス重視</option>
+      </select>
+    </label>
+    <button class="primary" id="generateSeatingBtn">🪑 班案を生成</button>
+  </div>
+  <div class="card">
+    <h3>提案された班分け</h3>
+    <p class="muted small">要配慮児童ペア・トラブル相手の同席は警告マーク付きで表示。「ロック」したい組合せは右上のピンで固定。</p>
+    <div id="seatingResult"></div>
+  </div>
+  <div class="card">
+    <h3>注意事項</h3>
+    <div id="seatingNotes"></div>
+  </div>
+</section>
+
+<!-- =================== 履歴タブ =================== -->
+<section class="tab-panel" id="tab-history">
+  <div class="filter-bar">
+    <label>児童で絞り込み:
+      <select id="historyStudent"><option value="">すべて</option></select>
+    </label>
+    <label>シーン:
+      <select id="historyScene"><option value="">すべて</option></select>
+    </label>
+    <label>キーワード:
+      <input type="text" id="historyKeyword" placeholder="メモ・活動・名前で検索" style="width:200px">
+    </label>
+    <span class="filter-info" id="historyInfo"></span>
+    <button class="ghost danger" id="deleteSelectedBtn" disabled>選択した記録を削除</button>
+  </div>
+  <table class="history-table" id="historyTable"></table>
+</section>
+
+<!-- =================== 設定タブ =================== -->
+<section class="tab-panel" id="tab-settings">
+  <div class="settings-grid">
+    <div class="card">
+      <h3>データのバックアップ・復元</h3>
+      <p class="muted">ブラウザに保存。週1回はエクスポート推奨。複数PCで使う場合はGoogleドライブ等で受け渡し。</p>
+      <div class="btn-row">
+        <button class="primary" id="exportBtn">📥 JSONエクスポート</button>
+        <button class="ghost" id="importBtn">📤 JSONインポート</button>
+        <input type="file" id="importFile" accept=".json" hidden>
+      </div>
+      <div class="btn-row">
+        <button class="ghost" id="exportCsvBtn">📊 CSV (生データ)</button>
+        <button class="ghost" id="exportCrossBtn" title="児童×児童の共起回数マトリクス">📈 CSV (クロス集計)</button>
+        <button class="ghost" id="exportEnrichedBtn" title="AI副担任のstudent-cards-enriched.jsonに統合できる形式">🧠 AI副担任向け JSON</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h3>学年アーカイブ</h3>
+      <p class="muted">新年度切替時に現在のデータを年度別キーに退避。クラス変更前に必ず実行。</p>
+      <div class="btn-row">
+        <button class="ghost" id="archiveYearBtn">📦 現在のデータをアーカイブ</button>
+        <button class="ghost" id="viewArchivesBtn">📚 アーカイブ一覧</button>
+      </div>
+      <div id="archivesList" class="muted small" style="margin-top:6px"></div>
+    </div>
+
+    <div class="card">
+      <h3>統計</h3>
+      <table class="stats-table">
+        <tr><td>累計記録数</td><td><b id="statsTotal">0</b></td></tr>
+        <tr><td>記録した日数</td><td><b id="statsDays">0</b></td></tr>
+        <tr><td>観察した児童数</td><td><b id="statsStudents">0</b> / 28</td></tr>
+        <tr><td>初回記録日</td><td id="statsFirstDate">—</td></tr>
+        <tr><td>最終記録日</td><td id="statsLastDate">—</td></tr>
+      </table>
+    </div>
+
+    <div class="card">
+      <h3>児童属性編集（性別・班）</h3>
+      <p class="muted small">男女別集計や班別集計、席替え提案で使用。未設定でも他機能は動作します。</p>
+      <table class="settings-table" id="attrSettings"></table>
+    </div>
+
+    <div class="card">
+      <h3>イベント注釈</h3>
+      <p class="muted small">「席替え」「校外学習」などの日付を記録。ペアタイムライン上に縦線で表示されます。</p>
+      <div class="btn-row">
+        <input type="date" id="eventDate" style="padding:4px;">
+        <input type="text" id="eventLabel" placeholder="例: 5月席替え" style="padding:4px;flex:1;">
+        <button class="primary" id="addEventBtn">＋ 追加</button>
+      </div>
+      <ul id="eventList" style="margin-top:8px;font-size:12px;list-style:none;padding:0;"></ul>
+    </div>
+
+    <div class="card">
+      <h3>シーン編集</h3>
+      <p class="muted">シーン名はカスタマイズできます。「業間休み」を「2時間目休み」にする等。</p>
+      <table class="settings-table" id="sceneSettings"></table>
+    </div>
+
+    <div class="card">
+      <h3>活動編集</h3>
+      <p class="muted">活動モードで使う選択肢。クラスでよく見る遊びに合わせて。</p>
+      <textarea id="activitySettings" rows="10"></textarea>
+      <div class="btn-row">
+        <button class="primary" id="saveActivitiesBtn">活動リストを保存</button>
+      </div>
+    </div>
+
+    <!-- ===== クラウド同期カード (cloud-sync.js が中身を注入) ===== -->
+    <div class="card" id="syncSettingsCard">
+      <p class="muted">読み込み中…</p>
+    </div>
+
+    <div class="card danger-card">
+      <h3>⚠ 危険な操作</h3>
+      <p class="muted">すべての記録を削除します。事前にエクスポートしてください。</p>
+      <button class="danger" id="resetBtn">全記録を削除</button>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<!-- オンボーディングモーダル -->
+<div class="modal-backdrop hidden" id="onboardingModal">
+  <div class="modal" style="max-width:560px;">
+    <h2>👋 はじめての方へ — 30秒で覚える3つの操作</h2>
+    <ol style="font-size:14px; line-height:1.8;">
+      <li><b>シーン選択</b>（上部）: 「業間休み」「昼休み」など。1クリックで切替</li>
+      <li><b>主役の児童をクリック</b>: 名簿から観察した子をタップ</li>
+      <li><b>一緒にいた子をクリック</b>（複数可）→ <kbd>Enter</kbd>で保存</li>
+    </ol>
+    <p style="font-size:13px; color:#666;">
+      💡 数字キー(1〜28)で児童選択も可。<kbd>Shift</kbd>+<kbd>?</kbd>でショートカット一覧。<br>
+      ⚠️ データはブラウザに保存されます。<b>週1回はJSONエクスポート</b>で必ずバックアップを。
+    </p>
+    <div class="modal-actions">
+      <button class="primary" id="closeOnboardingBtn">わかった、始める</button>
+    </div>
+  </div>
+</div>
+
+<!-- 編集モーダル -->
+<div class="modal-backdrop hidden" id="editModal">
+  <div class="modal" style="max-width:560px;">
+    <h2>記録を編集</h2>
+    <div id="editModalBody"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="cancelEditBtn">キャンセル</button>
+      <button class="primary" id="saveEditBtn">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- 児童個別ダッシュボードモーダル -->
+<div class="modal-backdrop hidden" id="dashboardModal">
+  <div class="modal" style="max-width:880px; width:90vw;">
+    <div id="dashboardBody"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="closeDashboardBtn">閉じる (Esc)</button>
+    </div>
+  </div>
+</div>
+
+<!-- ヘルプモーダル -->
+<div class="modal-backdrop hidden" id="helpModal">
+  <div class="modal">
+    <h2>キーボードショートカット</h2>
+    <table>
+      <tr><th>キー</th><th>動作</th></tr>
+      <tr><td><kbd>1</kbd>〜<kbd>28</kbd></td><td>出席番号で児童を選択（2桁は連続入力、または番号一意なら自動確定）</td></tr>
+      <tr><td><kbd>Enter</kbd></td><td>保存して次の児童へ</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>選択をクリア</td></tr>
+      <tr><td><kbd>Ctrl</kbd>+<kbd>Z</kbd></td><td>直前の記録を取り消し</td></tr>
+      <tr><td><kbd>A</kbd> / <kbd>T</kbd> / <kbd>O</kbd></td><td>一人で / 先生と / 他クラスと</td></tr>
+      <tr><td><kbd>F1</kbd>〜<kbd>F8</kbd></td><td>シーン切替（左から順に）</td></tr>
+      <tr><td><kbd>Tab</kbd></td><td>記録モード切替（シンプル ↔ 相手×活動）</td></tr>
+      <tr><td><kbd>Shift</kbd>+<kbd>?</kbd></td><td>このヘルプを表示</td></tr>
+    </table>
+    <h2 style="margin-top:18px;">運用のコツ</h2>
+    <ul style="font-size:13px; line-height:1.7;">
+      <li><b>同じ集まりは1回だけ記録</b>。同じ場面を別の主役で再登録すると共起カウントが膨らむ</li>
+      <li>1児童ボタンの<b>左下緑●</b>＝今日記録済み、<b>赤い破線枠</b>＝5日以上未観察</li>
+      <li>マーク<b>●</b>=要配慮児童、<b>■</b>=観察優先（4日間で名前出てない子）</li>
+      <li>週1回は <b>設定タブ→JSONエクスポート</b>でバックアップ推奨</li>
+    </ul>
+    <div class="modal-actions">
+      <button class="primary" id="closeHelpBtn">閉じる (Esc)</button>
+    </div>
+  </div>
+</div>
+
+<script src="students.js"></script>
+<script src="app.js"></script>
+<script src="cloud-sync.js"></script>
+</body>
+</html>
