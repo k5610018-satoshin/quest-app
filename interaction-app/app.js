@@ -858,12 +858,13 @@ function refreshSidePanel() {
     ol.appendChild(li);
   }
 
-  // 直近の記録
+  // 直近の記録（各行に編集ボタン）
   const recent = state.records.slice(-10).reverse();
   const ul = document.getElementById('recentList');
   ul.innerHTML = '';
   for (const r of recent) {
     const li = document.createElement('li');
+    li.className = 'recent-item';
     const subj = escapeHtml(getStudentName(r.subject));
     let body = '';
     if (r.special) {
@@ -872,9 +873,29 @@ function refreshSidePanel() {
       body = r.members.map(id => escapeHtml(getStudentName(id))).join('・');
     }
     const act = r.activity ? ` [${escapeHtml(r.activity)}]` : '';
-    li.innerHTML = `<span class="time">${escapeHtml(formatTime(r.timestamp))}</span> <span class="subject">${subj}</span> ▶ ${body}${act}`;
+    li.innerHTML = `<span class="recent-body"><span class="time">${escapeHtml(formatTime(r.timestamp))}</span> <span class="subject">${subj}</span> ▶ ${body}${act}</span>` +
+      `<span class="recent-actions">` +
+        `<button class="recent-btn" data-edit-id="${escapeHtml(r.id)}" title="編集">✏</button>` +
+        `<button class="recent-btn" data-del-id="${escapeHtml(r.id)}" title="削除">🗑</button>` +
+      `</span>`;
     ul.appendChild(li);
   }
+  ul.querySelectorAll('button[data-edit-id]').forEach(btn => {
+    btn.addEventListener('click', e => { e.stopPropagation(); openEditModal(btn.dataset.editId); });
+  });
+  ul.querySelectorAll('button[data-del-id]').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const rec = state.records.find(r => r.id === btn.dataset.delId);
+      if (!rec) return;
+      if (!confirm(`削除しますか?\n${formatDateTime(rec.timestamp)} ${getStudentName(rec.subject)}`)) return;
+      state.records = state.records.filter(r => r.id !== btn.dataset.delId);
+      pushUndo({ type: 'delete', rec });
+      saveState();
+      refreshAll();
+      showToast('🗑 削除しました (Ctrl+Zで復元)');
+    });
+  });
 }
 
 // ========== Records filter helper ==========
@@ -1088,8 +1109,25 @@ function refreshSummaryCompare() {
       ids.slice(0, max).map(id => escapeHtml(getStudentName(id))).join('・') +
       (ids.length > max ? ` 他${ids.length-max}名` : '');
 
+    // 「同じ仲間か違うか」の判定ラベル
+    let verdict, verdictCls;
+    if (totalA === 0 || totalB === 0) {
+      verdict = '片方の場面で記録なし';
+      verdictCls = 'verdict-na';
+    } else if (jaccard >= 0.67) {
+      verdict = `🟣 ほぼ同じ仲間と過ごしている (${Math.round(jaccard*100)}%一致)`;
+      verdictCls = 'verdict-same';
+    } else if (jaccard >= 0.34) {
+      verdict = `🟡 一部だけ重なる仲間 (${Math.round(jaccard*100)}%一致)`;
+      verdictCls = 'verdict-mixed';
+    } else {
+      verdict = `🔴 ほぼ違う相手と過ごしている (${Math.round(jaccard*100)}%一致)`;
+      verdictCls = 'verdict-different';
+    }
+
     card.innerHTML = `
       <h4>${escapeHtml(s.name)}<span class="muted small">A:${totalA} / B:${totalB}</span></h4>
+      <div class="compare-verdict ${verdictCls}">${verdict}</div>
       <div class="compare-cols">
         <div class="compare-col col-a">
           <h5>${escapeHtml(aLabel)} <span class="cnt">${totalA}回</span></h5>
