@@ -44,7 +44,8 @@ const state = {
     selectedActivity: null,
     selectedHistoryIds: new Set(),
     numBuf: '',
-    numTimer: null
+    numTimer: null,
+    recordDate: ''     // 観察日。空なら todayISO() を使う
   },
   events: [],          // [{date:'YYYY-MM-DD', label:'席替え'}]
   attributes: {}       // {studentId: {gender:'M|F', group: 1|2|...}}
@@ -220,6 +221,7 @@ function init() {
   if (!checkLocalStorage()) return;
   loadState();
   renderToday();
+  initRecordDatePicker();
   renderSceneButtons();
   renderStudentGrid();
   renderActivityButtons();
@@ -320,6 +322,38 @@ function renderToday() {
   const wd = ['日','月','火','水','木','金','土'][d.getDay()];
   document.getElementById('todayLabel').textContent =
     `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()} (${wd})`;
+}
+
+function initRecordDatePicker() {
+  const inp = document.getElementById('recordDate');
+  const btn = document.getElementById('recordDateTodayBtn');
+  if (!inp) return;
+  inp.value = state.ui.recordDate || todayISO();
+  state.ui.recordDate = inp.value;
+  refreshRecordDateStyle();
+  inp.addEventListener('change', () => {
+    state.ui.recordDate = inp.value || todayISO();
+    refreshRecordDateStyle();
+    if (state.ui.recordDate !== todayISO()) {
+      const [y,m,d] = state.ui.recordDate.split('-').map(Number);
+      const wd = ['日','月','火','水','木','金','土'][new Date(y,m-1,d).getDay()];
+      showToast(`📅 観察日: ${m}/${d} (${wd}) で記録します`, 'success');
+    } else {
+      showToast('📅 今日の日付で記録します', 'success');
+    }
+  });
+  btn?.addEventListener('click', () => {
+    inp.value = todayISO();
+    state.ui.recordDate = inp.value;
+    refreshRecordDateStyle();
+    showToast('📅 今日に戻しました', 'success');
+  });
+}
+
+function refreshRecordDateStyle() {
+  const inp = document.getElementById('recordDate');
+  if (!inp) return;
+  inp.classList.toggle('past-date', inp.value !== todayISO());
 }
 
 // ========== Scene Buttons ==========
@@ -669,10 +703,18 @@ function saveRecord() {
       : [...new Set(state.ui.selectedMembers.filter(m => m !== state.ui.subjectId))];
     const noteEl = document.getElementById('noteInput');
     const noteVal = noteEl ? noteEl.value.trim() : '';
+    const recordDate = state.ui.recordDate || todayISO();
+    // 過去日付の場合、timestamp はその日の現在時刻相当（時刻部分は今）にする
+    let timestamp = new Date().toISOString();
+    if (recordDate !== todayISO()) {
+      const now = new Date();
+      const [y, m, d] = recordDate.split('-').map(Number);
+      timestamp = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
+    }
     const rec = {
       id: uuid(),
-      timestamp: new Date().toISOString(),
-      date: todayISO(),
+      timestamp,
+      date: recordDate,
       scene: sceneId,
       category: getSceneCategory(sceneId),
       mode: state.ui.currentMode,

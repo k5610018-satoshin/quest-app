@@ -820,6 +820,23 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 /* ========== Edit Modal Members Grid ========== */
 #editMembers label:hover { background: #eef3f9; border-radius: 4px; padding: 2px 4px; }
 
+/* ========== Record Date Picker ========== */
+#recordDate {
+  padding: 4px 8px;
+  border: 2px solid var(--border);
+  border-radius: var(--radius);
+  font-family: inherit;
+  font-size: 13px;
+  background: white;
+}
+#recordDate.past-date {
+  background: #fff3c4;
+  border-color: #d4a017;
+  color: #5a4500;
+  font-weight: bold;
+}
+#recordDateTodayBtn { color: var(--muted); }
+
 /* ========== Note input ========== */
 .note-row {
   margin-top: 4px;
