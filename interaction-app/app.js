@@ -45,7 +45,8 @@ const state = {
     selectedHistoryIds: new Set(),
     numBuf: '',
     numTimer: null,
-    recordDate: ''     // 観察日。空なら todayISO() を使う
+    recordDate: '',    // 観察日。空なら todayISO() を使う
+    centerId: null     // 中心人物のID（任意指定）
   },
   events: [],          // [{date:'YYYY-MM-DD', label:'席替え'}]
   attributes: {}       // {studentId: {gender:'M|F', group: 1|2|...}}
@@ -147,7 +148,8 @@ function normalizeRecord(r) {
     members,
     special: r.special && SPECIAL_LABELS[r.special] ? r.special : null,
     activity: r.activity || null,
-    note: typeof r.note === 'string' ? r.note.slice(0, 500) : ''
+    note: typeof r.note === 'string' ? r.note.slice(0, 500) : '',
+    center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null
   };
 }
 
@@ -431,7 +433,7 @@ function refreshGridState() {
   const { todaySet, daysAgo } = computeCoverageMap();
   document.querySelectorAll('.student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('subject', 'selected', 'disabled', 'covered-today', 'alert');
+    btn.classList.remove('subject', 'selected', 'disabled', 'covered-today', 'alert', 'center-marked');
     if (state.ui.subjectId === id) {
       btn.classList.add('subject');
     } else if (state.ui.selectedMembers.includes(id)) {
@@ -439,6 +441,7 @@ function refreshGridState() {
     } else if (state.ui.specialState && state.ui.subjectId !== null) {
       btn.classList.add('disabled');
     }
+    if (state.ui.centerId === id) btn.classList.add('center-marked');
     if (todaySet.has(id)) btn.classList.add('covered-today');
     if (daysAgo[id] >= ALERT_DAYS && daysAgo[id] !== 999) btn.classList.add('alert');
     else if (daysAgo[id] === 999 && state.records.length > 30) btn.classList.add('alert');
@@ -494,13 +497,23 @@ function refreshSelectedChips() {
     cont.appendChild(chip);
     return;
   }
-  // 通常メンバー
+  // 通常メンバー: 各チップに「★中心指定」ボタン
   for (const id of state.ui.selectedMembers) {
     const s = getStudent(id);
     if (!s) continue;
     const chip = document.createElement('span');
-    chip.className = 'chip';
-    chip.textContent = s.name;
+    chip.className = 'chip' + (state.ui.centerId === id ? ' chip-center' : '');
+    chip.appendChild(document.createTextNode(s.name));
+    const star = document.createElement('button');
+    star.className = 'chip-star';
+    star.title = state.ui.centerId === id ? '中心指定を外す' : 'この子を中心人物に指定';
+    star.textContent = state.ui.centerId === id ? '★' : '☆';
+    star.addEventListener('click', e => {
+      e.stopPropagation();
+      state.ui.centerId = (state.ui.centerId === id) ? null : id;
+      refreshAfterSelectionChange();
+    });
+    chip.appendChild(star);
     cont.appendChild(chip);
   }
 }
@@ -513,42 +526,56 @@ function refreshStatusLine() {
     const span = document.createElement('span');
     span.className = 'status-label muted';
     if (memberCount > 0) {
-      span.textContent = `主役を選んでください（${memberCount}人選択中・主役にした子はメンバーから外れます）`;
+      span.textContent = `グループに追加する子を選んでください（${memberCount}人選択中）`;
     } else {
-      span.textContent = '① 主役の児童を選んでください';
+      span.textContent = '一緒にいた子を選んでください（複数可・順序は集計に影響しません）';
     }
     line.appendChild(span);
     return;
   }
   const s = getStudent(state.ui.subjectId);
-  // 主役チップ + ×
+  const isCenter = state.ui.centerId === state.ui.subjectId;
+  // 起点チップ
   const wrap = document.createElement('span');
-  wrap.className = 'subject-name-wrap';
+  wrap.className = 'subject-name-wrap' + (isCenter ? ' is-center' : '');
+  wrap.title = '最初に選択した子（便宜上の起点。中心人物とは限りません）';
   wrap.appendChild(document.createTextNode(s ? s.name : `(ID:${state.ui.subjectId})`));
+  // 起点にも中心指定ボタン
+  const star = document.createElement('button');
+  star.className = 'chip-star';
+  star.textContent = isCenter ? '★' : '☆';
+  star.title = isCenter ? '中心指定を外す' : 'この子を中心人物に指定';
+  star.addEventListener('click', e => {
+    e.stopPropagation();
+    state.ui.centerId = isCenter ? null : state.ui.subjectId;
+    refreshAfterSelectionChange();
+  });
+  wrap.appendChild(star);
   const x = document.createElement('button');
   x.className = 'subject-clear';
   x.textContent = '×';
-  x.title = '主役を解除（メンバー保持）';
+  x.title = 'この子をグループから外す';
   x.addEventListener('click', () => {
     state.ui.subjectId = null;
+    if (state.ui.centerId === state.ui.subjectId) state.ui.centerId = null;
     refreshAfterSelectionChange();
   });
   wrap.appendChild(x);
   line.appendChild(wrap);
-  // 矢印
+  // 矢印 + 補足
   const arrow = document.createElement('span');
   arrow.className = 'arrow';
-  arrow.textContent = ' ▶ ';
+  arrow.textContent = ' + ';
   line.appendChild(arrow);
-  // suffix
   const suffix = document.createElement('span');
   suffix.className = 'muted';
   if (state.ui.specialState) {
     suffix.textContent = SPECIAL_LABELS[state.ui.specialState];
   } else if (state.ui.selectedMembers.length === 0) {
-    suffix.textContent = '② 一緒にいた子を選択 (複数可)';
+    suffix.textContent = '一緒にいた子を追加 (複数可)';
   } else {
-    suffix.textContent = `${state.ui.selectedMembers.length}人選択中 → 保存可 (Enter)`;
+    const centerInfo = state.ui.centerId ? ` ★中心: ${getStudentName(state.ui.centerId)}` : '';
+    suffix.textContent = `計${state.ui.selectedMembers.length + 1}人 → 保存可 (Enter)${centerInfo}`;
   }
   line.appendChild(suffix);
 }
@@ -704,13 +731,15 @@ function saveRecord() {
     const noteEl = document.getElementById('noteInput');
     const noteVal = noteEl ? noteEl.value.trim() : '';
     const recordDate = state.ui.recordDate || todayISO();
-    // 過去日付の場合、timestamp はその日の現在時刻相当（時刻部分は今）にする
     let timestamp = new Date().toISOString();
     if (recordDate !== todayISO()) {
       const now = new Date();
       const [y, m, d] = recordDate.split('-').map(Number);
       timestamp = new Date(y, m - 1, d, now.getHours(), now.getMinutes(), now.getSeconds()).toISOString();
     }
+    // center が選択中グループ (subject + safeMembers) に含まれていなければ無効化
+    const allIds = [state.ui.subjectId, ...safeMembers];
+    const center = (state.ui.centerId && allIds.includes(state.ui.centerId)) ? state.ui.centerId : null;
     const rec = {
       id: uuid(),
       timestamp,
@@ -718,8 +747,9 @@ function saveRecord() {
       scene: sceneId,
       category: getSceneCategory(sceneId),
       mode: state.ui.currentMode,
-      subject: state.ui.subjectId,
+      subject: state.ui.subjectId,    // 便宜上の起点（最初に選んだ子・中心とは限らない）
       members: safeMembers,
+      center,                          // 中心人物（指定時のみ）
       special: state.ui.specialState,
       activity: state.ui.currentMode === 'activity' ? state.ui.selectedActivity : null,
       note: noteVal
@@ -738,10 +768,11 @@ function saveRecord() {
     if (rec.activity) summary += ` (${rec.activity})`;
     showToast(`✓ 保存: ${summary}`);
 
-    // 主役だけクリア（次の児童を選びやすくする）
+    // 起点とメンバーをクリア（次のグループを選びやすくする）
     state.ui.subjectId = null;
     state.ui.selectedMembers = [];
     state.ui.specialState = null;
+    state.ui.centerId = null;
     // 活動は維持（連続記録を高速化）
     refreshAfterSelectionChange();
     refreshSpecialButtons();
@@ -758,6 +789,7 @@ function clearSelection() {
   state.ui.selectedMembers = [];
   state.ui.specialState = null;
   state.ui.selectedActivity = null;
+  state.ui.centerId = null;
   refreshAfterSelectionChange();
   refreshSpecialButtons();
   refreshActivityButtons();

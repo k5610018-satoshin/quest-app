@@ -252,12 +252,34 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 .chip {
   background: var(--selected);
   color: white;
-  padding: 3px 10px;
+  padding: 3px 6px 3px 10px;
   border-radius: 12px;
   font-size: 12px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+}
+.chip.chip-center {
+  background: #ffb300;
+  color: #4a2c00;
+  font-weight: bold;
+}
+.chip-star {
+  background: rgba(255,255,255,0.25);
+  border: none;
+  color: inherit;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  padding: 0;
+  font-size: 12px;
+  cursor: pointer;
+  line-height: 1;
+}
+.chip-star:hover { background: rgba(255,255,255,0.5); }
+.subject-name-wrap.is-center {
+  background: #ffb300;
+  color: #4a2c00;
 }
 
 /* 児童グリッド (7列×4行) */
@@ -345,6 +367,17 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   background: var(--selected);
   color: white;
   border-color: #4cae4c;
+}
+.student-btn.center-marked::before {
+  content: "★";
+  position: absolute;
+  top: -6px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 16px;
+  color: #ffb300;
+  text-shadow: 0 0 3px white, 0 0 1px black;
+  z-index: 2;
 }
 .student-btn.disabled {
   opacity: 0.3;
