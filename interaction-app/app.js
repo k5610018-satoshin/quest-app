@@ -2130,6 +2130,143 @@ function initTimelineFilters() {
   ['timelineGranularity', 'timelineCategory'].forEach(id => {
     document.getElementById(id)?.addEventListener('change', refreshTimeline);
   });
+  // 変化TOP用フィルタ
+  ['changePreset', 'changeCategory', 'changeLimit',
+   'periodAStart', 'periodAEnd', 'periodBStart', 'periodBEnd'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', refreshChangeRanking);
+  });
+  document.getElementById('changePreset')?.addEventListener('change', () => {
+    const v = document.getElementById('changePreset').value;
+    document.getElementById('changeCustomFields').classList.toggle('hidden', v !== 'custom');
+  });
+}
+
+function getPresetPeriods(preset) {
+  const today = new Date();
+  const t0 = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const sub = (d, n) => { const x = new Date(d); x.setDate(x.getDate() - n); return x; };
+  if (preset === 'week') {
+    return {
+      a: { start: fmt(sub(t0, 13)), end: fmt(sub(t0, 7)),  label: '先週(7-13日前)' },
+      b: { start: fmt(sub(t0, 6)),  end: fmt(t0),           label: '今週(直近7日)' }
+    };
+  }
+  if (preset === '2week') {
+    return {
+      a: { start: fmt(sub(t0, 27)), end: fmt(sub(t0, 14)), label: '前2週(15-28日前)' },
+      b: { start: fmt(sub(t0, 13)), end: fmt(t0),           label: '直近2週' }
+    };
+  }
+  if (preset === 'month') {
+    const ty = today.getFullYear(), tm = today.getMonth();
+    const aStart = new Date(ty, tm - 1, 1);
+    const aEnd = new Date(ty, tm, 0);
+    const bStart = new Date(ty, tm, 1);
+    return {
+      a: { start: fmt(aStart), end: fmt(aEnd), label: `先月(${tm}月)` },
+      b: { start: fmt(bStart), end: fmt(t0),    label: `今月(${tm+1}月)` }
+    };
+  }
+  if (preset === '30days') {
+    return {
+      a: { start: fmt(sub(t0, 59)), end: fmt(sub(t0, 30)), label: '前30日(31-60日前)' },
+      b: { start: fmt(sub(t0, 29)), end: fmt(t0),           label: '直近30日' }
+    };
+  }
+  // custom
+  const aS = document.getElementById('periodAStart').value;
+  const aE = document.getElementById('periodAEnd').value;
+  const bS = document.getElementById('periodBStart').value;
+  const bE = document.getElementById('periodBEnd').value;
+  return {
+    a: { start: aS, end: aE, label: `A: ${aS}〜${aE}` },
+    b: { start: bS, end: bE, label: `B: ${bS}〜${bE}` }
+  };
+}
+
+function recordsInRange(start, end, category) {
+  if (!start || !end) return [];
+  let recs = state.records.filter(r => r.date >= start && r.date <= end);
+  if (category) recs = recs.filter(r => r.category === category);
+  return recs;
+}
+
+function refreshChangeRanking() {
+  const preset = document.getElementById('changePreset').value;
+  const category = document.getElementById('changeCategory').value;
+  const limit = parseInt(document.getElementById('changeLimit').value) || 10;
+  const { a, b } = getPresetPeriods(preset);
+  if (!a.start || !b.start) {
+    document.getElementById('changeRanking').innerHTML = '<div class="change-empty">期間を入力してください</div>';
+    return;
+  }
+  const recsA = recordsInRange(a.start, a.end, category);
+  const recsB = recordsInRange(b.start, b.end, category);
+  document.getElementById('changeInfo').textContent =
+    `${a.label} (${recsA.length}件) / ${b.label} (${recsB.length}件)`;
+
+  // 児童ごとの変化度を計算
+  const data = state.students.map(s => {
+    const pA = computePartnerCounts(s.id, recsA);
+    const pB = computePartnerCounts(s.id, recsB);
+    const setA = new Set(Object.keys(pA).map(Number));
+    const setB = new Set(Object.keys(pB).map(Number));
+    const onlyA = [...setA].filter(x => !setB.has(x));
+    const onlyB = [...setB].filter(x => !setA.has(x));
+    const common = [...setA].filter(x => setB.has(x));
+    const unionN = setA.size + setB.size - common.length;
+    const jaccard = unionN > 0 ? common.length / unionN : (setA.size === 0 && setB.size === 0 ? null : 0);
+    // 変化度 = 1 - jaccard (両方ゼロは null)
+    const change = jaccard === null ? null : 1 - jaccard;
+    const totalA = Object.values(pA).reduce((x,y)=>x+y, 0);
+    const totalB = Object.values(pB).reduce((x,y)=>x+y, 0);
+    return { student: s, change, jaccard, onlyA, onlyB, common, totalA, totalB, pA, pB };
+  });
+  // 両方記録ありの子だけ + 変化度高い順
+  const ranked = data.filter(d => d.change !== null && (d.totalA + d.totalB) >= 2)
+                     .sort((a,b) => b.change - a.change)
+                     .slice(0, limit);
+
+  const cont = document.getElementById('changeRanking');
+  if (ranked.length === 0) {
+    cont.innerHTML = '<div class="change-empty">比較対象の児童がいません。両期間に記録があるか確認してください。</div>';
+    return;
+  }
+
+  const fmtNamesByFreq = (ids, partners, max=4, cls) => {
+    if (ids.length === 0) return '<span class="muted">—</span>';
+    const sorted = ids.slice().sort((x,y) => (partners[y]||0) - (partners[x]||0));
+    const html = sorted.slice(0, max).map(id =>
+      `<span class="${cls}">${escapeHtml(getStudentName(id))}(${partners[id]||0})</span>`
+    ).join(' ');
+    return html + (sorted.length > max ? ` <span class="muted">他${sorted.length-max}名</span>` : '');
+  };
+
+  let html = '';
+  ranked.forEach((d, i) => {
+    const cls = d.student.highlight ? 'highlight-row' : '';
+    const changePct = Math.round(d.change * 100);
+    html += `
+      <div class="change-row ${cls}">
+        <div class="rank">${i+1}</div>
+        <div>
+          <div class="name">${escapeHtml(d.student.name)}</div>
+          <div class="muted small">A:${d.totalA} / B:${d.totalB}</div>
+        </div>
+        <div>
+          <div><span class="change-bar"><span class="change-fill" style="width:${changePct}%"></span></span></div>
+          <div class="muted small">変化度 ${changePct}%</div>
+        </div>
+        <dl class="changes">
+          <dt>失った</dt><dd>${fmtNamesByFreq(d.onlyA, d.pA, 5, 'lost-name')}</dd>
+          <dt>新しい</dt><dd>${fmtNamesByFreq(d.onlyB, d.pB, 5, 'new-name')}</dd>
+          <dt>変わらず</dt><dd>${fmtNamesByFreq(d.common, d.pB, 5, 'same-name')}</dd>
+        </dl>
+      </div>
+    `;
+  });
+  cont.innerHTML = html;
 }
 
 function periodKey(date, granularity) {
@@ -2384,7 +2521,7 @@ const _origSwitchTab = switchTab;
 switchTab = function(name) {
   _origSwitchTab(name);
   if (name === 'centrality') refreshCentrality();
-  else if (name === 'timeline') refreshTimeline();
+  else if (name === 'timeline') { refreshTimeline(); refreshChangeRanking(); }
 };
 
 // saveRecord/deleteSelectedRecords の Undo 連携

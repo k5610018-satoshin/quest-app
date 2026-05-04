@@ -889,6 +889,53 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   background: #fafbfc;
   border-radius: var(--radius);
 }
+.change-card .inner-filter {
+  background: transparent;
+  padding: 4px 0 8px;
+  box-shadow: none;
+  margin-bottom: 4px;
+}
+.change-row {
+  display: grid;
+  grid-template-columns: 30px 100px 80px 1fr;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid #eef0f3;
+  align-items: start;
+  font-size: 12px;
+}
+.change-row:hover { background: #f9fafc; }
+.change-row.highlight-row { background: #fffbe8; }
+.change-row .rank {
+  font-weight: bold;
+  color: var(--primary);
+  font-size: 14px;
+}
+.change-row .name { font-weight: bold; }
+.change-row .change-bar {
+  display: inline-block;
+  width: 60px;
+  height: 8px;
+  background: #e0e6ee;
+  border-radius: 4px;
+  overflow: hidden;
+  vertical-align: middle;
+}
+.change-row .change-fill {
+  height: 100%;
+  background: linear-gradient(to right, #5cb85c 0%, #f0ad4e 50%, #e74c3c 100%);
+}
+.change-row .changes {
+  display: grid;
+  grid-template-columns: 50px 1fr;
+  gap: 2px 6px;
+}
+.change-row .changes dt { color: var(--muted); margin: 0; font-size: 11px; }
+.change-row .changes dd { margin: 0; font-size: 11px; }
+.change-row .new-name  { color: #1565c0; font-weight: bold; }
+.change-row .lost-name { color: #b53d2e; }
+.change-row .same-name { color: var(--muted); }
+.change-empty { padding: 16px; color: var(--muted); text-align: center; }
 
 /* ========== Edit Modal Members Grid ========== */
 #editMembers label:hover { background: #eef3f9; border-radius: 4px; padding: 2px 4px; }
