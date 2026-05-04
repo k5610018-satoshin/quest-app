@@ -938,13 +938,52 @@ function initSummaryFilters() {
     opt.textContent = getSceneLabel(sc.id);
     sel.appendChild(opt);
   }
-  ['summaryScene', 'summaryCategory', 'summaryPeriod'].forEach(id => {
-    document.getElementById(id).addEventListener('change', refreshSummary);
+  // 並列比較用シーンoptgroup埋め
+  ['summaryAScenes', 'summaryBScenes'].forEach(gid => {
+    const grp = document.getElementById(gid);
+    if (!grp) return;
+    for (const sc of state.scenes) {
+      const opt = document.createElement('option');
+      opt.value = 'sc:' + sc.id;
+      opt.textContent = getSceneLabel(sc.id);
+      grp.appendChild(opt);
+    }
+  });
+  ['summaryScene', 'summaryCategory', 'summaryPeriod', 'summaryMode', 'summaryA', 'summaryB']
+    .forEach(id => document.getElementById(id)?.addEventListener('change', refreshSummary));
+  document.getElementById('summaryMode')?.addEventListener('change', () => {
+    const mode = document.getElementById('summaryMode').value;
+    document.getElementById('summarySingleFilters').classList.toggle('hidden', mode !== 'single');
+    document.getElementById('summaryCompareFilters').classList.toggle('hidden', mode !== 'compare');
   });
   document.getElementById('printSummaryBtn')?.addEventListener('click', () => window.print());
 }
 
+function parseSummaryFilter(val) {
+  // "cat:rest" / "sc:break1" → {category} or {scene}
+  if (!val) return {};
+  if (val.startsWith('cat:')) return { category: val.slice(4) };
+  if (val.startsWith('sc:'))  return { scene: val.slice(3) };
+  return {};
+}
+
+function summaryFilterLabel(val) {
+  if (!val) return 'すべて';
+  if (val.startsWith('cat:')) {
+    return ({rest:'休み時間', class:'授業時間', other:'その他'})[val.slice(4)] || val;
+  }
+  if (val.startsWith('sc:')) return getSceneLabel(val.slice(3));
+  return val;
+}
+
 function refreshSummary() {
+  const mode = document.getElementById('summaryMode')?.value || 'single';
+  const gridEl = document.getElementById('summaryGrid');
+  if (mode === 'compare') {
+    gridEl.classList.add('compare');
+    return refreshSummaryCompare();
+  }
+  gridEl.classList.remove('compare');
   const scene = document.getElementById('summaryScene').value;
   const category = document.getElementById('summaryCategory').value;
   const period = document.getElementById('summaryPeriod').value;
@@ -997,6 +1036,76 @@ function refreshSummary() {
       <h4>${escapeHtml(s.name)}<span class="total">${total} 回 / 観察${totalObs}</span></h4>
       <ul class="partner-list">${partnersHtml}</ul>
       ${specialsHtml}${isolationHtml}
+    `;
+    grid.appendChild(card);
+  }
+}
+
+// ========== Summary 並列比較モード ==========
+function refreshSummaryCompare() {
+  const aVal = document.getElementById('summaryA').value;
+  const bVal = document.getElementById('summaryB').value;
+  const period = document.getElementById('summaryPeriod').value;
+  const aFilter = { ...parseSummaryFilter(aVal), period };
+  const bFilter = { ...parseSummaryFilter(bVal), period };
+  const recsA = filterRecords(aFilter);
+  const recsB = filterRecords(bFilter);
+  const aLabel = summaryFilterLabel(aVal);
+  const bLabel = summaryFilterLabel(bVal);
+  document.getElementById('summaryInfo').textContent =
+    `A: ${aLabel} ${recsA.length}件 / B: ${bLabel} ${recsB.length}件`;
+
+  const grid = document.getElementById('summaryGrid');
+  grid.innerHTML = '';
+  for (const s of state.students) {
+    const partnersA = computePartnerCounts(s.id, recsA);
+    const partnersB = computePartnerCounts(s.id, recsB);
+    const totalA = Object.values(partnersA).reduce((a,b)=>a+b, 0);
+    const totalB = Object.values(partnersB).reduce((a,b)=>a+b, 0);
+    if (totalA === 0 && totalB === 0) continue; // 完全に記録なしの子は省略
+
+    const setA = new Set(Object.keys(partnersA).map(Number));
+    const setB = new Set(Object.keys(partnersB).map(Number));
+    const onlyA = [...setA].filter(x => !setB.has(x));
+    const onlyB = [...setB].filter(x => !setA.has(x));
+    const common = [...setA].filter(x => setB.has(x));
+    const unionN = setA.size + setB.size - common.length;
+    const jaccard = unionN > 0 ? common.length / unionN : 0;
+
+    const card = document.createElement('div');
+    card.className = 'summary-card compare-card';
+    if (s.highlight) card.classList.add('highlight');
+    if (s.watch) card.classList.add('watch');
+
+    const renderList = (partners, onlySet) =>
+      Object.entries(partners).sort((a,b)=>b[1]-a[1]).slice(0,6).map(([pid, cnt]) => {
+        const p = getStudent(parseInt(pid));
+        const cls = onlySet.has(parseInt(pid)) ? ' class="only"' : '';
+        return `<li${cls}><span>${escapeHtml(p?.name||'?')}</span><span class="muted">${cnt}</span></li>`;
+      }).join('') || '<li class="muted">記録なし</li>';
+
+    const fmtNames = (ids, max=4) =>
+      ids.slice(0, max).map(id => escapeHtml(getStudentName(id))).join('・') +
+      (ids.length > max ? ` 他${ids.length-max}名` : '');
+
+    card.innerHTML = `
+      <h4>${escapeHtml(s.name)}<span class="muted small">A:${totalA} / B:${totalB}</span></h4>
+      <div class="compare-cols">
+        <div class="compare-col col-a">
+          <h5>${escapeHtml(aLabel)} <span class="cnt">${totalA}回</span></h5>
+          <ul>${renderList(partnersA, new Set(onlyA))}</ul>
+        </div>
+        <div class="compare-col col-b">
+          <h5>${escapeHtml(bLabel)} <span class="cnt">${totalB}回</span></h5>
+          <ul>${renderList(partnersB, new Set(onlyB))}</ul>
+        </div>
+      </div>
+      <dl class="compare-diff">
+        <dt>共通</dt>     <dd class="diff-common">${common.length===0 ? '<span class="muted">—</span>' : fmtNames(common)}</dd>
+        <dt>Aだけ</dt>    <dd class="diff-only-a">${onlyA.length===0 ? '<span class="muted">—</span>' : fmtNames(onlyA)}</dd>
+        <dt>Bだけ</dt>    <dd class="diff-only-b">${onlyB.length===0 ? '<span class="muted">—</span>' : fmtNames(onlyB)}</dd>
+        <dt>類似度</dt>   <dd>${jaccard.toFixed(2)} <span class="muted">(共通${common.length}/和集合${unionN})</span></dd>
+      </dl>
     `;
     grid.appendChild(card);
   }

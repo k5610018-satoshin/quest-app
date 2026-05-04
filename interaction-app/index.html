@@ -112,17 +112,47 @@
 <!-- =================== 集計タブ =================== -->
 <section class="tab-panel" id="tab-summary">
   <div class="filter-bar">
-    <label>シーン:
-      <select id="summaryScene"><option value="">すべて</option></select>
-    </label>
-    <label>カテゴリ:
-      <select id="summaryCategory">
-        <option value="">すべて</option>
-        <option value="rest">休み時間</option>
-        <option value="class">授業時間</option>
-        <option value="other">その他</option>
+    <label>表示:
+      <select id="summaryMode">
+        <option value="single">単一</option>
+        <option value="compare">並列比較 (A vs B)</option>
       </select>
     </label>
+    <span id="summarySingleFilters">
+      <label>シーン:
+        <select id="summaryScene"><option value="">すべて</option></select>
+      </label>
+      <label>カテゴリ:
+        <select id="summaryCategory">
+          <option value="">すべて</option>
+          <option value="rest">休み時間</option>
+          <option value="class">授業時間</option>
+          <option value="other">その他</option>
+        </select>
+      </label>
+    </span>
+    <span id="summaryCompareFilters" class="hidden">
+      <label>A:
+        <select id="summaryA">
+          <optgroup label="カテゴリ">
+            <option value="cat:rest" selected>休み時間 (全体)</option>
+            <option value="cat:class">授業時間 (全体)</option>
+            <option value="cat:other">その他</option>
+          </optgroup>
+          <optgroup label="シーン" id="summaryAScenes"></optgroup>
+        </select>
+      </label>
+      <label>B:
+        <select id="summaryB">
+          <optgroup label="カテゴリ">
+            <option value="cat:rest">休み時間 (全体)</option>
+            <option value="cat:class" selected>授業時間 (全体)</option>
+            <option value="cat:other">その他</option>
+          </optgroup>
+          <optgroup label="シーン" id="summaryBScenes"></optgroup>
+        </select>
+      </label>
+    </span>
     <label>期間:
       <select id="summaryPeriod">
         <option value="all">すべて</option>
