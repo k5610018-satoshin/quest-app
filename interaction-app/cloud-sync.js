@@ -210,33 +210,109 @@ async function syncNow() {
 async function pullFromGas() {
   if (!checkSyncReady()) return;
   const since = localStorage.getItem(LAST_PULL_KEY) || '2000-01-01T00:00:00.000Z';
-  const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=${encodeURIComponent(since)}&deviceId=${encodeURIComponent(_deviceId)}`;
+  // dataType=all で records と praises を一括取得
+  const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=${encodeURIComponent(since)}&deviceId=${encodeURIComponent(_deviceId)}&dataType=all`;
 
   const res = await fetch(url);
   if (!res.ok) throw new Error('HTTP ' + res.status);
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'GAS error');
 
-  const pulled = data.records || [];
-  let merged = 0;
-  const existingIds = new Set(state.records.map(r => r.id));
-  for (const r of pulled) {
-    if (String(r.deleted) === '1') continue; // 論理削除はスキップ
-    if (existingIds.has(r.id)) continue;
-    const normalized = normalizeRecord(r);
-    if (normalized) {
-      state.records.push(normalized);
-      merged++;
+  // ===== 交友関係レコード =====
+  const pulledRecs = data.records || [];
+  let mergedRecs = 0;
+  const existingRecIds = new Set(state.records.map(r => r.id));
+  for (const r of pulledRecs) {
+    if (String(r.deleted) === '1') continue;
+    if (existingRecIds.has(r.id)) continue;
+    const n = normalizeRecord(r);
+    if (n) { state.records.push(n); mergedRecs++; }
+  }
+
+  // ===== ほめたい =====
+  const pulledPraises = data.praises || [];
+  let mergedPraises = 0;
+  if (Array.isArray(state.praises)) {
+    const existingPrIds = new Set(state.praises.map(p => p.id));
+    for (const p of pulledPraises) {
+      if (String(p.deleted) === '1') continue;
+      if (existingPrIds.has(p.id)) continue;
+      const n = (typeof normalizePraise === 'function') ? normalizePraise(p) : p;
+      if (n) { state.praises.push(n); mergedPraises++; }
     }
   }
-  if (merged > 0) {
+
+  if (mergedRecs > 0 || mergedPraises > 0) {
     saveState();
-    // UIを更新
     if (typeof refreshAll === 'function') refreshAll();
-    else if (typeof renderStudentButtons === 'function') renderStudentButtons();
   }
   updateLastPullTime();
-  if (merged > 0) showSyncStatus(`${merged}件の新規記録を取得`);
+  if (mergedRecs > 0 || mergedPraises > 0) {
+    const parts = [];
+    if (mergedRecs > 0) parts.push(`記録 ${mergedRecs}件`);
+    if (mergedPraises > 0) parts.push(`ほめ ${mergedPraises}件`);
+    showSyncStatus(`新規 ${parts.join(' / ')} を取得`);
+  }
+}
+
+// ===== ほめたい push =====
+
+async function pushPraiseToGas(praise, action) {
+  if (!checkSyncReady()) return false;
+  if (!navigator.onLine) {
+    addToPendingQueue({ action: action || 'add', praise, dataType: 'praise' });
+    return false;
+  }
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: action || 'add',
+        dataType: 'praise',
+        praise,
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return true;
+  } catch (err) {
+    console.warn('[sync] praise push失敗、キューへ:', err.message);
+    addToPendingQueue({ action: action || 'add', praise, dataType: 'praise' });
+    return false;
+  }
+}
+
+async function pushAllPraises() {
+  if (!checkSyncReady()) return;
+  if (!Array.isArray(state.praises) || state.praises.length === 0) {
+    showToast('送信するほめ記録がありません', 'error');
+    return;
+  }
+  if (_isSyncing) return;
+  _isSyncing = true;
+  showSyncStatus(`ほめ全${state.praises.length}件送信中…`);
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulk_add',
+        dataType: 'praise',
+        praises: state.praises,
+        deviceId: _deviceId
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    showSyncStatus(`ほめ送信完了: ${data.added}件追加 / ${data.skipped}件重複`);
+  } catch (err) {
+    showSyncStatus('ほめ送信失敗: ' + err.message, true);
+  } finally {
+    _isSyncing = false;
+  }
 }
 
 async function pushRecordToGas(record, action) {

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505e">
+<link rel="stylesheet" href="styles.css?v=20260505f">
 </head>
 <body>
 
@@ -24,6 +24,7 @@
     <button class="tab-btn" data-tab="heatmap">観察分布</button>
     <button class="tab-btn" data-tab="seating">席替え</button>
     <button class="tab-btn" data-tab="history">履歴</button>
+    <button class="tab-btn" data-tab="praise-list">🌟 ほめたい</button>
     <button class="tab-btn" data-tab="settings">設定</button>
     <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
   </nav>
@@ -31,6 +32,13 @@
 
 <!-- =================== 記録タブ =================== -->
 <section class="tab-panel active" id="tab-record">
+  <!-- 記録モード切替（交友関係 / ほめたい） -->
+  <div class="record-mode-bar">
+    <button class="record-mode-btn active" data-record-mode="interaction" type="button">📝 交友関係を記録</button>
+    <button class="record-mode-btn" data-record-mode="praise" type="button">🌟 ほめたいことを記録</button>
+  </div>
+
+  <div id="interactionRecordView">
   <div class="record-toolbar">
     <div class="toolbar-group">
       <label>観察日</label>
@@ -111,6 +119,66 @@
       </div>
     </aside>
   </div>
+  </div><!-- /interactionRecordView -->
+
+  <!-- ほめたいモード -->
+  <div id="praiseRecordView" class="hidden">
+    <div class="record-toolbar">
+      <div class="toolbar-group">
+        <label>記録日</label>
+        <input type="date" id="praiseDate" title="ほめた日付">
+        <button class="ghost" id="praiseDateTodayBtn" title="今日に戻す" style="padding:3px 8px;font-size:11px;">今日</button>
+      </div>
+      <div class="toolbar-group">
+        <label>少ない判定</label>
+        <select id="praiseMarkPeriod" title="どの期間でほめが少ない児童を■マークするか">
+          <option value="all" selected>累計</option>
+          <option value="week">今週</option>
+          <option value="today">今日</option>
+        </select>
+      </div>
+      <div class="toolbar-group right">
+        <span class="muted small">対象児童をタップ → ほめポイントを入力 → 保存</span>
+      </div>
+    </div>
+
+    <div class="record-main">
+      <div class="grid-area">
+        <div class="grid-header">
+          <div class="status-line">
+            <span class="status-label" id="praiseStatusLabel">児童をタップしてほめポイントを書く</span>
+          </div>
+        </div>
+        <div class="grid-legend" title="ボタン上のマークの意味（ほめたいモード）">
+          <span><span class="lg-mark dn">●</span>今日ほめた</span>
+          <span><span class="lg-mark wt">■</span>選択期間でほめが少ない（下位1/3・自動判定）</span>
+        </div>
+        <div class="student-grid" id="praiseStudentGrid"></div>
+        <div class="action-row">
+          <span class="action-hint">児童ボタン → 右側の入力欄へ → Ctrl+Enter または保存</span>
+        </div>
+      </div>
+
+      <aside class="side-panel">
+        <div class="card">
+          <h3 id="praiseTargetName">児童を選んでください</h3>
+          <textarea id="praiseInput" placeholder="ほめポイント（例: 友達にノートを貸してあげていた / 苦手な計算を最後まで頑張った）" rows="4" maxlength="500" disabled></textarea>
+          <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:6px;">
+            <button class="ghost" id="cancelPraiseBtn" disabled>クリア</button>
+            <button class="primary" id="savePraiseBtn" disabled>💾 保存 (Ctrl+Enter)</button>
+          </div>
+        </div>
+        <div class="card today-stats">
+          <h3>今日のほめ</h3>
+          <div><span class="big-number" id="todayPraiseCount">0</span> 件 ・ <b id="todayPraiseCovered">0</b>/28人</div>
+        </div>
+        <div class="card">
+          <h3 id="praiseRecentTitle">この子の直近のほめ</h3>
+          <ul class="recent-list" id="praiseRecentForStudent"><li class="muted">児童を選ぶと表示</li></ul>
+        </div>
+      </aside>
+    </div>
+  </div><!-- /praiseRecordView -->
 </section>
 
 <!-- =================== 集計タブ =================== -->
@@ -390,6 +458,29 @@
   <table class="history-table" id="historyTable"></table>
 </section>
 
+<!-- =================== ほめたい一覧タブ =================== -->
+<section class="tab-panel" id="tab-praise-list">
+  <div class="filter-bar">
+    <label>期間:
+      <select id="praiseListPeriod">
+        <option value="today">今日</option>
+        <option value="week" selected>今週</option>
+        <option value="all">累計</option>
+      </select>
+    </label>
+    <label>児童で絞り込み:
+      <select id="praiseListStudent"><option value="">全員</option></select>
+    </label>
+    <label>キーワード:
+      <input type="text" id="praiseListKeyword" placeholder="ほめ内容で検索" style="width:200px">
+    </label>
+    <span class="filter-info" id="praiseListInfo"></span>
+    <button class="ghost" id="exportPraiseCsvBtn" title="ほめたい記録のCSV出力">📥 CSV</button>
+  </div>
+  <div class="praise-summary card" id="praiseSummary"></div>
+  <ul class="praise-list" id="praiseList"></ul>
+</section>
+
 <!-- =================== 設定タブ =================== -->
 <section class="tab-panel" id="tab-settings">
   <div class="settings-grid">
@@ -545,8 +636,8 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505e"></script>
-<script src="app.js?v=20260505e"></script>
-<script src="cloud-sync.js?v=20260505e"></script>
+<script src="students.js?v=20260505b"></script>
+<script src="app.js?v=20260505b"></script>
+<script src="cloud-sync.js?v=20260505b"></script>
 </body>
 </html>

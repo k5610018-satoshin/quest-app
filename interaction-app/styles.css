@@ -1170,3 +1170,130 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 @media (max-width: 1100px) {
   .centrality-grid { grid-template-columns: 1fr; }
 }
+
+/* ========== ほめたいモード ========== */
+.record-mode-bar {
+  display: flex;
+  gap: 6px;
+  padding: 4px 8px 0;
+  background: linear-gradient(180deg, #fafbfc 0%, transparent 100%);
+}
+.record-mode-btn {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+  background: #ecedf3;
+  color: var(--muted);
+  transition: background 0.12s;
+}
+.record-mode-btn:hover { background: #e0e2eb; }
+.record-mode-btn.active {
+  background: var(--surface);
+  color: var(--text);
+  border-color: var(--primary);
+  border-bottom: 2px solid var(--surface);
+  margin-bottom: -1px;
+  box-shadow: 0 -2px 6px rgba(0,0,0,0.04);
+}
+.record-mode-btn[data-record-mode="praise"].active {
+  border-color: #d4a017;
+}
+
+/* praise textarea */
+#praiseInput {
+  width: 100%;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-family: inherit;
+  font-size: 13px;
+  resize: vertical;
+}
+#praiseInput:disabled { background: #f5f5f7; color: var(--muted); }
+#praiseInput:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px rgba(74,144,226,0.15); }
+
+/* praise list tab */
+.praise-summary {
+  margin: 8px 12px;
+  padding: 10px 14px;
+  font-size: 13px;
+}
+.praise-summary h3 {
+  margin: 0 0 8px;
+  font-size: 14px;
+}
+.praise-rank-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.praise-rank-list li {
+  background: #fff8e0;
+  border: 1px solid #f7c948;
+  padding: 3px 8px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+.praise-rank-list li.zero {
+  background: #fde7e7;
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.praise-rank-list li b { font-weight: 700; }
+
+.praise-list {
+  list-style: none;
+  margin: 0 12px;
+  padding: 0;
+  max-height: calc(100vh - 280px);
+  overflow-y: auto;
+}
+.praise-list li {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  margin-bottom: 2px;
+  border-radius: 4px;
+}
+.praise-list .praise-meta {
+  min-width: 130px;
+  font-size: 11px;
+  color: var(--muted);
+}
+.praise-list .praise-name {
+  font-weight: 700;
+  color: var(--text);
+  font-size: 13px;
+}
+.praise-list .praise-content {
+  flex: 1;
+  font-size: 13px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.praise-list .praise-actions {
+  display: flex;
+  gap: 4px;
+  flex-shrink: 0;
+}
+.praise-list .praise-actions button {
+  font-size: 11px;
+  padding: 3px 7px;
+}
+.praise-list .empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--muted);
+  background: transparent;
+  border: none;
+}

@@ -34,10 +34,15 @@ const state = {
     customActivities: null
   },
   records: [],
+  praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
   ui: {
     currentTab: 'record',
     currentScene: 'break1',
     currentMode: 'simple',
+    recordMode: 'interaction',  // 'interaction' | 'praise'
+    praiseMarkPeriod: 'all',    // 記録グリッドの■判定基準: 'today' | 'week' | 'all'
+    praiseListPeriod: 'week',   // ほめたい一覧タブのフィルタ
+    praiseTargetId: null,       // ほめたい入力中の対象児童ID
     subjectId: null,
     selectedMembers: [],
     specialState: null,
@@ -79,6 +84,9 @@ function loadState() {
     if (Array.isArray(data.records)) {
       state.records = data.records.map(normalizeRecord).filter(Boolean);
     }
+    if (Array.isArray(data.praises)) {
+      state.praises = data.praises.map(normalizePraise).filter(Boolean);
+    }
     state.settings = mergeSettings(data.settings);
     if (data.lastScene) state.ui.currentScene = data.lastScene;
     if (data.lastMode) state.ui.currentMode = data.lastMode;
@@ -97,6 +105,7 @@ function saveState() {
   const data = {
     version: APP_VERSION,
     records: state.records,
+    praises: state.praises,
     settings: state.settings,
     events: state.events,
     attributes: state.attributes,
@@ -150,6 +159,28 @@ function normalizeRecord(r) {
     activity: r.activity || null,
     note: typeof r.note === 'string' ? r.note.slice(0, 500) : '',
     center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null
+  };
+}
+
+function normalizePraise(p) {
+  if (!p || typeof p !== 'object') return null;
+  const studentId = parseInt(p.studentId);
+  if (!studentId || studentId < 1) return null;
+  const content = typeof p.content === 'string' ? p.content.trim().slice(0, 500) : '';
+  if (!content) return null;
+  const timestamp = p.timestamp || new Date().toISOString();
+  let date = p.date;
+  if (!date) {
+    try { date = new Date(timestamp).toISOString().slice(0, 10); }
+    catch { date = todayISO(); }
+  }
+  return {
+    id: p.id || uuid(),
+    studentId,
+    content,
+    date,
+    timestamp,
+    scene: p.scene || null
   };
 }
 
@@ -235,6 +266,8 @@ function init() {
   initTimelineFilters();
   initHistoryFilters();
   initSettingsEvents();
+  initPraiseEvents();
+  renderPraiseStudentGrid();
   initKeyboardShortcuts();
   initHelpModal();
   updateHealthBadge();
@@ -869,6 +902,7 @@ function switchTab(name) {
   else if (name === 'socio') refreshSocio();
   else if (name === 'history') refreshHistory();
   else if (name === 'settings') refreshSettings();
+  else if (name === 'praise-list') refreshPraiseList();
 }
 
 // ========== Side Panel ==========
@@ -1753,14 +1787,368 @@ function resetAll() {
 }
 
 // ========== Refresh All ==========
+// ========== ほめたいモード ==========
+
+function initPraiseEvents() {
+  // モード切替
+  document.querySelectorAll('.record-mode-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchRecordMode(btn.dataset.recordMode));
+  });
+
+  // 日付ピッカー
+  const dateInp = document.getElementById('praiseDate');
+  if (dateInp) {
+    dateInp.value = todayISO();
+    dateInp.addEventListener('change', () => refreshPraiseSidePanel());
+    document.getElementById('praiseDateTodayBtn').addEventListener('click', () => {
+      dateInp.value = todayISO();
+      refreshPraiseSidePanel();
+    });
+  }
+
+  // ■判定基準
+  const markPeriod = document.getElementById('praiseMarkPeriod');
+  if (markPeriod) {
+    markPeriod.value = state.ui.praiseMarkPeriod;
+    markPeriod.addEventListener('change', () => {
+      state.ui.praiseMarkPeriod = markPeriod.value;
+      refreshPraiseGridState();
+    });
+  }
+
+  // 保存・キャンセル
+  const saveBtn = document.getElementById('savePraiseBtn');
+  if (saveBtn) saveBtn.addEventListener('click', savePraise);
+  const cancelBtn = document.getElementById('cancelPraiseBtn');
+  if (cancelBtn) cancelBtn.addEventListener('click', cancelPraiseInput);
+
+  // テキスト入力: Ctrl+Enterで保存
+  const inp = document.getElementById('praiseInput');
+  if (inp) {
+    inp.addEventListener('keydown', e => {
+      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        savePraise();
+      }
+    });
+  }
+
+  // ほめたい一覧タブのフィルタ
+  const lp = document.getElementById('praiseListPeriod');
+  if (lp) lp.addEventListener('change', refreshPraiseList);
+  const ls = document.getElementById('praiseListStudent');
+  if (ls) {
+    // 児童プルダウン埋め込み
+    state.students.forEach(s => {
+      const o = document.createElement('option');
+      o.value = String(s.id);
+      o.textContent = `${s.id}. ${s.name}`;
+      ls.appendChild(o);
+    });
+    ls.addEventListener('change', refreshPraiseList);
+  }
+  const lk = document.getElementById('praiseListKeyword');
+  if (lk) lk.addEventListener('input', refreshPraiseList);
+  const exportBtn = document.getElementById('exportPraiseCsvBtn');
+  if (exportBtn) exportBtn.addEventListener('click', exportPraiseCsv);
+}
+
+function switchRecordMode(mode) {
+  if (mode !== 'interaction' && mode !== 'praise') mode = 'interaction';
+  state.ui.recordMode = mode;
+  document.querySelectorAll('.record-mode-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.recordMode === mode);
+  });
+  document.getElementById('interactionRecordView').classList.toggle('hidden', mode !== 'interaction');
+  document.getElementById('praiseRecordView').classList.toggle('hidden', mode !== 'praise');
+  if (mode === 'praise') {
+    refreshPraiseGridState();
+    refreshPraiseSidePanel();
+  }
+}
+
+function renderPraiseStudentGrid() {
+  const grid = document.getElementById('praiseStudentGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const s of state.students) {
+    const btn = document.createElement('button');
+    btn.className = 'student-btn';
+    btn.dataset.studentId = s.id;
+    btn.title = `${s.kana}${s.note ? ' / ' + s.note : ''} (出席番号 ${s.id})`;
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = s.id;
+    btn.appendChild(num);
+    btn.appendChild(document.createTextNode(s.name));
+    btn.addEventListener('click', () => onPraiseStudentClick(s.id));
+    grid.appendChild(btn);
+  }
+}
+
+// 期間判定: 'today' / 'week' / 'all'
+function isInPraisePeriod(p, period) {
+  if (period === 'all') return true;
+  const today = todayISO();
+  if (period === 'today') return p.date === today;
+  if (period === 'week') {
+    // 今週 = 今日を含む過去7日間
+    const t = new Date(p.date + 'T00:00:00').getTime();
+    const todayMs = new Date(today + 'T00:00:00').getTime();
+    return (todayMs - t) <= 6 * 86400000 && (todayMs - t) >= 0;
+  }
+  return true;
+}
+
+function computePraisedTodaySet() {
+  const today = todayISO();
+  const set = new Set();
+  for (const p of state.praises) {
+    if (p.date === today) set.add(p.studentId);
+  }
+  return set;
+}
+
+function computePraiseUndercountedSet(period) {
+  // 期間内のほめ件数を児童ごとに集計し、下位1/3を返す。
+  // 全員0件 or 全体最大が0 ならマークしない。
+  const counts = new Map();
+  for (const s of state.students) counts.set(s.id, 0);
+  for (const p of state.praises) {
+    if (!isInPraisePeriod(p, period)) continue;
+    counts.set(p.studentId, (counts.get(p.studentId) || 0) + 1);
+  }
+  const arr = state.students.map(s => counts.get(s.id) || 0);
+  const max = arr.length ? Math.max(...arr) : 0;
+  if (max < 1) return new Set();  // ほめ記録がまだ無い
+  const sorted = [...arr].sort((a, b) => a - b);
+  const cutoffIdx = Math.max(1, Math.floor(state.students.length / 3));
+  const threshold = sorted[cutoffIdx - 1];
+  const result = new Set();
+  state.students.forEach((s, i) => {
+    if (arr[i] <= threshold && arr[i] < max) result.add(s.id);
+  });
+  return result;
+}
+
+function refreshPraiseGridState() {
+  const todaySet = computePraisedTodaySet();
+  const lowSet = computePraiseUndercountedSet(state.ui.praiseMarkPeriod);
+  const target = state.ui.praiseTargetId;
+  document.querySelectorAll('#praiseStudentGrid .student-btn').forEach(btn => {
+    const id = parseInt(btn.dataset.studentId);
+    btn.classList.remove('subject', 'covered-today', 'watch');
+    if (todaySet.has(id)) btn.classList.add('covered-today');
+    if (lowSet.has(id)) btn.classList.add('watch');
+    if (id === target) btn.classList.add('subject');
+  });
+}
+
+function onPraiseStudentClick(id) {
+  state.ui.praiseTargetId = id;
+  const s = state.students.find(x => x.id === id);
+  document.getElementById('praiseTargetName').textContent = s ? `${s.id}. ${s.name} のほめポイント` : '児童';
+  document.getElementById('praiseRecentTitle').textContent = `${s ? s.name : ''} の直近のほめ`;
+  const inp = document.getElementById('praiseInput');
+  inp.disabled = false;
+  inp.value = '';
+  inp.focus();
+  document.getElementById('savePraiseBtn').disabled = false;
+  document.getElementById('cancelPraiseBtn').disabled = false;
+  refreshPraiseGridState();
+  renderPraiseRecentForStudent(id);
+}
+
+function cancelPraiseInput() {
+  state.ui.praiseTargetId = null;
+  document.getElementById('praiseTargetName').textContent = '児童を選んでください';
+  document.getElementById('praiseRecentTitle').textContent = 'この子の直近のほめ';
+  const inp = document.getElementById('praiseInput');
+  inp.value = '';
+  inp.disabled = true;
+  document.getElementById('savePraiseBtn').disabled = true;
+  document.getElementById('cancelPraiseBtn').disabled = true;
+  document.getElementById('praiseRecentForStudent').innerHTML = '<li class="muted">児童を選ぶと表示</li>';
+  refreshPraiseGridState();
+}
+
+function savePraise() {
+  const id = state.ui.praiseTargetId;
+  if (!id) { showToast('まず児童を選んでください', 'error'); return; }
+  const inp = document.getElementById('praiseInput');
+  const content = (inp.value || '').trim();
+  if (!content) { showToast('ほめポイントを書いてください', 'error'); inp.focus(); return; }
+  const dateInp = document.getElementById('praiseDate');
+  const date = (dateInp && dateInp.value) ? dateInp.value : todayISO();
+  const p = normalizePraise({ studentId: id, content, date });
+  if (!p) { showToast('保存に失敗', 'error'); return; }
+  state.praises.push(p);
+  saveState();
+  showToast(`${state.students.find(s => s.id === id).name} のほめを記録しました`);
+  // クラウド同期があれば push
+  if (typeof pushPraiseToGas === 'function') pushPraiseToGas(p, 'add').catch(() => {});
+  // 入力クリア（児童選択は維持して連続記録できるように）
+  inp.value = '';
+  refreshPraiseGridState();
+  refreshPraiseSidePanel();
+  renderPraiseRecentForStudent(id);
+  if (state.ui.currentTab === 'praise-list') refreshPraiseList();
+  inp.focus();
+}
+
+function renderPraiseRecentForStudent(studentId) {
+  const ul = document.getElementById('praiseRecentForStudent');
+  if (!ul) return;
+  const items = state.praises
+    .filter(p => p.studentId === studentId)
+    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+    .slice(0, 5);
+  if (!items.length) {
+    ul.innerHTML = '<li class="muted">まだ記録なし</li>';
+    return;
+  }
+  ul.innerHTML = items.map(p => `
+    <li>
+      <div class="muted small">${p.date}</div>
+      <div>${escapeHtml(p.content)}</div>
+    </li>
+  `).join('');
+}
+
+function refreshPraiseSidePanel() {
+  const today = todayISO();
+  const todays = state.praises.filter(p => p.date === today);
+  const cnt = document.getElementById('todayPraiseCount');
+  if (cnt) cnt.textContent = todays.length;
+  const cov = document.getElementById('todayPraiseCovered');
+  if (cov) cov.textContent = new Set(todays.map(p => p.studentId)).size;
+}
+
+// ========== ほめたい一覧タブ ==========
+
+function refreshPraiseList() {
+  const period = (document.getElementById('praiseListPeriod') || {}).value || 'week';
+  const studentIdRaw = (document.getElementById('praiseListStudent') || {}).value || '';
+  const kw = ((document.getElementById('praiseListKeyword') || {}).value || '').trim().toLowerCase();
+  const studentId = studentIdRaw ? parseInt(studentIdRaw) : null;
+
+  const filtered = state.praises.filter(p => {
+    if (!isInPraisePeriod(p, period)) return false;
+    if (studentId && p.studentId !== studentId) return false;
+    if (kw && !p.content.toLowerCase().includes(kw)) return false;
+    return true;
+  }).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  const info = document.getElementById('praiseListInfo');
+  if (info) info.textContent = `${filtered.length}件`;
+
+  // 児童別ランキング
+  renderPraiseSummary(period);
+
+  const ul = document.getElementById('praiseList');
+  if (!ul) return;
+  if (!filtered.length) {
+    ul.innerHTML = '<li class="empty">該当するほめ記録はありません</li>';
+    return;
+  }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  ul.innerHTML = filtered.map(p => {
+    const s = sMap.get(p.studentId);
+    const name = s ? `${s.id}. ${s.name}` : `(ID:${p.studentId})`;
+    const time = p.timestamp ? new Date(p.timestamp).toLocaleString('ja-JP', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : p.date;
+    return `<li data-id="${p.id}">
+      <div class="praise-meta">
+        <div>${time}</div>
+        <div class="praise-name">${escapeHtml(name)}</div>
+      </div>
+      <div class="praise-content">${escapeHtml(p.content)}</div>
+      <div class="praise-actions">
+        <button class="ghost danger" data-action="delete" data-id="${p.id}">削除</button>
+      </div>
+    </li>`;
+  }).join('');
+
+  // 削除イベント
+  ul.querySelectorAll('button[data-action="delete"]').forEach(btn => {
+    btn.addEventListener('click', () => deletePraise(btn.dataset.id));
+  });
+}
+
+function renderPraiseSummary(period) {
+  const cont = document.getElementById('praiseSummary');
+  if (!cont) return;
+  const counts = new Map();
+  for (const s of state.students) counts.set(s.id, 0);
+  for (const p of state.praises) {
+    if (!isInPraisePeriod(p, period)) continue;
+    counts.set(p.studentId, (counts.get(p.studentId) || 0) + 1);
+  }
+  const periodLabel = period === 'today' ? '今日' : period === 'week' ? '今週' : '累計';
+  // ほめ0件の児童 (期間内)
+  const zero = state.students.filter(s => (counts.get(s.id) || 0) === 0);
+  const top = state.students
+    .map(s => ({ s, n: counts.get(s.id) || 0 }))
+    .filter(x => x.n > 0)
+    .sort((a, b) => b.n - a.n)
+    .slice(0, 5);
+  const topHtml = top.map(x => `<li><b>${x.s.name}</b> ${x.n}件</li>`).join('');
+  const zeroHtml = zero.length
+    ? zero.slice(0, 28).map(s => `<li class="zero">${s.name}</li>`).join('')
+    : '<li class="muted">なし（全員ほめ済）</li>';
+  cont.innerHTML = `
+    <h3>${periodLabel}のサマリ</h3>
+    <div style="margin-bottom:6px;"><b>ほめ件数 上位:</b></div>
+    <ul class="praise-rank-list">${topHtml || '<li class="muted">記録なし</li>'}</ul>
+    <div style="margin:8px 0 6px;"><b>${periodLabel}内でまだほめていない子 (${zero.length}人):</b></div>
+    <ul class="praise-rank-list">${zeroHtml}</ul>
+  `;
+}
+
+function deletePraise(id) {
+  if (!confirm('このほめ記録を削除しますか？')) return;
+  const idx = state.praises.findIndex(p => p.id === id);
+  if (idx < 0) return;
+  state.praises.splice(idx, 1);
+  saveState();
+  if (typeof pushPraiseToGas === 'function') pushPraiseToGas({ id }, 'delete').catch(() => {});
+  refreshPraiseList();
+  refreshPraiseGridState();
+  refreshPraiseSidePanel();
+  showToast('削除しました');
+}
+
+function exportPraiseCsv() {
+  if (!state.praises.length) { showToast('ほめ記録がありません', 'error'); return; }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const rows = [['date', 'time', 'student_id', 'student_name', 'content']];
+  for (const p of state.praises) {
+    const s = sMap.get(p.studentId);
+    const time = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('ja-JP') : '';
+    rows.push([p.date, time, p.studentId, s ? s.name : '', p.content.replace(/[\r\n]+/g, ' ')]);
+  }
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `praises_${todayISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function refreshAll() {
   refreshSidePanel();
   refreshAfterSelectionChange();
+  if (state.ui.recordMode === 'praise') {
+    refreshPraiseGridState();
+    refreshPraiseSidePanel();
+  }
   if (state.ui.currentTab === 'summary') refreshSummary();
   else if (state.ui.currentTab === 'compare') refreshCompare();
   else if (state.ui.currentTab === 'socio') refreshSocio();
   else if (state.ui.currentTab === 'history') refreshHistory();
   else if (state.ui.currentTab === 'settings') refreshSettings();
+  else if (state.ui.currentTab === 'praise-list') refreshPraiseList();
 }
 
 // ========== Keyboard Shortcuts ==========
