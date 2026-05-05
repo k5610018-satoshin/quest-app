@@ -7,8 +7,8 @@ window.APP_DATA = {
   "students": [
     { "id": 1,  "name": "伊藤 煌",     "kana": "いとう こう",       "highlight": true,  "note": "ADHD・服薬時期あり" },
     { "id": 2,  "name": "伊藤 楓花",   "kana": "いとう ふうか" },
-    { "id": 3,  "name": "井上 笑菜",   "kana": "いのうえ えな",     "highlight": true,  "note": "体重取り違え件・配慮" },
-    { "id": 4,  "name": "井野 零大",   "kana": "いの れお" },
+    { "id": 3,  "name": "井野 零大",   "kana": "いの れお" },
+    { "id": 4,  "name": "井上 笑菜",   "kana": "いのうえ えな",     "highlight": true,  "note": "体重取り違え件・配慮" },
     { "id": 5,  "name": "長田 優真",   "kana": "おさだ ゆうしん",   "highlight": true,  "note": "最重要配慮児・衝動性" },
     { "id": 6,  "name": "押谷 優花",   "kana": "おしたに ゆうか" },
     { "id": 7,  "name": "風岡 孝太郎", "kana": "かざおか こうたろう" },

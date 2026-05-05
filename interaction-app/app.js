@@ -48,16 +48,21 @@ const state = {
     recordMode: 'interaction',  // 'interaction' | 'praise' | 'evaluation'
     praiseMarkPeriod: 'all',    // 記録グリッドの■判定基準: 'today' | 'week' | 'all'
     praiseListPeriod: 'week',   // ほめたい一覧タブのフィルタ
-    praiseTargetId: null,       // ほめたい入力中の対象児童ID
+    praiseTargetIds: new Set(), // ほめたい複数選択中の児童ID
+    editingPraiseId: null,      // 既存ほめ編集モード時のID
     evalSubjectId: '',
     evalUnitId: '',
     evalViewpoint: 'knowledge',
     evalScale: 3,               // 3 | 5
-    evalActiveGrade: null,      // 'A'|'B'|'C'|'1'..'5'
-    abaSlot: 'p1',
+    evalActiveGrade: null,      // 'A'|'B'|'C'|'1'..'5' (評価値先行モード)
+    evalActiveStudent: null,    // 児童先行モード時の選択児童ID
+    abaDate: '',
+    abaSlot: '',
     abaSubjectId: '',
     abaTargetId: null,
     abaBehaviors: new Set(),    // 選択中の行動
+    abaOtherText: '',           // その他選択時の記述
+    abaStep: 'date',            // 現在のステップ: date/slot/subject/student/behavior/input
     subjectId: null,
     selectedMembers: [],
     specialState: null,
@@ -1993,21 +1998,43 @@ function initPraiseEvents() {
     });
   }
 
-  // ■判定基準
-  const markPeriod = document.getElementById('praiseMarkPeriod');
-  if (markPeriod) {
-    markPeriod.value = state.ui.praiseMarkPeriod;
-    markPeriod.addEventListener('change', () => {
-      state.ui.praiseMarkPeriod = markPeriod.value;
-      refreshPraiseGridState();
+  // ■判定基準ボタン群
+  initPeriodBtnGroup('praiseMarkPeriodBtns', state.ui.praiseMarkPeriod, val => {
+    state.ui.praiseMarkPeriod = val;
+    refreshPraiseGridState();
+  });
+
+  // クイックタグ
+  document.querySelectorAll('#praiseQuickTags .praise-tag-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const tag = b.dataset.tag;
+      const ta = document.getElementById('praiseInput');
+      if (!tag) { ta.focus(); return; }
+      ta.value = ta.value ? (ta.value + ' / ' + tag) : tag;
+      // フラッシュ
+      b.classList.add('active');
+      setTimeout(() => b.classList.remove('active'), 350);
     });
-  }
+  });
 
   // 保存・キャンセル
   const saveBtn = document.getElementById('savePraiseBtn');
   if (saveBtn) saveBtn.addEventListener('click', savePraise);
   const cancelBtn = document.getElementById('cancelPraiseBtn');
   if (cancelBtn) cancelBtn.addEventListener('click', cancelPraiseInput);
+
+  // 今日のほめカード→今日のほめ一覧タブへ
+  const todayCard = document.getElementById('todayPraiseCard');
+  if (todayCard) todayCard.addEventListener('click', () => {
+    switchTab('praise-list');
+    const periodInp = document.getElementById('praiseListPeriod');
+    if (periodInp) {
+      periodInp.value = 'today';
+      const grp = document.getElementById('praiseListPeriodBtns');
+      if (grp) grp.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.value === 'today'));
+    }
+    refreshPraiseList();
+  });
 
   // テキスト入力: Ctrl+Enterで保存
   const inp = document.getElementById('praiseInput');
@@ -2020,12 +2047,16 @@ function initPraiseEvents() {
     });
   }
 
-  // ほめたい一覧タブのフィルタ
-  const lp = document.getElementById('praiseListPeriod');
-  if (lp) lp.addEventListener('change', refreshPraiseList);
+  // ほめたい一覧タブの期間ボタン
+  initPeriodBtnGroup('praiseListPeriodBtns', state.ui.praiseListPeriod, val => {
+    state.ui.praiseListPeriod = val;
+    const inp = document.getElementById('praiseListPeriod');
+    if (inp) inp.value = val;
+    refreshPraiseList();
+  });
+
   const ls = document.getElementById('praiseListStudent');
   if (ls) {
-    // 児童プルダウン埋め込み
     state.students.forEach(s => {
       const o = document.createElement('option');
       o.value = String(s.id);
@@ -2038,6 +2069,19 @@ function initPraiseEvents() {
   if (lk) lk.addEventListener('input', refreshPraiseList);
   const exportBtn = document.getElementById('exportPraiseCsvBtn');
   if (exportBtn) exportBtn.addEventListener('click', exportPraiseCsv);
+}
+
+// 期間ボタン群の汎用初期化
+function initPeriodBtnGroup(groupId, initValue, onChange) {
+  const grp = document.getElementById(groupId);
+  if (!grp) return;
+  grp.querySelectorAll('button').forEach(b => {
+    b.classList.toggle('active', b.dataset.value === initValue);
+    b.addEventListener('click', () => {
+      grp.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+      onChange(b.dataset.value);
+    });
+  });
 }
 
 function switchRecordMode(mode) {
@@ -2128,85 +2172,112 @@ function computePraiseUndercountedSet(period) {
 function refreshPraiseGridState() {
   const todaySet = computePraisedTodaySet();
   const lowSet = computePraiseUndercountedSet(state.ui.praiseMarkPeriod);
-  const target = state.ui.praiseTargetId;
   document.querySelectorAll('#praiseStudentGrid .student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('subject', 'covered-today', 'watch');
+    btn.classList.remove('subject', 'selected', 'covered-today', 'watch');
     if (todaySet.has(id)) btn.classList.add('covered-today');
     if (lowSet.has(id)) btn.classList.add('watch');
-    if (id === target) btn.classList.add('subject');
+    if (state.ui.praiseTargetIds.has(id)) btn.classList.add('selected');
+  });
+  refreshPraiseChips();
+  refreshPraiseSaveBtn();
+}
+
+function refreshPraiseChips() {
+  const cont = document.getElementById('praiseSelectedChips');
+  const title = document.getElementById('praiseTargetName');
+  if (!cont) return;
+  const ids = [...state.ui.praiseTargetIds];
+  if (title) title.textContent = `対象児童 (${ids.length}人選択中)`;
+  if (!ids.length) { cont.innerHTML = ''; return; }
+  cont.innerHTML = ids.map(id => {
+    const s = state.students.find(x => x.id === id);
+    return `<span class="chip" data-id="${id}">${s ? s.name : id} <button data-remove="${id}" type="button">×</button></span>`;
+  }).join('');
+  cont.querySelectorAll('button[data-remove]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.ui.praiseTargetIds.delete(parseInt(b.dataset.remove));
+      refreshPraiseGridState();
+    });
   });
 }
 
+function refreshPraiseSaveBtn() {
+  const btn = document.getElementById('savePraiseBtn');
+  if (!btn) return;
+  btn.disabled = state.ui.praiseTargetIds.size === 0;
+  btn.textContent = state.ui.editingPraiseId
+    ? '💾 編集を保存'
+    : `💾 ${state.ui.praiseTargetIds.size > 0 ? state.ui.praiseTargetIds.size + '人に' : ''}保存`;
+}
+
 function onPraiseStudentClick(id) {
-  state.ui.praiseTargetId = id;
-  const s = state.students.find(x => x.id === id);
-  document.getElementById('praiseTargetName').textContent = s ? `${s.id}. ${s.name} のほめポイント` : '児童';
-  document.getElementById('praiseRecentTitle').textContent = `${s ? s.name : ''} の直近のほめ`;
-  const inp = document.getElementById('praiseInput');
-  inp.disabled = false;
-  inp.value = '';
-  inp.focus();
-  document.getElementById('savePraiseBtn').disabled = false;
-  document.getElementById('cancelPraiseBtn').disabled = false;
+  // 編集モード中は通常クリックを無効化
+  if (state.ui.editingPraiseId) {
+    showToast('編集モード中です。先にキャンセルまたは保存してください', 'error');
+    return;
+  }
+  if (state.ui.praiseTargetIds.has(id)) {
+    state.ui.praiseTargetIds.delete(id);
+  } else {
+    state.ui.praiseTargetIds.add(id);
+  }
   refreshPraiseGridState();
-  renderPraiseRecentForStudent(id);
 }
 
 function cancelPraiseInput() {
-  state.ui.praiseTargetId = null;
-  document.getElementById('praiseTargetName').textContent = '児童を選んでください';
-  document.getElementById('praiseRecentTitle').textContent = 'この子の直近のほめ';
+  state.ui.praiseTargetIds = new Set();
+  state.ui.editingPraiseId = null;
   const inp = document.getElementById('praiseInput');
   inp.value = '';
-  inp.disabled = true;
-  document.getElementById('savePraiseBtn').disabled = true;
-  document.getElementById('cancelPraiseBtn').disabled = true;
-  document.getElementById('praiseRecentForStudent').innerHTML = '<li class="muted">児童を選ぶと表示</li>';
   refreshPraiseGridState();
+  refreshTodayPraiseEditList();
 }
 
 function savePraise() {
-  const id = state.ui.praiseTargetId;
-  if (!id) { showToast('まず児童を選んでください', 'error'); return; }
   const inp = document.getElementById('praiseInput');
   const content = (inp.value || '').trim();
-  if (!content) { showToast('ほめポイントを書いてください', 'error'); inp.focus(); return; }
+  if (!content) { showToast('タグまたは詳細を入力してください', 'error'); inp.focus(); return; }
   const dateInp = document.getElementById('praiseDate');
   const date = (dateInp && dateInp.value) ? dateInp.value : todayISO();
-  const p = normalizePraise({ studentId: id, content, date });
-  if (!p) { showToast('保存に失敗', 'error'); return; }
-  state.praises.push(p);
+
+  // 編集モード: 既存の1件を更新
+  if (state.ui.editingPraiseId) {
+    const ex = state.praises.find(p => p.id === state.ui.editingPraiseId);
+    if (ex) {
+      ex.content = content;
+      saveState();
+      if (typeof pushPraiseToGas === 'function') pushPraiseToGas(ex, 'edit').catch(() => {});
+      showToast(`「${ex.content.slice(0, 20)}」を更新`);
+    }
+    state.ui.editingPraiseId = null;
+    inp.value = '';
+    refreshPraiseGridState();
+    refreshPraiseSidePanel();
+    refreshTodayPraiseEditList();
+    if (state.ui.currentTab === 'praise-list') refreshPraiseList();
+    return;
+  }
+
+  const ids = [...state.ui.praiseTargetIds];
+  if (!ids.length) { showToast('児童を1人以上選んでください', 'error'); return; }
+  let saved = 0;
+  for (const id of ids) {
+    const p = normalizePraise({ studentId: id, content, date });
+    if (!p) continue;
+    state.praises.push(p);
+    if (typeof pushPraiseToGas === 'function') pushPraiseToGas(p, 'add').catch(() => {});
+    saved++;
+  }
   saveState();
-  showToast(`${state.students.find(s => s.id === id).name} のほめを記録しました`);
-  // クラウド同期があれば push
-  if (typeof pushPraiseToGas === 'function') pushPraiseToGas(p, 'add').catch(() => {});
-  // 入力クリア（児童選択は維持して連続記録できるように）
+  showToast(`${saved}人 にほめを記録しました`);
+  // 児童選択は解除、テキストはクリアして次の連続記録へ
+  state.ui.praiseTargetIds = new Set();
   inp.value = '';
   refreshPraiseGridState();
   refreshPraiseSidePanel();
-  renderPraiseRecentForStudent(id);
+  refreshTodayPraiseEditList();
   if (state.ui.currentTab === 'praise-list') refreshPraiseList();
-  inp.focus();
-}
-
-function renderPraiseRecentForStudent(studentId) {
-  const ul = document.getElementById('praiseRecentForStudent');
-  if (!ul) return;
-  const items = state.praises
-    .filter(p => p.studentId === studentId)
-    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
-    .slice(0, 5);
-  if (!items.length) {
-    ul.innerHTML = '<li class="muted">まだ記録なし</li>';
-    return;
-  }
-  ul.innerHTML = items.map(p => `
-    <li>
-      <div class="muted small">${p.date}</div>
-      <div>${escapeHtml(p.content)}</div>
-    </li>
-  `).join('');
 }
 
 function refreshPraiseSidePanel() {
@@ -2216,6 +2287,44 @@ function refreshPraiseSidePanel() {
   if (cnt) cnt.textContent = todays.length;
   const cov = document.getElementById('todayPraiseCovered');
   if (cov) cov.textContent = new Set(todays.map(p => p.studentId)).size;
+  refreshTodayPraiseEditList();
+}
+
+function refreshTodayPraiseEditList() {
+  const ul = document.getElementById('todayPraiseEditList');
+  if (!ul) return;
+  const today = todayISO();
+  const todays = state.praises.filter(p => p.date === today)
+    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  if (!todays.length) {
+    ul.innerHTML = '<li class="muted">今日の記録はまだありません</li>';
+    return;
+  }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  ul.innerHTML = todays.map(p => {
+    const s = sMap.get(p.studentId);
+    return `<li style="padding:4px 6px; border-bottom:1px solid #eee; cursor:pointer;" data-pid="${p.id}" title="クリックで詳細追加・編集">
+      <b>${s ? s.name : '?'}:</b> ${escapeHtml(p.content)}
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('li[data-pid]').forEach(li => {
+    li.addEventListener('click', () => beginEditPraise(li.dataset.pid));
+  });
+}
+
+function beginEditPraise(praiseId) {
+  const p = state.praises.find(x => x.id === praiseId);
+  if (!p) return;
+  state.ui.editingPraiseId = praiseId;
+  state.ui.praiseTargetIds = new Set();
+  const s = state.students.find(x => x.id === p.studentId);
+  document.getElementById('praiseTargetName').textContent = `編集中: ${s ? s.name : ''}`;
+  const inp = document.getElementById('praiseInput');
+  inp.value = p.content;
+  inp.focus();
+  refreshPraiseGridState();
+  refreshPraiseSaveBtn();
+  showToast(`「${(p.content || '').slice(0, 20)}」を編集中。保存ボタンで確定`);
 }
 
 // ========== ほめたい一覧タブ ==========
@@ -2479,6 +2588,14 @@ function renderEvalGradeButtons() {
     b.textContent = g;
     if (state.ui.evalActiveGrade === g) b.classList.add('active');
     b.addEventListener('click', () => {
+      // 児童先行モード中: 選択児童に対してこの評価値を保存
+      if (state.ui.evalActiveStudent) {
+        applyEvaluation(state.ui.evalActiveStudent, g);
+        state.ui.evalActiveStudent = null;
+        refreshEvalGridState();
+        return;
+      }
+      // 通常モード: トグル
       state.ui.evalActiveGrade = (state.ui.evalActiveGrade === g) ? null : g;
       cont.querySelectorAll('.eval-grade-btn').forEach(x => x.classList.toggle('active', x.dataset.grade === state.ui.evalActiveGrade));
       updateEvalStatusLabel();
@@ -2488,15 +2605,7 @@ function renderEvalGradeButtons() {
 }
 
 function updateEvalStatusLabel() {
-  const lbl = document.getElementById('evalStatusLabel');
-  if (!lbl) return;
-  if (!state.ui.evalActiveGrade) {
-    lbl.textContent = '評価値を選んで児童をタップ';
-    lbl.style.color = '';
-  } else {
-    lbl.textContent = `評価値「${state.ui.evalActiveGrade}」を選択中 — 児童をタップで一括記録`;
-    lbl.style.color = '#2f6db5';
-  }
+  refreshEvalGridState();
 }
 
 function renderEvalStudentGrid() {
@@ -2518,32 +2627,63 @@ function renderEvalStudentGrid() {
   }
 }
 
+// 全件取得 (補助簿: 同じ単元×観点に複数記録あり得る)
+function findEvaluations(studentId, subjectId, unitId, viewpoint) {
+  return state.evaluations
+    .filter(e => e.studentId === studentId && e.subjectId === subjectId &&
+                 e.unitId === unitId && e.viewpoint === viewpoint)
+    .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+}
+
+// 最新1件 (表示用)。後方互換として findEvaluation 名を維持
 function findEvaluation(studentId, subjectId, unitId, viewpoint) {
-  return state.evaluations.find(e =>
-    e.studentId === studentId &&
-    e.subjectId === subjectId &&
-    e.unitId === unitId &&
-    e.viewpoint === viewpoint
-  );
+  const list = findEvaluations(studentId, subjectId, unitId, viewpoint);
+  return list.length ? list[list.length - 1] : null;
 }
 
 function refreshEvalGridState() {
   const subj = state.ui.evalSubjectId, unit = state.ui.evalUnitId, vp = state.ui.evalViewpoint;
   document.querySelectorAll('#evalStudentGrid .student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('covered-today', 'watch', 'subject');
-    btn.querySelectorAll('.eval-grade-tag').forEach(t => t.remove());
-    const ev = findEvaluation(id, subj, unit, vp);
+    btn.classList.remove('covered-today', 'watch', 'subject', 'eval-active-student');
+    btn.querySelectorAll('.eval-grade-tag, .eval-count-badge').forEach(t => t.remove());
+    const list = findEvaluations(id, subj, unit, vp);
+    const ev = list.length ? list[list.length - 1] : null;
     if (ev) {
       btn.classList.add('covered-today');
       const tag = document.createElement('span');
       tag.className = 'eval-grade-tag';
       tag.textContent = ev.grade;
       btn.appendChild(tag);
+      if (list.length >= 2) {
+        const badge = document.createElement('span');
+        badge.className = 'eval-count-badge';
+        badge.textContent = list.length;
+        badge.title = `${list.length}回記録 (補助簿)`;
+        btn.appendChild(badge);
+      }
     } else {
       btn.classList.add('watch');
     }
+    if (id === state.ui.evalActiveStudent) {
+      btn.classList.add('eval-active-student');
+    }
   });
+  // 評価値ボタン側の表示更新（児童先行時にヒント）
+  const lbl = document.getElementById('evalStatusLabel');
+  if (lbl) {
+    if (state.ui.evalActiveStudent) {
+      const s = state.students.find(x => x.id === state.ui.evalActiveStudent);
+      lbl.textContent = `${s ? s.name : ''} の評価値を選択 → タップで保存`;
+      lbl.style.color = '#c62828';
+    } else if (state.ui.evalActiveGrade) {
+      lbl.textContent = `評価値「${state.ui.evalActiveGrade}」選択中 — 児童をタップで一括記録`;
+      lbl.style.color = '#2f6db5';
+    } else {
+      lbl.textContent = '評価値を選んで児童をタップ、または児童を選んで評価値をタップ';
+      lbl.style.color = '';
+    }
+  }
 }
 
 function refreshEvalUI() {
@@ -2590,46 +2730,42 @@ function refreshEvalSidePanel() {
 }
 
 function onEvalStudentClick(studentId) {
-  if (!state.ui.evalActiveGrade) {
-    showToast('まず評価値（A/B/C や 1〜5）を選択してください', 'error');
-    return;
-  }
   if (!state.ui.evalSubjectId || !state.ui.evalUnitId || !state.ui.evalViewpoint) {
     showToast('教科・単元・観点を選択してください', 'error');
     return;
   }
-  const existing = findEvaluation(studentId, state.ui.evalSubjectId, state.ui.evalUnitId, state.ui.evalViewpoint);
-  if (existing && existing.grade === state.ui.evalActiveGrade) {
-    // 同値再タップ → 取消
-    state.evaluations = state.evaluations.filter(e => e.id !== existing.id);
-    saveState();
-    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas({ id: existing.id }, 'delete').catch(() => {});
-    showToast(`${state.students.find(s => s.id === studentId).name} の評価を取消`);
-  } else if (existing) {
-    // 上書き
-    existing.grade = state.ui.evalActiveGrade;
-    existing.scale = state.ui.evalScale;
-    existing.timestamp = new Date().toISOString();
-    existing.date = todayISO();
-    saveState();
-    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(existing, 'edit').catch(() => {});
-    showToast(`${state.students.find(s => s.id === studentId).name}: ${state.ui.evalActiveGrade} に更新`);
-  } else {
-    const ev = normalizeEvaluation({
-      studentId,
-      subjectId: state.ui.evalSubjectId,
-      unitId: state.ui.evalUnitId,
-      viewpoint: state.ui.evalViewpoint,
-      grade: state.ui.evalActiveGrade,
-      scale: state.ui.evalScale,
-      date: todayISO()
-    });
-    if (!ev) { showToast('保存に失敗', 'error'); return; }
-    state.evaluations.push(ev);
-    saveState();
-    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(ev, 'add').catch(() => {});
-    showToast(`${state.students.find(s => s.id === studentId).name}: ${state.ui.evalActiveGrade}`);
+  // 評価値先行モード: クリック即記録
+  if (state.ui.evalActiveGrade) {
+    applyEvaluation(studentId, state.ui.evalActiveGrade);
+    return;
   }
+  // 児童先行モード: 児童をハイライト → 評価値ボタン待ち
+  if (state.ui.evalActiveStudent === studentId) {
+    state.ui.evalActiveStudent = null; // 同児童再タップでキャンセル
+  } else {
+    state.ui.evalActiveStudent = studentId;
+  }
+  refreshEvalGridState();
+}
+
+// 評価記録を **必ず append** (補助簿として何度でも記録可能)。既存編集はしない。
+function applyEvaluation(studentId, grade) {
+  const ev = normalizeEvaluation({
+    studentId,
+    subjectId: state.ui.evalSubjectId,
+    unitId: state.ui.evalUnitId,
+    viewpoint: state.ui.evalViewpoint,
+    grade,
+    scale: state.ui.evalScale,
+    date: todayISO()
+  });
+  if (!ev) { showToast('保存に失敗', 'error'); return; }
+  state.evaluations.push(ev);
+  saveState();
+  if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(ev, 'add').catch(() => {});
+  const s = state.students.find(x => x.id === studentId);
+  const list = findEvaluations(studentId, ev.subjectId, ev.unitId, ev.viewpoint);
+  showToast(`${s ? s.name : ''}: ${grade}（この単元観点で${list.length}件目）`);
   refreshEvalUI();
   if (state.ui.currentTab === 'eval-list') refreshEvalList();
 }
@@ -2819,48 +2955,103 @@ const ABA_SLOT_LABELS = {
 };
 
 function initAbaEvents() {
-  // 日付
-  const dateInp = document.getElementById('abaDate');
-  if (dateInp) {
-    dateInp.value = todayISO();
-    document.getElementById('abaDateTodayBtn').addEventListener('click', () => {
-      dateInp.value = todayISO();
+  state.ui.abaDate = state.ui.abaDate || todayISO();
+
+  // 日付ステップ
+  const dateInput = document.getElementById('abaDateInput');
+  if (dateInput) {
+    dateInput.value = state.ui.abaDate;
+    dateInput.addEventListener('change', () => {
+      state.ui.abaDate = dateInput.value || todayISO();
+      updateAbaStatusBar();
+      setAbaStep('slot');
+    });
+  }
+  document.querySelectorAll('.aba-date-btn').forEach(b => {
+    b.addEventListener('click', () => {
+      const offset = parseInt(b.dataset.dateOffset) || 0;
+      const d = new Date();
+      d.setDate(d.getDate() + offset);
+      state.ui.abaDate = d.toISOString().slice(0, 10);
+      if (dateInput) dateInput.value = state.ui.abaDate;
+      updateAbaStatusBar();
+      setAbaStep('slot');
+    });
+  });
+
+  // 時間帯ステップ - グリッド
+  const slotGrid = document.getElementById('abaSlotGrid');
+  if (slotGrid) {
+    slotGrid.innerHTML = '';
+    Object.entries(ABA_SLOT_LABELS).forEach(([id, label]) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'aba-slot-btn';
+      btn.dataset.slotId = id;
+      btn.textContent = label;
+      btn.addEventListener('click', () => {
+        state.ui.abaSlot = id;
+        updateAbaStatusBar();
+        setAbaStep('subject');
+      });
+      slotGrid.appendChild(btn);
     });
   }
 
-  // 教科プルダウン
-  const subjSel = document.getElementById('abaSubject');
-  if (subjSel) {
+  // 教科ステップ - グリッド
+  const subjGrid = document.getElementById('abaSubjectGrid');
+  if (subjGrid) {
+    subjGrid.innerHTML = '';
     state.subjects.forEach(s => {
-      const o = document.createElement('option');
-      o.value = s.id; o.textContent = s.label;
-      subjSel.appendChild(o);
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'aba-subject-btn';
+      btn.dataset.subjectId = s.id;
+      btn.style.borderColor = s.color;
+      btn.style.color = s.color;
+      btn.textContent = s.label;
+      btn.addEventListener('click', () => {
+        state.ui.abaSubjectId = s.id;
+        updateAbaStatusBar();
+        setAbaStep('student');
+      });
+      subjGrid.appendChild(btn);
     });
   }
+  document.getElementById('abaSkipSubjectBtn')?.addEventListener('click', () => {
+    state.ui.abaSubjectId = '';
+    updateAbaStatusBar();
+    setAbaStep('student');
+  });
 
-  // 対象児童プルダウン
-  const tgt = document.getElementById('abaTarget');
-  if (tgt) {
+  // 児童ステップ - 既存と同じ student-grid
+  const stGrid = document.getElementById('abaStudentGrid');
+  if (stGrid) {
+    stGrid.innerHTML = '';
     state.students.forEach(s => {
-      const o = document.createElement('option');
-      o.value = String(s.id);
-      o.textContent = `${s.id}. ${s.name}`;
-      tgt.appendChild(o);
-    });
-    tgt.addEventListener('change', () => {
-      state.ui.abaTargetId = tgt.value ? parseInt(tgt.value) : null;
-      const s = state.students.find(x => x.id === state.ui.abaTargetId);
-      const mark = document.getElementById('abaTargetMark');
-      if (mark) mark.textContent = s && s.note ? `[${s.note}]` : '';
-      refreshAbaSidePanel();
-      refreshAbaSaveBtn();
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'student-btn';
+      btn.dataset.studentId = s.id;
+      btn.title = `${s.kana}${s.note ? ' / ' + s.note : ''} (${s.id})`;
+      const num = document.createElement('span');
+      num.className = 'num';
+      num.textContent = s.id;
+      btn.appendChild(num);
+      btn.appendChild(document.createTextNode(s.name));
+      btn.addEventListener('click', () => {
+        state.ui.abaTargetId = s.id;
+        updateAbaStatusBar();
+        setAbaStep('behavior');
+      });
+      stGrid.appendChild(btn);
     });
   }
 
-  // 行動ボタン
-  const grid = document.getElementById('abaBehaviorGrid');
-  if (grid) {
-    grid.innerHTML = '';
+  // 行動ステップ
+  const behGrid = document.getElementById('abaBehaviorGrid');
+  if (behGrid) {
+    behGrid.innerHTML = '';
     ABA_BEHAVIORS.forEach(b => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -2881,38 +3072,52 @@ function initAbaEvents() {
           btn.style.background = b.color;
           btn.style.color = 'white';
         }
-        refreshAbaSaveBtn();
-        refreshAbaSelectedSummary();
+        renderAbaOtherInput();
+        updateAbaStatusBar();
       });
-      grid.appendChild(btn);
+      behGrid.appendChild(btn);
     });
   }
+
+  // 「その他」記述欄エリア (動的に出現)
+  // → renderAbaOtherInput() で挿入
+
+  document.getElementById('abaProceedToInput')?.addEventListener('click', () => {
+    if (state.ui.abaBehaviors.size === 0) {
+      showToast('行動を1つ以上選択してください', 'error'); return;
+    }
+    if (state.ui.abaBehaviors.has('other') && !state.ui.abaOtherText.trim()) {
+      showToast('「その他」を選んだ場合は内容を記述してください', 'error');
+      const oi = document.getElementById('abaOtherText');
+      if (oi) oi.focus();
+      return;
+    }
+    setAbaStep('input');
+  });
+
+  document.getElementById('abaBackBtn')?.addEventListener('click', () => setAbaStep('behavior'));
+
+  // ステータスバーのアイテムをクリックで該当ステップへ
+  document.querySelectorAll('#abaStatusBar .aba-status-item').forEach(it => {
+    it.addEventListener('click', () => setAbaStep(it.dataset.step));
+  });
+  document.getElementById('abaResetBtn')?.addEventListener('click', resetAbaAll);
 
   // クイック挿入
   document.querySelectorAll('.aba-quick').forEach(btn => {
     btn.addEventListener('click', () => {
       const target = document.getElementById(btn.dataset.fill);
       if (!target) return;
-      target.value = target.value
-        ? (target.value + ' / ' + btn.dataset.text)
-        : btn.dataset.text;
+      target.value = target.value ? (target.value + ' / ' + btn.dataset.text) : btn.dataset.text;
       target.focus();
     });
   });
 
-  // 保存・クリア
   document.getElementById('saveAbaBtn').addEventListener('click', saveAbaRecord);
-  document.getElementById('abaClearBtn').addEventListener('click', clearAbaForm);
 
-  // 時間帯・教科の保存
-  document.getElementById('abaSlot').addEventListener('change', e => {
-    state.ui.abaSlot = e.target.value;
-  });
-  if (subjSel) subjSel.addEventListener('change', e => {
-    state.ui.abaSubjectId = e.target.value;
-  });
-
-  refreshAbaSidePanel();
+  // 初期表示
+  setAbaStep('date');
+  updateAbaStatusBar();
 
   // ABA一覧タブ
   const lstSt = document.getElementById('abaListStudent');
@@ -2948,48 +3153,149 @@ function initAbaEvents() {
   if (expBtn) expBtn.addEventListener('click', exportAbaCsv);
 }
 
-function refreshAbaSelectedSummary() {
-  const summary = document.getElementById('abaSelectedSummary');
-  if (!summary) return;
-  const labels = [...state.ui.abaBehaviors].map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id);
-  summary.textContent = labels.length ? `選択中: ${labels.join(' + ')}` : '';
+// ステップ式UIの遷移
+function setAbaStep(step) {
+  state.ui.abaStep = step;
+  document.querySelectorAll('.aba-step').forEach(el => {
+    el.classList.toggle('hidden', el.dataset.step !== step);
+  });
+  document.getElementById('abaInputArea').classList.toggle('hidden', step !== 'input');
+  // ステータスバーの強調
+  document.querySelectorAll('#abaStatusBar .aba-status-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.step === step);
+  });
+  // 行動ステップ表示時に行動グリッドのアクティブ状態を反映
+  if (step === 'behavior') {
+    document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(btn => {
+      const id = btn.dataset.behaviorId;
+      const beh = ABA_BEHAVIORS.find(b => b.id === id);
+      const active = state.ui.abaBehaviors.has(id);
+      btn.classList.toggle('active', active);
+      btn.style.background = active && beh ? beh.color : '';
+      btn.style.color = active ? 'white' : (beh ? beh.color : '');
+    });
+    renderAbaOtherInput();
+  }
+  // 児童ステップ表示時にハイライト
+  if (step === 'student') {
+    document.querySelectorAll('#abaStudentGrid .student-btn').forEach(btn => {
+      btn.classList.toggle('subject', parseInt(btn.dataset.studentId) === state.ui.abaTargetId);
+    });
+  }
+  // 時間帯ステップ表示時にハイライト
+  if (step === 'slot') {
+    document.querySelectorAll('#abaSlotGrid .aba-slot-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.slotId === state.ui.abaSlot);
+    });
+  }
+  // 教科ステップ
+  if (step === 'subject') {
+    document.querySelectorAll('#abaSubjectGrid .aba-subject-btn').forEach(btn => {
+      btn.classList.toggle('active', btn.dataset.subjectId === state.ui.abaSubjectId);
+    });
+  }
 }
 
-function refreshAbaSaveBtn() {
-  const btn = document.getElementById('saveAbaBtn');
-  if (!btn) return;
-  btn.disabled = !(state.ui.abaTargetId && state.ui.abaBehaviors.size > 0);
+function updateAbaStatusBar() {
+  const dEl = document.getElementById('abaStatusDate');
+  if (dEl) dEl.textContent = state.ui.abaDate === todayISO() ? '今日' : (state.ui.abaDate || '今日');
+  const sEl = document.getElementById('abaStatusSlot');
+  if (sEl) sEl.textContent = ABA_SLOT_LABELS[state.ui.abaSlot] || '未選択';
+  const subEl = document.getElementById('abaStatusSubject');
+  if (subEl) {
+    const sub = state.subjects.find(x => x.id === state.ui.abaSubjectId);
+    subEl.textContent = sub ? sub.label : '—';
+  }
+  const stEl = document.getElementById('abaStatusStudent');
+  if (stEl) {
+    const st = state.students.find(x => x.id === state.ui.abaTargetId);
+    stEl.textContent = st ? `${st.id}.${st.name}` : '未選択';
+  }
+  const bEl = document.getElementById('abaStatusBehavior');
+  if (bEl) {
+    const labels = [...state.ui.abaBehaviors].map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id);
+    if (labels.length === 0) bEl.textContent = '未選択';
+    else if (state.ui.abaBehaviors.has('other') && state.ui.abaOtherText) {
+      bEl.textContent = labels.join('+') + ` (${state.ui.abaOtherText.slice(0, 12)})`;
+    } else {
+      bEl.textContent = labels.join('+');
+    }
+  }
 }
 
-function clearAbaForm() {
+// 「その他」選択時の記述欄
+function renderAbaOtherInput() {
+  const grid = document.getElementById('abaBehaviorGrid');
+  if (!grid) return;
+  let cont = document.getElementById('abaOtherWrap');
+  if (state.ui.abaBehaviors.has('other')) {
+    if (!cont) {
+      cont = document.createElement('div');
+      cont.id = 'abaOtherWrap';
+      cont.style.marginTop = '8px';
+      cont.innerHTML = `<label style="font-size:12px; font-weight:600; color:#555;">「その他」の内容を記述:
+        <input type="text" id="abaOtherText" placeholder="例: 物投げ・自傷など" maxlength="100"
+               style="width:100%; padding:6px 8px; font-size:13px; border:2px solid #34495e; border-radius:4px; margin-top:3px;">
+      </label>`;
+      grid.parentNode.insertBefore(cont, grid.nextSibling);
+      const oi = cont.querySelector('#abaOtherText');
+      oi.value = state.ui.abaOtherText || '';
+      oi.addEventListener('input', () => {
+        state.ui.abaOtherText = oi.value;
+        updateAbaStatusBar();
+      });
+      oi.focus();
+    }
+  } else {
+    if (cont) cont.remove();
+    state.ui.abaOtherText = '';
+  }
+}
+
+function resetAbaAll() {
+  state.ui.abaSlot = '';
+  state.ui.abaSubjectId = '';
+  state.ui.abaTargetId = null;
   state.ui.abaBehaviors = new Set();
-  document.querySelectorAll('.aba-behavior-btn').forEach(b => {
+  state.ui.abaOtherText = '';
+  document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(b => {
     b.classList.remove('active');
-    const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
     b.style.background = '';
+    const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
     if (beh) b.style.color = beh.color;
   });
-  document.getElementById('abaAntecedent').value = '';
-  document.getElementById('abaConsequence').value = '';
-  document.getElementById('abaResponse').value = '';
-  refreshAbaSaveBtn();
-  refreshAbaSelectedSummary();
+  ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  renderAbaOtherInput();
+  updateAbaStatusBar();
+  setAbaStep('date');
 }
 
 function saveAbaRecord() {
-  if (!state.ui.abaTargetId || state.ui.abaBehaviors.size === 0) {
-    showToast('対象児童と行動を選んでください', 'error'); return;
+  if (!state.ui.abaTargetId || state.ui.abaBehaviors.size === 0 || !state.ui.abaSlot) {
+    showToast('時間帯・児童・行動を選択してください', 'error'); return;
   }
-  const date = (document.getElementById('abaDate') || {}).value || todayISO();
+  if (state.ui.abaBehaviors.has('other') && !state.ui.abaOtherText.trim()) {
+    showToast('「その他」の内容を記述してください', 'error'); return;
+  }
+  const ant = document.getElementById('abaAntecedent').value || '';
+  const cons = document.getElementById('abaConsequence').value || '';
+  const resp = document.getElementById('abaResponse').value || '';
+  // 「その他」の内容を behaviors の付帯情報として保存
+  let antWithOther = ant;
+  if (state.ui.abaBehaviors.has('other') && state.ui.abaOtherText) {
+    antWithOther = `[その他: ${state.ui.abaOtherText}]` + (ant ? ' / ' + ant : '');
+  }
   const rec = normalizeAba({
     studentId: state.ui.abaTargetId,
-    date,
-    slot: document.getElementById('abaSlot').value,
-    subject: document.getElementById('abaSubject').value || '',
+    date: state.ui.abaDate || todayISO(),
+    slot: state.ui.abaSlot,
+    subject: state.ui.abaSubjectId || '',
     behaviors: [...state.ui.abaBehaviors],
-    antecedent: document.getElementById('abaAntecedent').value || '',
-    consequence: document.getElementById('abaConsequence').value || '',
-    response: document.getElementById('abaResponse').value || ''
+    antecedent: antWithOther,
+    consequence: cons,
+    response: resp
   });
   if (!rec) { showToast('保存に失敗', 'error'); return; }
   state.abaRecords.push(rec);
@@ -2997,60 +3303,26 @@ function saveAbaRecord() {
   if (typeof pushAbaToGas === 'function') pushAbaToGas(rec, 'add').catch(() => {});
   const s = state.students.find(x => x.id === rec.studentId);
   showToast(`${s ? s.name : ''} のABA記録を保存`);
-  // 行動・テキストはクリア。対象児童・時間帯は維持して連続記録できるように。
+  // 行動・テキストはクリア。日付/時間帯/教科/児童は維持で連続記録
   state.ui.abaBehaviors = new Set();
+  state.ui.abaOtherText = '';
   document.querySelectorAll('.aba-behavior-btn').forEach(b => {
     b.classList.remove('active');
     const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
     b.style.background = '';
     if (beh) b.style.color = beh.color;
   });
-  document.getElementById('abaAntecedent').value = '';
-  document.getElementById('abaConsequence').value = '';
-  document.getElementById('abaResponse').value = '';
-  refreshAbaSaveBtn();
-  refreshAbaSelectedSummary();
-  refreshAbaSidePanel();
+  ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
+    const e = document.getElementById(id); if (e) e.value = '';
+  });
+  renderAbaOtherInput();
+  updateAbaStatusBar();
+  setAbaStep('behavior'); // 同じ児童で次の行動を記録できるように
   if (state.ui.currentTab === 'aba-list') refreshAbaList();
 }
 
 function refreshAbaSidePanel() {
-  const today = todayISO();
-  const todays = state.abaRecords.filter(r => r.date === today);
-  const cnt = document.getElementById('todayAbaCount');
-  if (cnt) cnt.textContent = todays.length;
-  const ul = document.getElementById('todayAbaList');
-  if (ul) {
-    if (!todays.length) {
-      ul.innerHTML = '<li class="muted">記録なし</li>';
-    } else {
-      const sMap = new Map(state.students.map(s => [s.id, s]));
-      ul.innerHTML = todays.slice().sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10).map(r => {
-        const s = sMap.get(r.studentId);
-        const labels = r.behaviors.map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id).join('+');
-        return `<li><b>${ABA_SLOT_LABELS[r.slot] || ''}</b> ${s ? s.name : ''}: ${escapeHtml(labels)}</li>`;
-      }).join('');
-    }
-  }
-  // 対象児童の直近
-  const stRecent = document.getElementById('abaStudentRecent');
-  if (stRecent) {
-    const tid = state.ui.abaTargetId;
-    if (!tid) {
-      stRecent.innerHTML = '<li class="muted">対象児童を選ぶと表示</li>';
-    } else {
-      const items = state.abaRecords.filter(r => r.studentId === tid)
-        .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 8);
-      const s = state.students.find(x => x.id === tid);
-      document.getElementById('abaStudentRecentTitle').textContent = (s ? s.name : '') + ' の直近記録';
-      stRecent.innerHTML = items.length
-        ? items.map(r => {
-            const labels = r.behaviors.map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id).join('+');
-            return `<li>${r.date} ${ABA_SLOT_LABELS[r.slot] || ''} ${escapeHtml(labels)}${r.consequence ? ' → ' + escapeHtml(r.consequence) : ''}</li>`;
-          }).join('')
-        : '<li class="muted">この子の記録なし</li>';
-    }
-  }
+  // V2: 記録画面からは削除。ABA一覧タブで参照。互換のため空関数として残す
 }
 
 function refreshAbaList() {
