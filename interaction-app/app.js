@@ -3930,6 +3930,7 @@ function renderKetRatingButtons() {
       }
       refreshKetebureUI();
     });
+    cont.appendChild(b);
   });
 }
 
