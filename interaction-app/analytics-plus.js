@@ -97,26 +97,57 @@ function computeRollingMean(values, win) {
 }
 
 // ===== 児童×日マトリクス =====
+function _localDate(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+function _collectAllObservations() {
+  // 全モード（交友/ほめ/評価/けテぶれ/ABA）の観察イベントを集約
+  const events = [];
+  const st = window.state || {};
+  for (const r of (st.records || [])) {
+    if (!r || !r.date) continue;
+    if (r.subject != null) events.push({ date: r.date, studentId: r.subject });
+    for (const m of (r.members || [])) events.push({ date: r.date, studentId: m });
+  }
+  for (const p of (st.praises || [])) {
+    if (p && p.date && p.studentId != null) events.push({ date: p.date, studentId: p.studentId });
+  }
+  for (const e of (st.evaluations || [])) {
+    if (e && e.date && e.studentId != null) events.push({ date: e.date, studentId: e.studentId });
+  }
+  for (const k of (st.ketebureRecords || [])) {
+    if (k && k.date && k.studentId != null) events.push({ date: k.date, studentId: k.studentId });
+  }
+  for (const a of (st.abaRecords || [])) {
+    if (a && a.date && a.studentId != null) events.push({ date: a.date, studentId: a.studentId });
+    if (a && a.date && a.targetStudentId != null) events.push({ date: a.date, studentId: a.targetStudentId });
+  }
+  return events;
+}
+
 function computeStudentDayMatrix(records, students, days) {
+  // records 引数は互換のため残すが、実際には全モード合算で算出
   days = days || 30;
   const today = new Date();
   const dates = [];
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
+    dates.push(_localDate(d));
   }
   const dateIdx = new Map(dates.map((d, i) => [d, i]));
   const matrix = students.map(s => ({ id: s.id, name: s.name, counts: new Array(days).fill(0) }));
   const idIdx = new Map(students.map((s, i) => [s.id, i]));
-  for (const r of records) {
-    const di = dateIdx.get(r.date);
+  const events = _collectAllObservations();
+  for (const ev of events) {
+    const di = dateIdx.get(ev.date);
     if (di === undefined) continue;
-    const all = new Set([r.subject, ...(Array.isArray(r.members) ? r.members : [])]);
-    for (const id of all) {
-      const si = idIdx.get(id);
-      if (si !== undefined) matrix[si].counts[di]++;
-    }
+    const si = idIdx.get(ev.studentId);
+    if (si !== undefined) matrix[si].counts[di]++;
   }
   return { dates, matrix };
 }
@@ -166,8 +197,8 @@ function injectAnalyticsUI() {
     sec.id = 'apMatrixSection';
     sec.style.margin = '12px';
     sec.innerHTML =
-      '<h3>🟦 児童 × 日 マトリクス（直近30日）</h3>' +
-      '<p class="muted small">行=児童、列=日付、セル色=その日の出現回数。空白の列が続く児童 = 観察漏れ候補。</p>' +
+      '<h3>🟦 児童 × 日 マトリクス（直近30日・全モード合算）</h3>' +
+      '<p class="muted small">行=児童、列=日付、セル色=その日に観察された回数（交友/ほめ/評価/けテぶれ/ABA合算）。空欄が続く児童 = 観察漏れ候補。「計0」の児童は赤字で警告。</p>' +
       '<div id="apMatrix" style="overflow-x:auto;max-height:480px;overflow-y:auto;"></div>';
     heatmapTab.appendChild(sec);
   }
@@ -283,25 +314,34 @@ function refreshRollingChart() {
 function refreshDayMatrix() {
   const target = document.getElementById('apMatrix');
   if (!target) return;
-  const recs = (window.state && window.state.records) || [];
   const studs = (window.state && window.state.students) || [];
-  if (recs.length === 0 || studs.length === 0) {
-    target.innerHTML = '<p class="muted">記録または名簿がありません</p>';
+  if (studs.length === 0) {
+    target.innerHTML = '<p class="muted">名簿がありません</p>';
     return;
   }
-  const r = computeStudentDayMatrix(recs, studs, 30);
-  const sortedRows = r.matrix.slice().sort((a, b) => a.id - b.id);
-  let html = '<table class="ap-matrix"><thead><tr><th class="ap-fixed">児童</th>';
+  const r = computeStudentDayMatrix(null, studs, 30);
+  // 観察少ない順（合計昇順）でソート → 「観察漏れ」候補を上に
+  const sortedRows = r.matrix.slice().sort((a, b) => {
+    const sa = a.counts.reduce((s, v) => s + v, 0);
+    const sb = b.counts.reduce((s, v) => s + v, 0);
+    if (sa !== sb) return sa - sb;
+    return a.id - b.id;
+  });
+  const today = _localDate(new Date());
+  let html = '<table class="ap-matrix"><thead><tr><th class="ap-fixed">児童 (観察少順)</th>';
   for (const d of r.dates) {
     const day = d.slice(8);
-    const dow = new Date(d).getDay();
-    const sty = (dow === 0 || dow === 6) ? ' style="color:#c66;"' : '';
+    const dow = new Date(d + 'T00:00:00').getDay();
+    const isToday = d === today;
+    const sty = (dow === 0 || dow === 6)
+      ? ' style="color:#c66;' + (isToday ? 'background:#fff3c4;' : '') + '"'
+      : (isToday ? ' style="background:#fff3c4;"' : '');
     html += '<th' + sty + '>' + day + '</th>';
   }
   html += '<th>計</th></tr></thead><tbody>';
   for (const row of sortedRows) {
     const sum = row.counts.reduce((s, v) => s + v, 0);
-    const lowAlert = sum === 0 ? ' style="color:#c00;font-weight:bold"' : '';
+    const lowAlert = sum === 0 ? ' style="color:#c00;font-weight:bold"' : (sum <= 2 ? ' style="color:#d68000;"' : '');
     html += '<tr><td class="ap-fixed"' + lowAlert + '>' + _esc(row.name) + '</td>';
     for (const c of row.counts) {
       const lvl = c === 0 ? 0 : c === 1 ? 1 : c === 2 ? 2 : 3;

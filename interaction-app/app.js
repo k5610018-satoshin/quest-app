@@ -1192,7 +1192,11 @@ function switchTab(name) {
   else if (name === 'history') refreshHistory();
   else if (name === 'settings') refreshSettings();
   else if (name === 'praise-list') refreshPraiseList();
-  else if (name === 'eval-list') refreshEvalList();
+  else if (name === 'eval-list') {
+    refreshEvalList();
+    const mat = document.getElementById('evalMatrixContent');
+    if (mat && !mat.classList.contains('hidden')) renderEvalMatrix();
+  }
   else if (name === 'aba-list') refreshAbaList();
 }
 
@@ -1382,6 +1386,49 @@ function summaryFilterLabel(val) {
   return val;
 }
 
+// 児童ごとの分析バッジを計算（孤立/偏り/橋渡し/多様）
+function computeStudentBadges(records) {
+  const result = {};
+  state.students.forEach(s => result[s.id] = []);
+  if (records.length === 0) return result;
+
+  const network = (typeof buildUndirectedNetwork === 'function')
+    ? buildUndirectedNetwork(records)
+    : null;
+  if (!network) return result;
+
+  const deg = (typeof computeDegree === 'function') ? computeDegree(network) : {};
+  const strength = (typeof computeStrength === 'function') ? computeStrength(network) : {};
+  const bw = (typeof computeBetweenness === 'function') ? computeBetweenness(network) : {};
+
+  // 平均でしきい値を決める
+  const N = state.students.length;
+  const degArr = state.students.map(s => deg[s.id] || 0).sort((a,b)=>a-b);
+  const strArr = state.students.map(s => strength[s.id] || 0).sort((a,b)=>b-a);
+  const bwArr = state.students.map(s => bw[s.id] || 0).sort((a,b)=>b-a);
+
+  // BOTTOM 1/3 in degree → 関わり少
+  const bottomDegThreshold = degArr[Math.floor(N / 3)] ?? 0;
+  // TOP 1/3 in degree → 多様
+  const topDegThreshold = degArr[Math.ceil(N * 2 / 3)] ?? 999;
+  // 偏り: strength高 (TOP1/3) かつ degree が中央値以下
+  const topStrThreshold = strArr[Math.floor(N / 3)] ?? 999;
+  const medianDeg = degArr[Math.floor(N / 2)] ?? 0;
+  // 橋渡し: betweenness TOP 1/4
+  const topBwThreshold = bwArr[Math.floor(N / 4)] ?? 999;
+
+  for (const s of state.students) {
+    const d = deg[s.id] || 0;
+    const st = strength[s.id] || 0;
+    const b = bw[s.id] || 0;
+    if (d > 0 && d <= bottomDegThreshold) result[s.id].push({ cls: 'sb-isolated', label: '🚨 関わり少', title: `関わり相手 ${d}人 (下位1/3)` });
+    if (d > 0 && st >= topStrThreshold && d <= medianDeg) result[s.id].push({ cls: 'sb-biased', label: '⚠ 偏り', title: `濃密だが少数 (強度${st}/相手${d}人)` });
+    if (b >= topBwThreshold && b > 0) result[s.id].push({ cls: 'sb-bridge', label: '🌉 橋渡し', title: `異グループの仲介 (BW=${b.toFixed(3)})` });
+    if (d >= topDegThreshold && d > 0) result[s.id].push({ cls: 'sb-diverse', label: '🌟 多様', title: `関わり相手 ${d}人 (上位1/3)` });
+  }
+  return result;
+}
+
 function refreshSummary() {
   const mode = document.getElementById('summaryMode')?.value || 'single';
   const gridEl = document.getElementById('summaryGrid');
@@ -1395,6 +1442,9 @@ function refreshSummary() {
   const period = document.getElementById('summaryPeriod').value;
   const recs = filterRecords({ scene, category, period });
   document.getElementById('summaryInfo').textContent = `対象記録: ${recs.length}件`;
+
+  // 全体記録から分析バッジを算出（フィルタ無視・全体傾向で判定）
+  const badges = computeStudentBadges(state.records);
 
   const grid = document.getElementById('summaryGrid');
   grid.innerHTML = '';
@@ -1410,7 +1460,7 @@ function refreshSummary() {
 
     const sortedPartners = Object.entries(partners)
       .sort((a, b) => b[1] - a[1])
-      .slice(0, 8);
+      .slice(0, 6);
     const maxCount = sortedPartners.length > 0 ? sortedPartners[0][1] : 1;
 
     let partnersHtml = '';
@@ -1420,26 +1470,32 @@ function refreshSummary() {
       partnersHtml = sortedPartners.map(([pid, cnt]) => {
         const partner = getStudent(parseInt(pid));
         if (!partner) return '';
-        const w = Math.max(8, Math.round((cnt / maxCount) * 80));
+        const w = Math.max(6, Math.round((cnt / maxCount) * 50));
         return `<li><span><span class="bar" style="width:${w}px"></span>${escapeHtml(partner.name)}</span><span class="count">${cnt}</span></li>`;
       }).join('');
     }
 
     let specialsHtml = '';
     const spParts = [];
-    if (specials.alone > 0) spParts.push(`一人で ${specials.alone}`);
-    if (specials.with_teacher > 0) spParts.push(`先生と ${specials.with_teacher}`);
-    if (specials.other_class > 0) spParts.push(`他クラス ${specials.other_class}`);
+    if (specials.alone > 0) spParts.push(`一人 ${specials.alone}`);
+    if (specials.with_teacher > 0) spParts.push(`先生 ${specials.with_teacher}`);
+    if (specials.other_class > 0) spParts.push(`他ｸ ${specials.other_class}`);
     const totalObs = total + specials.alone + specials.with_teacher + specials.other_class;
     let isolationHtml = '';
     if (totalObs >= 3 && specials.alone > 0) {
       const rate = Math.round((specials.alone / totalObs) * 100);
-      isolationHtml = `<div class="isolation">⚠ 孤立率 ${rate}% (${specials.alone}/${totalObs})</div>`;
+      isolationHtml = `<div class="isolation">⚠ 孤立率 ${rate}%</div>`;
     }
     if (spParts.length > 0) specialsHtml = `<div class="specials">${spParts.join(' / ')}</div>`;
 
+    const badgeList = badges[s.id] || [];
+    const badgesHtml = badgeList.length > 0
+      ? `<div class="student-badges">${badgeList.map(b => `<span class="sb ${b.cls}" title="${escapeHtml(b.title)}">${b.label}</span>`).join('')}</div>`
+      : '';
+
     card.innerHTML = `
-      <h4>${escapeHtml(s.name)}<span class="total">${total} 回 / 観察${totalObs}</span></h4>
+      <h4><span class="name-text">${escapeHtml(s.name)}</span><span class="total">${total}/${totalObs}</span></h4>
+      ${badgesHtml}
       <ul class="partner-list">${partnersHtml}</ul>
       ${specialsHtml}${isolationHtml}
     `;
@@ -1710,7 +1766,17 @@ function initSocioFilters() {
   ['socioScene', 'socioCategory', 'socioMin'].forEach(id => {
     document.getElementById(id).addEventListener('change', refreshSocio);
   });
-  document.getElementById('socioRedraw').addEventListener('click', refreshSocio);
+  // 最低共起の数値変更で即時再描画（input/wheel/キー入力）
+  const socioMinEl = document.getElementById('socioMin');
+  if (socioMinEl) {
+    let socioDebounce = null;
+    socioMinEl.addEventListener('input', () => {
+      clearTimeout(socioDebounce);
+      socioDebounce = setTimeout(refreshSocio, 120);
+    });
+  }
+  const socioRedrawBtn = document.getElementById('socioRedraw');
+  if (socioRedrawBtn) socioRedrawBtn.addEventListener('click', refreshSocio);
 }
 
 function refreshSocio() {
@@ -3124,7 +3190,13 @@ function initEvaluationEvents() {
       o.textContent = s.label;
       lsubj.appendChild(o);
     });
-    lsubj.addEventListener('change', () => { populateEvalListUnits(); refreshEvalList(); });
+    lsubj.addEventListener('change', () => {
+      populateEvalListUnits();
+      refreshEvalList();
+      // マトリクス表示中なら自動的に教科切替で再描画
+      const mat = document.getElementById('evalMatrixContent');
+      if (mat && !mat.classList.contains('hidden')) renderEvalMatrix();
+    });
   }
   populateEvalListUnits();
   const lunit = document.getElementById('evalListUnit');
@@ -5951,38 +6023,35 @@ function refreshChangeRanking() {
     return;
   }
 
-  const fmtNamesByFreq = (ids, partners, max=4, cls) => {
+  const fmtNamesByFreq = (ids, partners, max=3, cls) => {
     if (ids.length === 0) return '<span class="muted">—</span>';
     const sorted = ids.slice().sort((x,y) => (partners[y]||0) - (partners[x]||0));
     const html = sorted.slice(0, max).map(id =>
-      `<span class="${cls}">${escapeHtml(getStudentName(id))}(${partners[id]||0})</span>`
+      `<span class="${cls}">${escapeHtml(getStudentName(id))}<small>(${partners[id]||0})</small></span>`
     ).join(' ');
-    return html + (sorted.length > max ? ` <span class="muted">他${sorted.length-max}名</span>` : '');
+    return html + (sorted.length > max ? ` <span class="muted">+${sorted.length-max}</span>` : '');
   };
 
-  let html = '';
+  let html = '<div class="change-card-grid">';
   ranked.forEach((d, i) => {
-    const cls = d.student.highlight ? 'highlight-row' : '';
+    const cls = d.student.highlight ? 'highlight-card' : '';
     const changePct = Math.round(d.change * 100);
     html += `
-      <div class="change-row ${cls}">
-        <div class="rank">${i+1}</div>
-        <div>
-          <div class="name">${escapeHtml(d.student.name)}</div>
-          <div class="muted small">A:${d.totalA} / B:${d.totalB}</div>
+      <div class="change-card ${cls}">
+        <div class="cc-head">
+          <span class="cc-rank">${i+1}</span>
+          <span class="cc-name">${escapeHtml(d.student.name)}</span>
+          <span class="cc-pct">${changePct}%</span>
         </div>
-        <div>
-          <div><span class="change-bar"><span class="change-fill" style="width:${changePct}%"></span></span></div>
-          <div class="muted small">変化度 ${changePct}%</div>
-        </div>
-        <dl class="changes">
-          <dt>失った</dt><dd>${fmtNamesByFreq(d.onlyA, d.pA, 5, 'lost-name')}</dd>
-          <dt>新しい</dt><dd>${fmtNamesByFreq(d.onlyB, d.pB, 5, 'new-name')}</dd>
-          <dt>変わらず</dt><dd>${fmtNamesByFreq(d.common, d.pB, 5, 'same-name')}</dd>
-        </dl>
+        <div class="cc-bar"><span class="cc-fill" style="width:${changePct}%"></span></div>
+        <div class="cc-meta">A:${d.totalA} / B:${d.totalB}</div>
+        <div class="cc-row"><span class="cc-tag lost">−</span> ${fmtNamesByFreq(d.onlyA, d.pA, 3, 'lost-name')}</div>
+        <div class="cc-row"><span class="cc-tag new">＋</span> ${fmtNamesByFreq(d.onlyB, d.pB, 3, 'new-name')}</div>
+        <div class="cc-row"><span class="cc-tag same">＝</span> ${fmtNamesByFreq(d.common, d.pB, 3, 'same-name')}</div>
       </div>
     `;
   });
+  html += '</div>';
   cont.innerHTML = html;
 }
 
@@ -6450,24 +6519,61 @@ function refreshHeatmap() {
   }
 }
 
+// 全観察モード（交友/ほめ/評価/けテぶれ/ABA）を統合して観察イベントを返す
+function getAllObservations() {
+  const events = []; // { date, studentId, type }
+  for (const r of (state.records || [])) {
+    if (!r.date) continue;
+    if (r.subject != null) events.push({ date: r.date, studentId: r.subject, type: 'interaction' });
+    for (const m of (r.members || [])) events.push({ date: r.date, studentId: m, type: 'interaction' });
+  }
+  for (const p of (state.praises || [])) {
+    if (p.date && p.studentId != null) events.push({ date: p.date, studentId: p.studentId, type: 'praise' });
+  }
+  for (const e of (state.evaluations || [])) {
+    if (e.date && e.studentId != null) events.push({ date: e.date, studentId: e.studentId, type: 'eval' });
+  }
+  for (const k of (state.ketebureRecords || [])) {
+    if (k.date && k.studentId != null) events.push({ date: k.date, studentId: k.studentId, type: 'ketebure' });
+  }
+  for (const a of (state.abaRecords || [])) {
+    if (a.date && a.studentId != null) events.push({ date: a.date, studentId: a.studentId, type: 'aba' });
+    if (a.date && a.targetStudentId != null) events.push({ date: a.date, studentId: a.targetStudentId, type: 'aba' });
+  }
+  return events;
+}
+
+// ローカル日付（JST）を YYYY-MM-DD で返す
+function localDateStr(d) {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 function drawDensityHeatmap() {
-  document.getElementById('heatmapTitle').textContent = '観察密度ヒートマップ (日別記録数)';
+  document.getElementById('heatmapTitle').textContent = '観察密度ヒートマップ (全モード合算・日別)';
   const body = document.getElementById('heatmapBody');
+  const events = getAllObservations();
   // 過去365日のカレンダー風 (GitHub contributions風)
   const now = new Date();
   const start = new Date(now); start.setDate(now.getDate() - 364);
   const dailyCounts = {};
-  for (const r of state.records) {
-    dailyCounts[r.date] = (dailyCounts[r.date] || 0) + 1;
+  const dailyStudents = {};
+  for (const ev of events) {
+    dailyCounts[ev.date] = (dailyCounts[ev.date] || 0) + 1;
+    if (!dailyStudents[ev.date]) dailyStudents[ev.date] = new Set();
+    dailyStudents[ev.date].add(ev.studentId);
   }
   const max = Math.max(1, ...Object.values(dailyCounts));
   const cells = [];
   for (let d = new Date(start); d <= now; d.setDate(d.getDate() + 1)) {
-    const ds = d.toISOString().slice(0, 10);
+    const ds = localDateStr(d);
     const cnt = dailyCounts[ds] || 0;
+    const studs = dailyStudents[ds] ? dailyStudents[ds].size : 0;
     let lvl = 0;
     if (cnt > 0) lvl = Math.min(4, Math.ceil(cnt / max * 4));
-    cells.push({ ds, cnt, lvl, dow: d.getDay() });
+    cells.push({ ds, cnt, lvl, studs, dow: d.getDay() });
   }
   // 53週 × 7曜日のグリッド
   const html = `
@@ -6476,14 +6582,14 @@ function drawDensityHeatmap() {
         ${['日','月','火','水','木','金','土'].map(d => `<div style="height:14px;line-height:14px;">${d}</div>`).join('')}
       </div>
       <div style="display:grid;grid-template-rows:repeat(7,14px);grid-auto-flow:column;gap:2px;">
-        ${cells.map(c => `<div class="hm-cell ${c.lvl>0?'l'+c.lvl:''}" title="${c.ds}: ${c.cnt}件" style="grid-row:${c.dow+1};"></div>`).join('')}
+        ${cells.map(c => `<div class="hm-cell ${c.lvl>0?'l'+c.lvl:''}" title="${c.ds}: ${c.cnt}件 (${c.studs}人)" style="grid-row:${c.dow+1};"></div>`).join('')}
       </div>
     </div>
     <div class="hm-legend">少 <div class="hm-cell"></div><div class="hm-cell l1"></div><div class="hm-cell l2"></div><div class="hm-cell l3"></div><div class="hm-cell l4"></div> 多 (1日あたり最大${max}件)</div>
-    <div class="muted small" style="margin-top:8px;">合計 ${state.records.length}件 / 直近365日 / 観察した日数: ${Object.keys(dailyCounts).length}日</div>
+    <div class="muted small" style="margin-top:8px;">合計 ${events.length}観察 / 直近365日 / 観察した日数: ${Object.keys(dailyCounts).length}日</div>
   `;
   body.innerHTML = html;
-  document.getElementById('heatmapInfo').textContent = `${state.records.length}件 / 観察日数 ${Object.keys(dailyCounts).length}`;
+  document.getElementById('heatmapInfo').textContent = `${events.length}観察 / 観察日数 ${Object.keys(dailyCounts).length}`;
 }
 
 function drawPairTimeline() {
@@ -7066,6 +7172,7 @@ const _origRefreshAll2 = refreshAll;
 refreshAll = function() {
   _origRefreshAll2();
   if (state.ui.currentTab === 'heatmap') refreshHeatmap();
+  if (state.ui.currentTab === 'ketebure-analysis') refreshKetebureAnalysis();
 };
 
 const _origSwitchTab2 = switchTab;
@@ -7073,6 +7180,7 @@ switchTab = function(name) {
   _origSwitchTab2(name);
   if (name === 'heatmap') refreshHeatmap();
   else if (name === 'seating') refreshSeatingTab();
+  else if (name === 'ketebure-analysis') refreshKetebureAnalysis();
 };
 
 // init拡張
@@ -7081,6 +7189,7 @@ init = function() {
   _origInit();
   initHeatmapTab();
   initSeating();
+  initKetebureAnalysisTab();
   refreshAttributesEditor();
   refreshEventList();
   document.getElementById('addEventBtn')?.addEventListener('click', addEvent);
@@ -7091,6 +7200,318 @@ init = function() {
     if (e.target.id === 'dashboardModal') closeDashboard();
   });
 };
+
+// ========== けテぶれ分析タブ ==========
+function initKetebureAnalysisTab() {
+  if (typeof initBtnGrp === 'function') {
+    initBtnGrp('ktAType', refreshKetebureAnalysis);
+    initBtnGrp('ktAPeriod', refreshKetebureAnalysis);
+  }
+}
+
+// けテぶれ観点の定義（葛原祥太理論）
+const KTA_ASPECTS_SHUKUDAI = ['け', 'テ', 'ぶ', 'れ'];
+const KTA_ASPECTS_SHUKUDAI_FULL = { 'け': '計画', 'テ': 'テスト', 'ぶ': '分析', 'れ': '練習' };
+const KTA_ASPECTS_SEIKATSU = ['心', 'け', 'ぶ', '→'];
+const KTA_ASPECTS_SEIKATSU_FULL = { '心': '心構え', 'け': '計画', 'ぶ': '分析', '→': '改善' };
+const KTA_RATING_COLORS = { '◎': '#2e7d32', '○': '#0277bd', '△': '#d68000', '×': '#c62828' };
+
+function getFilteredKetebure() {
+  const type = document.getElementById('ktAType')?.value || 'all';
+  const period = document.getElementById('ktAPeriod')?.value || 'all';
+  let recs = (state.ketebureRecords || []).slice();
+  if (type !== 'all') recs = recs.filter(r => r.type === type);
+  if (period !== 'all') {
+    const now = new Date();
+    let cutoff = null;
+    if (period === '7') { cutoff = new Date(now); cutoff.setDate(now.getDate() - 7); }
+    else if (period === '30') { cutoff = new Date(now); cutoff.setDate(now.getDate() - 30); }
+    else if (period === 'month') { cutoff = new Date(now.getFullYear(), now.getMonth(), 1); }
+    if (cutoff) {
+      const c = localDateStr(cutoff);
+      recs = recs.filter(r => r.date && r.date >= c);
+    }
+  }
+  return recs;
+}
+
+function refreshKetebureAnalysis() {
+  const recs = getFilteredKetebure();
+  document.getElementById('ktAInfo').textContent = `対象: ${recs.length}件`;
+
+  if (recs.length === 0) {
+    const empty = '<p class="muted">該当期間のけテぶれ記録はありません。記録タブの📚けテぶれモードで記録すると分析されます。</p>';
+    ['ktARatingDist','ktAAspectBalance','ktATrend','ktAAlerts','ktAStars','ktAStudentCards','ktACorrelation'].forEach(id => {
+      const el = document.getElementById(id); if (el) el.innerHTML = empty;
+    });
+    return;
+  }
+
+  renderKtARatingDist(recs);
+  renderKtAAspectBalance(recs);
+  renderKtATrend(recs);
+  renderKtAAlerts(recs);
+  renderKtAStars(recs);
+  renderKtAStudentCards(recs);
+  renderKtACorrelation(recs);
+}
+
+function renderKtARatingDist(recs) {
+  const target = document.getElementById('ktARatingDist');
+  const ratings = ['◎','○','△','×'];
+  const bySplit = { shukudai: {}, seikatsu: {} };
+  ratings.forEach(r => { bySplit.shukudai[r] = 0; bySplit.seikatsu[r] = 0; });
+  for (const r of recs) {
+    if (!r.rating) continue;
+    if (bySplit[r.type] && r.rating in bySplit[r.type]) bySplit[r.type][r.rating]++;
+  }
+  const renderBar = (label, counts) => {
+    const total = ratings.reduce((s, r) => s + counts[r], 0);
+    if (total === 0) return `<div class="kta-rdist-row"><span class="kta-rdist-label">${label}</span><span class="muted small">記録なし</span></div>`;
+    const segs = ratings.map(r => {
+      const pct = total > 0 ? (counts[r] / total * 100).toFixed(0) : 0;
+      if (counts[r] === 0) return '';
+      return `<span class="kta-rdist-seg" style="width:${pct}%; background:${KTA_RATING_COLORS[r]};" title="${r} ${counts[r]}件 (${pct}%)">${pct >= 10 ? r + counts[r] : ''}</span>`;
+    }).join('');
+    return `<div class="kta-rdist-row"><span class="kta-rdist-label">${label}<small>計${total}</small></span><div class="kta-rdist-bar">${segs}</div></div>`;
+  };
+  target.innerHTML = renderBar('宿題', bySplit.shukudai) + renderBar('生活', bySplit.seikatsu);
+}
+
+function renderKtAAspectBalance(recs) {
+  const target = document.getElementById('ktAAspectBalance');
+  // 各観点について「記録された回数」を集計（出現＝そこに重点をかけて評価した）
+  const shAspect = {}; KTA_ASPECTS_SHUKUDAI.forEach(a => shAspect[a] = 0);
+  const seAspect = {}; KTA_ASPECTS_SEIKATSU.forEach(a => seAspect[a] = 0);
+  let shTotal = 0, seTotal = 0;
+  for (const r of recs) {
+    const arr = Array.isArray(r.aspects) ? r.aspects : [];
+    if (r.type === 'shukudai') {
+      shTotal++;
+      for (const a of arr) if (a in shAspect) shAspect[a]++;
+    } else if (r.type === 'seikatsu') {
+      seTotal++;
+      for (const a of arr) if (a in seAspect) seAspect[a]++;
+    }
+  }
+  const renderRow = (label, aspects, full, counts, total) => {
+    if (total === 0) return `<div class="kta-aspect-row"><b>${label}</b> <span class="muted small">記録なし</span></div>`;
+    const max = Math.max(1, ...aspects.map(a => counts[a]));
+    const cells = aspects.map(a => {
+      const pct = (counts[a] / max * 100).toFixed(0);
+      return `<div class="kta-aspect-cell" title="${a}=${full[a]} ${counts[a]}/${total}件">
+        <div class="kta-aspect-bar"><span style="height:${pct}%; background:var(--primary);"></span></div>
+        <div class="kta-aspect-label">${a}</div>
+        <div class="kta-aspect-num">${counts[a]}</div>
+      </div>`;
+    }).join('');
+    return `<div class="kta-aspect-row"><b>${label} (${total}件)</b><div class="kta-aspect-grid">${cells}</div></div>`;
+  };
+  target.innerHTML =
+    renderRow('宿題けテぶれ', KTA_ASPECTS_SHUKUDAI, KTA_ASPECTS_SHUKUDAI_FULL, shAspect, shTotal) +
+    renderRow('生活けテぶれ', KTA_ASPECTS_SEIKATSU, KTA_ASPECTS_SEIKATSU_FULL, seAspect, seTotal);
+}
+
+function renderKtATrend(recs) {
+  const target = document.getElementById('ktATrend');
+  const today = new Date();
+  const days7 = new Date(today); days7.setDate(today.getDate() - 7);
+  const days14 = new Date(today); days14.setDate(today.getDate() - 14);
+  const ds7 = localDateStr(days7);
+  const ds14 = localDateStr(days14);
+  const dsToday = localDateStr(today);
+  let thisWeek = 0, lastWeek = 0, todayCount = 0;
+  for (const r of recs) {
+    if (!r.date) continue;
+    if (r.date >= ds7 && r.date <= dsToday) thisWeek++;
+    else if (r.date >= ds14 && r.date < ds7) lastWeek++;
+    if (r.date === dsToday) todayCount++;
+  }
+  const arrow = thisWeek > lastWeek ? '<span style="color:#2e7d32;">↑</span>'
+              : thisWeek < lastWeek ? '<span style="color:#c62828;">↓</span>'
+              : '<span class="muted">→</span>';
+  const studs = new Set(recs.map(r => r.studentId).filter(x => x != null));
+  target.innerHTML = `
+    <div class="kta-trend-row"><span class="muted">今日</span> <b>${todayCount}</b> 件</div>
+    <div class="kta-trend-row"><span class="muted">今週(7日)</span> <b>${thisWeek}</b> 件 ${arrow} <span class="muted small">先週 ${lastWeek}</span></div>
+    <div class="kta-trend-row"><span class="muted">記録された児童</span> <b>${studs.size}</b>/${state.students.length}人</div>
+    <div class="kta-trend-row"><span class="muted">未記録</span> <b>${state.students.length - studs.size}</b>人</div>
+  `;
+}
+
+function renderKtAAlerts(recs) {
+  const target = document.getElementById('ktAAlerts');
+  // 児童ごとに最新3件の評価をチェック
+  const byStudent = {};
+  for (const r of recs) {
+    if (!byStudent[r.studentId]) byStudent[r.studentId] = [];
+    byStudent[r.studentId].push(r);
+  }
+  Object.values(byStudent).forEach(arr => arr.sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||'')));
+  const alerts = [];
+  for (const s of state.students) {
+    const arr = byStudent[s.id] || [];
+    const reasons = [];
+    if (arr.length === 0) {
+      reasons.push('記録なし');
+    } else {
+      const last3 = arr.slice(0, 3).map(r => r.rating);
+      const triCount = last3.filter(r => r === '△' || r === '×').length;
+      if (triCount >= 2 && last3.length >= 2) reasons.push(`直近${last3.length}件中${triCount}件が△/×`);
+      if (arr.length === 1) reasons.push('記録1件のみ');
+      // 計画停滞: shukudai最近で「け」が出てこない
+      const shArr = arr.filter(r => r.type === 'shukudai').slice(0, 5);
+      if (shArr.length >= 3) {
+        const hasPlanRecent = shArr.some(r => Array.isArray(r.aspects) && r.aspects.includes('け'));
+        if (!hasPlanRecent) reasons.push('宿題で「計画」未評価');
+      }
+    }
+    if (reasons.length > 0) {
+      alerts.push({ student: s, reasons, count: arr.length });
+    }
+  }
+  if (alerts.length === 0) {
+    target.innerHTML = '<p class="muted">⚠ 該当なし。順調です。</p>';
+    return;
+  }
+  alerts.sort((a, b) => a.count - b.count);
+  let html = '<ul class="kta-alert-list">';
+  for (const a of alerts.slice(0, 12)) {
+    html += `<li class="${a.student.highlight ? 'highlight' : ''}">
+      <span class="kta-alert-name">${escapeHtml(a.student.name)}</span>
+      <span class="kta-alert-count">記録${a.count}件</span>
+      <span class="kta-alert-reasons">${a.reasons.join(' / ')}</span>
+    </li>`;
+  }
+  html += '</ul>';
+  if (alerts.length > 12) html += `<div class="muted small">他 ${alerts.length - 12}名</div>`;
+  target.innerHTML = html;
+}
+
+function renderKtAStars(recs) {
+  const target = document.getElementById('ktAStars');
+  // 自走児: ◎が多く + 全観点に登場 + 記録数が多い
+  const byStudent = {};
+  for (const r of recs) {
+    if (!byStudent[r.studentId]) byStudent[r.studentId] = [];
+    byStudent[r.studentId].push(r);
+  }
+  const stars = [];
+  for (const s of state.students) {
+    const arr = byStudent[s.id] || [];
+    if (arr.length < 3) continue;
+    const goodCount = arr.filter(r => r.rating === '◎').length;
+    const goodRate = goodCount / arr.length;
+    // 全観点に登場した数
+    const allAspects = new Set();
+    for (const r of arr) {
+      if (Array.isArray(r.aspects)) for (const a of r.aspects) allAspects.add(a);
+    }
+    if (goodRate >= 0.4 && allAspects.size >= 3) {
+      stars.push({ student: s, goodRate, count: arr.length, aspectCount: allAspects.size, goodCount });
+    }
+  }
+  if (stars.length === 0) {
+    target.innerHTML = '<p class="muted">該当なし。記録数が増えると候補が出ます。</p>';
+    return;
+  }
+  stars.sort((a, b) => b.goodRate - a.goodRate);
+  let html = '<ul class="kta-star-list">';
+  for (const s of stars.slice(0, 10)) {
+    html += `<li>
+      <span class="kta-star-name">${escapeHtml(s.student.name)}</span>
+      <span class="kta-star-stat">◎${s.goodCount}/${s.count} (${Math.round(s.goodRate*100)}%)</span>
+      <span class="kta-star-aspects">${s.aspectCount}観点</span>
+    </li>`;
+  }
+  html += '</ul>';
+  target.innerHTML = html;
+}
+
+function renderKtAStudentCards(recs) {
+  const target = document.getElementById('ktAStudentCards');
+  const byStudent = {};
+  for (const r of recs) {
+    if (!byStudent[r.studentId]) byStudent[r.studentId] = [];
+    byStudent[r.studentId].push(r);
+  }
+  let html = '';
+  for (const s of state.students) {
+    const arr = byStudent[s.id] || [];
+    if (arr.length === 0) {
+      html += `<div class="kta-card empty"><h4>${escapeHtml(s.name)}</h4><div class="muted small">記録なし</div></div>`;
+      continue;
+    }
+    const ratings = { '◎': 0, '○': 0, '△': 0, '×': 0 };
+    const aspectCounts = {};
+    for (const r of arr) {
+      if (r.rating in ratings) ratings[r.rating]++;
+      if (Array.isArray(r.aspects)) for (const a of r.aspects) aspectCounts[a] = (aspectCounts[a] || 0) + 1;
+    }
+    const total = arr.length;
+    const ratingBar = ['◎','○','△','×'].map(r => {
+      const pct = total > 0 ? (ratings[r] / total * 100) : 0;
+      if (ratings[r] === 0) return '';
+      return `<span class="kta-mini-seg" style="width:${pct}%; background:${KTA_RATING_COLORS[r]};" title="${r}${ratings[r]}件"></span>`;
+    }).join('');
+    // 強み弱みは出現観点トップ/最下位
+    const allAspects = Object.entries(aspectCounts).sort((a,b)=>b[1]-a[1]);
+    const top = allAspects.slice(0, 2).map(([a,c]) => `<span class="kta-asp-good">${a}</span>`).join('');
+    const goodRate = total > 0 ? Math.round(ratings['◎'] / total * 100) : 0;
+    const cls = goodRate >= 50 ? 'star' : (ratings['△'] + ratings['×'] >= total / 2 ? 'alert' : '');
+    html += `<div class="kta-card ${cls} ${s.highlight ? 'highlight' : ''}">
+      <h4>${escapeHtml(s.name)} <span class="kta-card-count">${total}件</span></h4>
+      <div class="kta-card-bar">${ratingBar}</div>
+      <div class="kta-card-meta">
+        <span>◎${ratings['◎']} ○${ratings['○']} △${ratings['△']}${ratings['×']>0?' ×'+ratings['×']:''}</span>
+      </div>
+      ${top ? `<div class="kta-card-aspects">強み: ${top}</div>` : ''}
+    </div>`;
+  }
+  target.innerHTML = html;
+}
+
+function renderKtACorrelation(recs) {
+  const target = document.getElementById('ktACorrelation');
+  // 同じ記録内に同時出現した観点ペアの共起回数
+  const allAspectsList = [...new Set([...KTA_ASPECTS_SHUKUDAI, ...KTA_ASPECTS_SEIKATSU])];
+  const cooc = {};
+  const single = {};
+  allAspectsList.forEach(a => single[a] = 0);
+  for (const r of recs) {
+    const arr = Array.isArray(r.aspects) ? [...new Set(r.aspects)] : [];
+    for (const a of arr) single[a] = (single[a] || 0) + 1;
+    for (let i = 0; i < arr.length; i++) {
+      for (let j = i + 1; j < arr.length; j++) {
+        const k = [arr[i], arr[j]].sort().join('-');
+        cooc[k] = (cooc[k] || 0) + 1;
+      }
+    }
+  }
+  const pairs = Object.entries(cooc).map(([k, c]) => {
+    const [a, b] = k.split('-');
+    const ca = single[a] || 0, cb = single[b] || 0;
+    const lift = (ca > 0 && cb > 0) ? c / ((ca * cb) / recs.length) : 0;
+    return { a, b, c, ca, cb, lift };
+  }).filter(p => p.c >= 2).sort((x, y) => y.lift - x.lift);
+
+  if (pairs.length === 0) {
+    target.innerHTML = '<p class="muted">複数観点の同時記録がまだ少ないため、相関分析できません。</p>';
+    return;
+  }
+  let html = '<table class="kta-corr-table"><thead><tr><th>観点ペア</th><th>共起</th><th>Lift</th><th>解釈</th></tr></thead><tbody>';
+  for (const p of pairs.slice(0, 10)) {
+    const aFull = KTA_ASPECTS_SHUKUDAI_FULL[p.a] || KTA_ASPECTS_SEIKATSU_FULL[p.a] || p.a;
+    const bFull = KTA_ASPECTS_SHUKUDAI_FULL[p.b] || KTA_ASPECTS_SEIKATSU_FULL[p.b] || p.b;
+    const interp = p.lift >= 1.5 ? '<span style="color:#2e7d32;">強い相関</span>'
+                  : p.lift >= 1.0 ? '<span style="color:#0277bd;">弱い相関</span>'
+                  : '<span class="muted">独立</span>';
+    html += `<tr><td><b>${p.a}</b>(${aFull}) × <b>${p.b}</b>(${bFull})</td><td>${p.c}</td><td>${p.lift.toFixed(2)}</td><td>${interp}</td></tr>`;
+  }
+  html += '</tbody></table>';
+  html += '<p class="muted small" style="margin-top:6px;">Lift = 同時に評価される頻度 ÷ 独立に評価される期待値。1.5以上で「セットで成長する観点」と解釈。</p>';
+  target.innerHTML = html;
+}
 
 // ========== グローバル公開 (他script用) ==========
 window.state = state;

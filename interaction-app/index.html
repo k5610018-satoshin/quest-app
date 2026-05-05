@@ -46,6 +46,7 @@ if ('serviceWorker' in navigator) {
     <button class="tab-btn" data-tab="socio" title="ソシオグラム + ランキング + コミュニティ">🕸 関係マップ</button>
     <button class="tab-btn" data-tab="timeline" title="関係の変化が大きい児童・期間別推移">📈 関係の変化</button>
     <button class="tab-btn" data-tab="heatmap" title="自分の観察記録の偏り点検">🔥 観察の偏り</button>
+    <button class="tab-btn" data-tab="ketebure-analysis" title="けテぶれ記録の分析（観点別バランス・成長軌跡）">📚 けテぶれ分析</button>
     <button class="tab-btn" data-tab="seating" title="席替えアプリと同期">🪑 座席</button>
     <button class="tab-btn" data-tab="history" title="記録履歴">📜 履歴</button>
     <button class="tab-btn" data-tab="praise-list" title="ほめたい一覧">🌟 ほめ</button>
@@ -93,47 +94,39 @@ if ('serviceWorker' in navigator) {
 
   <div class="record-main interaction-main-1col">
     <div class="grid-area">
-      <!-- ミニステータスバー: 今日の件数 + 観察少TOP3を1行で -->
-      <div class="mini-status-bar">
-        <span class="mini-stat">📊 今日 <b id="todayCount">0</b>件 / <b id="todayCovered">0</b>人観察</span>
-        <span class="mini-stat-divider">・</span>
-        <span class="mini-stat">⚠ 観察少:</span>
+      <!-- 上段バー: ステータス + 凡例 + 選択チップ + 操作ボタン を1行に集約 -->
+      <div class="interaction-top-bar">
+        <span class="mini-stat">📊 <b id="todayCount">0</b>件/<b id="todayCovered">0</b>人</span>
+        <span class="mini-divider">・</span>
+        <span class="mini-stat">⚠</span>
         <ol class="watch-inline" id="watchList"></ol>
+        <span class="mini-divider">・</span>
+        <span class="legend-mini" title="ボタン上のマーク">
+          <b style="color:#2e7d32;">●</b>記録済
+          <b style="color:#6a3eaa;">■</b>観察少
+          <b style="color:#d32f2f;">枠</b>5日未
+        </span>
+        <span class="interaction-actions">
+          <span class="selected-chips inline" id="selectedChips"></span>
+          <button class="ghost compact" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
+          <button class="primary compact" id="saveBtn" disabled>💾 保存(Enter)</button>
+        </span>
       </div>
+      <div class="status-line hidden" id="statusLine"></div>
 
-      <div class="grid-header">
-        <div class="status-line" id="statusLine">
-          <span class="status-label">関わっていた児童をタップしてグループを作成</span>
-        </div>
-        <div class="selected-chips" id="selectedChips"></div>
-      </div>
-      <div class="grid-legend" title="ボタン上のマークの意味">
-        <span><b style="color:#2e7d32;">●</b> 今日記録済（緑）</span>
-        <span><b style="color:#6a3eaa;">■</b> 観察少（紫・下位1/3）</span>
-        <span><b style="color:#d32f2f;">枠</b> 5日以上未観察</span>
-      </div>
       <div class="student-grid" id="studentGrid"></div>
 
-      <div class="special-row">
-        <button class="special-btn" data-special="alone">🚶 一人で過ごしていた</button>
-        <button class="special-btn" data-special="with_teacher">👨‍🏫 先生と</button>
-        <button class="special-btn" data-special="other_class">🌐 他クラスの子と</button>
-      </div>
-
-      <div class="activity-row hidden" id="activityRow">
-        <label>活動</label>
-        <div class="activity-buttons" id="activityButtons"></div>
-      </div>
-
-      <div class="note-row">
-        <input type="text" id="noteInput" placeholder="質的観察メモ (任意): 例「下釜が長田にボールを譲った」" maxlength="200">
-      </div>
-      <div class="action-row">
-        <span class="action-hint">児童を順不同でタップ → Enter=保存 / Esc=クリア / 右クリック=個別分析</span>
-        <div style="display:flex; gap:8px;">
-          <button class="ghost" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
-          <button class="primary" id="saveBtn" disabled>💾 保存して次へ (Enter)</button>
+      <!-- 下段バー: 特殊状況 + 活動 + メモ -->
+      <div class="interaction-bottom-bar">
+        <div class="special-row inline">
+          <button class="special-btn" data-special="alone">🚶 一人</button>
+          <button class="special-btn" data-special="with_teacher">👨‍🏫 先生と</button>
+          <button class="special-btn" data-special="other_class">🌐 他クラス</button>
         </div>
+        <div class="activity-row hidden" id="activityRow">
+          <div class="activity-buttons" id="activityButtons"></div>
+        </div>
+        <input type="text" id="noteInput" class="note-input-inline" placeholder="メモ（任意）..." maxlength="200">
       </div>
 
       <details class="recent-records">
@@ -628,14 +621,32 @@ if ('serviceWorker' in navigator) {
     <span style="margin-left:6px;">
       <label style="font-size:11px; color:#777;">最低共起:
         <input type="number" id="socioMin" value="2" min="1" max="50" style="width:50px; padding:2px 4px;">
+        <span class="muted small">（変更で自動再描画）</span>
       </label>
     </span>
     <input type="hidden" id="socioScene" value="">
     <input type="hidden" id="socioCategory" value="">
-    <button class="ghost" id="socioRedraw" style="padding:3px 8px; font-size:11px;">再描画</button>
+    <button class="ghost" id="socioRedraw" style="padding:3px 8px; font-size:11px;" title="手動で再描画">↻</button>
   </div>
 
-  <!-- 上段3カラム: 個別支援に直結する重要指標 -->
+  <!-- 最上段: ソシオグラム + 自然発生のグループ（横並び・主要視覚情報） -->
+  <div class="socio-main-2col">
+    <div class="card socio-main-card">
+      <h3>🕸 関係マップ（ソシオグラム） <span class="muted small">— 線の太さ=共起回数 / ●配慮優先 ●観察優先</span></h3>
+      <div class="socio-wrap">
+        <svg id="socioSvg" width="100%" height="560" viewBox="0 0 900 560" preserveAspectRatio="xMidYMid meet"></svg>
+      </div>
+    </div>
+    <div class="card socio-side-card">
+      <h3>👥 自然発生のグループ <span class="muted small">— Louvain</span></h3>
+      <div id="centralityCommunities"></div>
+      <div style="margin-top:8px; font-size:11px; color:var(--muted);" id="centralityNetworkStats"></div>
+      <h3 style="margin-top:14px;">🌟 多様に関わる子 TOP10</h3>
+      <table class="centrality-table" id="centralityDegreeTopTable"></table>
+    </div>
+  </div>
+
+  <!-- 下段3カラム: 個別支援に直結する重要指標 -->
   <div class="centrality-grid-3col">
     <div class="card">
       <h3>🚨 関わりが少ない子 BOTTOM10 <span class="muted small">— 孤立リスク</span></h3>
@@ -648,28 +659,6 @@ if ('serviceWorker' in navigator) {
     <div class="card">
       <h3>🌉 グループの橋渡し役 <span class="muted small">— Betweenness</span></h3>
       <table class="centrality-table" id="centralityBetweennessTable"></table>
-    </div>
-  </div>
-
-  <!-- 中段: 関係マップ + 自然発生グループ -->
-  <div class="socio-2col">
-    <div class="card">
-      <h3>🕸 関係マップ（ソシオグラム）</h3>
-      <div class="socio-wrap">
-        <svg id="socioSvg" width="100%" height="540" viewBox="0 0 900 540" preserveAspectRatio="xMidYMid meet"></svg>
-        <div class="socio-legend">
-          <div><span class="dot highlight"></span>配慮優先</div>
-          <div><span class="dot watch"></span>観察優先（情報少）</div>
-          <div>線の太さ = 一緒にいた回数</div>
-        </div>
-      </div>
-    </div>
-    <div class="card">
-      <h3>👥 自然発生のグループ <span class="muted small">— Louvain</span></h3>
-      <div id="centralityCommunities"></div>
-      <div style="margin-top:8px; font-size:11px; color:var(--muted);" id="centralityNetworkStats"></div>
-      <h3 style="margin-top:14px;">🌟 多様に関わる子 TOP10</h3>
-      <table class="centrality-table" id="centralityDegreeTopTable"></table>
     </div>
   </div>
 
@@ -770,6 +759,68 @@ if ('serviceWorker' in navigator) {
   </div>
 </section>
 
+<!-- =================== けテぶれ分析タブ =================== -->
+<section class="tab-panel" id="tab-ketebure-analysis">
+  <div class="filter-bar">
+    <span class="btn-grp-label">対象</span>
+    <div class="btn-grp" data-target="ktAType">
+      <button type="button" data-value="all" class="active">両方</button>
+      <button type="button" data-value="shukudai">宿題</button>
+      <button type="button" data-value="seikatsu">生活</button>
+    </div>
+    <input type="hidden" id="ktAType" value="all">
+    <span class="btn-grp-label">期間</span>
+    <div class="btn-grp" data-target="ktAPeriod">
+      <button type="button" data-value="all" class="active">すべて</button>
+      <button type="button" data-value="7">7日</button>
+      <button type="button" data-value="30">30日</button>
+      <button type="button" data-value="month">今月</button>
+    </div>
+    <input type="hidden" id="ktAPeriod" value="all">
+    <span class="filter-info" id="ktAInfo"></span>
+  </div>
+
+  <!-- 上段: 学級全体サマリー (3カラム) -->
+  <div class="kta-top-3col">
+    <div class="card kta-card">
+      <h3>📊 評価分布 <span class="muted small">— ◎○△の割合</span></h3>
+      <div id="ktARatingDist"></div>
+    </div>
+    <div class="card kta-card">
+      <h3>🎯 観点別バランス <span class="muted small">— 計画/分析/練習...</span></h3>
+      <div id="ktAAspectBalance"></div>
+    </div>
+    <div class="card kta-card">
+      <h3>📅 直近の動き <span class="muted small">— 今週・先週件数</span></h3>
+      <div id="ktATrend"></div>
+    </div>
+  </div>
+
+  <!-- 中段: 要観察児童 + 強み発見 -->
+  <div class="kta-middle-2col">
+    <div class="card kta-card">
+      <h3>⚠ 要観察 <span class="muted small">— 連続△・記録少・計画停滞</span></h3>
+      <div id="ktAAlerts"></div>
+    </div>
+    <div class="card kta-card">
+      <h3>🌟 けテぶれ自走児 <span class="muted small">— ◎多+全観点バランス◎</span></h3>
+      <div id="ktAStars"></div>
+    </div>
+  </div>
+
+  <!-- 下段: 児童別カードグリッド (◎○△分布 + 観点強度) -->
+  <div class="card">
+    <h3>👤 児童別 けテぶれカード <span class="muted small">— 観点ごとの強み・弱み</span></h3>
+    <div class="kta-card-grid" id="ktAStudentCards"></div>
+  </div>
+
+  <!-- 最下段: 観点相関 -->
+  <div class="card">
+    <h3>🔗 観点間の相関 <span class="muted small">— 「計画ができる子は分析もできるか」</span></h3>
+    <div id="ktACorrelation"></div>
+  </div>
+</section>
+
 <!-- =================== 席替えタブ =================== -->
 <section class="tab-panel" id="tab-seating">
   <div class="filter-bar">
@@ -860,15 +911,15 @@ if ('serviceWorker' in navigator) {
       </select>
     </label>
     <span class="filter-info" id="evalListInfo"></span>
-    <button class="ghost" id="evalMatrixBtn" title="教科別の児童一覧表示（児童×単元観点）">📋 教科別一覧</button>
+    <button class="ghost" id="evalMatrixBtn" title="教科別の児童一覧表示（児童×単元観点）">📋 一覧表示に戻す</button>
     <button class="ghost" id="evalCopyMatrixBtn" title="現在表示中の表をクリップボードにTSV形式でコピー">📋 表をコピー</button>
     <button class="ghost" id="exportEvalCsvBtn" title="評価記録のCSV出力">📥 CSV</button>
   </div>
-  <div id="evalListContent">
+  <div id="evalListContent" class="hidden">
     <div class="praise-summary card" id="evalListSummary"></div>
     <ul class="praise-list" id="evalList"></ul>
   </div>
-  <div id="evalMatrixContent" class="hidden" style="margin:8px 12px;">
+  <div id="evalMatrixContent" style="margin:8px 12px;">
     <h3 style="margin:6px 0;">📋 教科別評価一覧（児童 × 単元・観点）</h3>
     <p class="muted small">成績入力ソフトへのコピー用 → <b>「📋 表をコピー」ボタンを押すと TSV形式でクリップボードにコピーされます</b>（Excel/Googleスプレッドシートに貼付可）</p>
     <div style="overflow:auto; max-height:calc(100vh - 220px);">
@@ -1116,24 +1167,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506f"></script>
-<script src="students.js?v=20260506f"></script>
-<script src="eval-data.js?v=20260506f"></script>
-<script src="eval-data-extra.js?v=20260506f"></script>
-<script src="app.js?v=20260506f"></script>
-<script src="cloud-sync.js?v=20260506f"></script>
-<script src="analytics-plus.js?v=20260506f"></script>
-<script src="dashboard-overview.js?v=20260506f"></script>
-<script src="seating-planner.js?v=20260506f"></script>
-<script src="print-report.js?v=20260506f"></script>
-<script src="search-bar.js?v=20260506f"></script>
-<script src="centrality-extra.js?v=20260506f"></script>
-<script src="seating-correlation.js?v=20260506f"></script>
-<script src="templates.js?v=20260506f"></script>
-<script src="photo-library.js?v=20260506f"></script>
-<script src="voice-memo.js?v=20260506f"></script>
-<script src="ai-insights.js?v=20260506f"></script>
-<script src="extra-features.js?v=20260506f"></script>
-<script src="onboarding-wizard.js?v=20260506f"></script>
+<script src="config.js?v=20260506g"></script>
+<script src="students.js?v=20260506g"></script>
+<script src="eval-data.js?v=20260506g"></script>
+<script src="eval-data-extra.js?v=20260506g"></script>
+<script src="app.js?v=20260506g"></script>
+<script src="cloud-sync.js?v=20260506g"></script>
+<script src="analytics-plus.js?v=20260506g"></script>
+<script src="dashboard-overview.js?v=20260506g"></script>
+<script src="seating-planner.js?v=20260506g"></script>
+<script src="print-report.js?v=20260506g"></script>
+<script src="search-bar.js?v=20260506g"></script>
+<script src="centrality-extra.js?v=20260506g"></script>
+<script src="seating-correlation.js?v=20260506g"></script>
+<script src="templates.js?v=20260506g"></script>
+<script src="photo-library.js?v=20260506g"></script>
+<script src="voice-memo.js?v=20260506g"></script>
+<script src="ai-insights.js?v=20260506g"></script>
+<script src="extra-features.js?v=20260506g"></script>
+<script src="onboarding-wizard.js?v=20260506g"></script>
 </body>
 </html>
