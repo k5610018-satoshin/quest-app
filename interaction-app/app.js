@@ -1554,9 +1554,24 @@ function drawSociogram(pairs, minCount) {
   const radius = Math.min(w, h) / 2 - 60;
   const N = state.students.length;
 
-  // 児童の位置を円形に配置
+  // Louvain コミュニティで色分け (中心性タブと共通の指標)
+  const network = { nodes: state.students.map(s => s.id), edges: [] };
+  for (const k in pairs) {
+    const [a, b] = k.split('-').map(Number);
+    if (pairs[k] >= minCount) network.edges.push({ a, b, w: pairs[k] });
+  }
+  const community = (typeof louvainCommunities === 'function') ? louvainCommunities(network) : {};
+  const communityColors = ['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#e67e22','#16a085','#34495e','#c0392b','#2980b9'];
+  // コミュニティごとに児童を分類してから配置（同じコミュニティを近くに）
+  const communitySorted = state.students.slice().sort((a, b) => {
+    const ca = community[a.id] ?? 999;
+    const cb = community[b.id] ?? 999;
+    if (ca !== cb) return ca - cb;
+    return a.id - b.id;
+  });
+  // 児童の位置を円形に配置 (コミュニティ順 → 同じグループが隣接)
   const positions = {};
-  state.students.forEach((s, i) => {
+  communitySorted.forEach((s, i) => {
     const angle = (i / N) * 2 * Math.PI - Math.PI / 2;
     positions[s.id] = {
       x: cx + Math.cos(angle) * radius,
@@ -1601,12 +1616,16 @@ function drawSociogram(pairs, minCount) {
 
     const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     circle.setAttribute('r', 22);
+    // コミュニティ色を fill 背景にうっすら反映、stroke は配慮属性
+    const cIdx = community[s.id];
+    const cColor = (cIdx !== undefined && cIdx >= 0) ? communityColors[cIdx % communityColors.length] : null;
     let fill = '#ffffff', stroke = '#4a90e2';
-    if (s.highlight) { fill = '#fff3c4'; stroke = '#d4a017'; }
-    if (s.watch) { fill = '#e8e0f3'; stroke = '#7e57c2'; }
+    if (cColor) fill = cColor + '33'; // 透明度付きでコミュニティ色
+    if (s.highlight) stroke = '#d4a017';
+    if (s.watch) stroke = '#7e57c2';
     circle.setAttribute('fill', fill);
     circle.setAttribute('stroke', stroke);
-    circle.setAttribute('stroke-width', 2);
+    circle.setAttribute('stroke-width', s.highlight || s.watch ? 3 : 2);
     g.appendChild(circle);
 
     const text = document.createElementNS('http://www.w3.org/2000/svg', 'text');
