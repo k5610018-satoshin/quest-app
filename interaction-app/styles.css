@@ -1936,7 +1936,7 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 }
 .eval-control-bar {
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: auto 1fr auto;
   gap: 16px;
   padding: 6px 12px;
   background: linear-gradient(180deg, #f0f8ff 0%, #e3f0ff 100%);
@@ -1944,6 +1944,43 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   border-radius: 8px;
   margin: 4px 0 6px;
   align-items: start;
+}
+.eval-control-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 130px;
+}
+.eval-control-actions #evalSaveBtn {
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+.eval-control-actions #evalSaveBtn:not(:disabled) {
+  background: #27ae60;
+  border-color: #1e8449;
+  animation: ketPulse 1.5s ease-in-out infinite;
+}
+.student-btn.eval-pending {
+  background: #fffbe6;
+  border-color: #f7c948;
+  box-shadow: 0 0 0 2px rgba(247, 201, 72, 0.45);
+}
+.student-btn .eval-pending-grade {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: #f1c40f;
+  color: #5a4500;
+  border-radius: 8px;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.1;
+  border: 1px solid #c19400;
+  z-index: 2;
 }
 .eval-control-grade {
   display: flex;

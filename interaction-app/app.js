@@ -3172,14 +3172,23 @@ function initEvaluationEvents() {
         x.classList.toggle('active', parseInt(x.dataset.evalScale) === state.ui.evalScale)
       );
       state.ui.evalActiveGrade = null;
+      // 尺度変更時は保留もクリア（A/B/C ↔ 1-5 で互換性なし）
+      state.ui.evalSelected = new Map();
       renderEvalGradeButtons();
+      refreshEvalGridState();
+      refreshEvalSaveBtn();
       saveState();
     });
   });
 
   renderEvalGradeButtons();
   renderEvalStudentGrid();
+  // 一括保存ボタン・クリアボタン
+  state.ui.evalSelected = state.ui.evalSelected instanceof Map ? state.ui.evalSelected : new Map();
+  document.getElementById('evalSaveBtn')?.addEventListener('click', saveEvalBatch);
+  document.getElementById('evalClearBtn')?.addEventListener('click', clearEvalSelection);
   refreshEvalUI();
+  refreshEvalSaveBtn();
 
   // 評価一覧タブのフィルタ
   const lsubj = document.getElementById('evalListSubject');
@@ -3361,10 +3370,11 @@ function findEvaluation(studentId, subjectId, unitId, viewpoint) {
 
 function refreshEvalGridState() {
   const subj = state.ui.evalSubjectId, unit = state.ui.evalUnitId, vp = state.ui.evalViewpoint;
+  const pending = state.ui.evalSelected || new Map();
   document.querySelectorAll('#evalStudentGrid .student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('covered-today', 'watch', 'subject', 'eval-active-student');
-    btn.querySelectorAll('.eval-grade-tag, .eval-count-badge').forEach(t => t.remove());
+    btn.classList.remove('covered-today', 'watch', 'subject', 'eval-active-student', 'eval-pending');
+    btn.querySelectorAll('.eval-grade-tag, .eval-count-badge, .eval-pending-grade').forEach(t => t.remove());
     const list = findEvaluations(id, subj, unit, vp);
     const ev = list.length ? list[list.length - 1] : null;
     if (ev) {
@@ -3385,6 +3395,16 @@ function refreshEvalGridState() {
     }
     if (id === state.ui.evalActiveStudent) {
       btn.classList.add('eval-active-student');
+    }
+    // 保留中（一括保存待ち）の評価値タグを上書き表示
+    const pendGrade = pending.get(id);
+    if (pendGrade) {
+      btn.classList.add('eval-pending');
+      const pTag = document.createElement('span');
+      pTag.className = 'eval-pending-grade';
+      pTag.textContent = pendGrade;
+      pTag.title = '保留中（💾記録ボタンで保存）';
+      btn.appendChild(pTag);
     }
   });
   // 評価値ボタン側の表示更新（児童先行時にヒント）
@@ -3488,18 +3508,82 @@ function onEvalStudentClick(studentId) {
     showToast('教科・単元・観点を選択してください', 'error');
     return;
   }
-  // 評価値先行モード: クリック即記録
+  // 評価値先行モード: 保留Mapに追加（評価値切替時も既存選択を保持して累積）
   if (state.ui.evalActiveGrade) {
-    applyEvaluation(studentId, state.ui.evalActiveGrade);
+    if (!state.ui.evalSelected) state.ui.evalSelected = new Map();
+    const cur = state.ui.evalSelected.get(studentId);
+    if (cur === state.ui.evalActiveGrade) {
+      // 同じ評価値で再タップ → 解除
+      state.ui.evalSelected.delete(studentId);
+    } else {
+      // 新規 or 別評価値で上書き
+      state.ui.evalSelected.set(studentId, state.ui.evalActiveGrade);
+    }
+    refreshEvalGridState();
+    refreshEvalSaveBtn();
     return;
   }
-  // 児童先行モード: 児童をハイライト → 評価値ボタン待ち
+  // 児童先行モード: 児童をハイライト → 評価値ボタン待ち（即時記録）
   if (state.ui.evalActiveStudent === studentId) {
-    state.ui.evalActiveStudent = null; // 同児童再タップでキャンセル
+    state.ui.evalActiveStudent = null;
   } else {
     state.ui.evalActiveStudent = studentId;
   }
   refreshEvalGridState();
+}
+
+function refreshEvalSaveBtn() {
+  const btn = document.getElementById('evalSaveBtn');
+  if (!btn) return;
+  const cnt = state.ui.evalSelected ? state.ui.evalSelected.size : 0;
+  btn.disabled = cnt === 0;
+  const cntEl = document.getElementById('evalPendingCount');
+  if (cntEl) cntEl.textContent = `(${cnt})`;
+}
+
+function clearEvalSelection() {
+  state.ui.evalSelected = new Map();
+  state.ui.evalActiveGrade = null;
+  document.querySelectorAll('.eval-grade-btn').forEach(x => x.classList.remove('active'));
+  refreshEvalGridState();
+  refreshEvalSaveBtn();
+}
+
+function saveEvalBatch() {
+  if (!state.ui.evalSelected || state.ui.evalSelected.size === 0) return;
+  const entries = [...state.ui.evalSelected.entries()];
+  const evMap = state.ui.evalEvidences || {};
+  const evidences = EVAL_EVIDENCE_TYPES
+    .filter(t => evMap[t.id] !== undefined && evMap[t.id] !== null)
+    .map(t => ({ type: t.id, detail: evMap[t.id] || '' }));
+  const note = state.ui.evalNote || '';
+  const date = todayISO();
+  let savedCount = 0;
+  for (const [studentId, grade] of entries) {
+    const ev = normalizeEvaluation({
+      studentId,
+      subjectId: state.ui.evalSubjectId,
+      unitId: state.ui.evalUnitId,
+      viewpoint: state.ui.evalViewpoint,
+      grade,
+      scale: state.ui.evalScale,
+      evidences,
+      note,
+      date
+    });
+    if (!ev) continue;
+    state.evaluations.push(ev);
+    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(ev, 'add').catch(() => {});
+    savedCount++;
+  }
+  saveState();
+  state.ui.evalSelected = new Map();
+  state.ui.evalActiveGrade = null;
+  document.querySelectorAll('.eval-grade-btn').forEach(x => x.classList.remove('active'));
+  refreshEvalUI();
+  refreshEvalSaveBtn();
+  showToast(`${savedCount}件の評価を一括記録しました`);
+  if (state.ui.currentTab === 'eval-list') refreshEvalList();
 }
 
 // 評価記録を **必ず append** (補助簿として何度でも記録可能)。既存編集はしない。
