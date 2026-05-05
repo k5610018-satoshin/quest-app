@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="styles.css?v=20260505d">
 </head>
 <body>
 
@@ -62,6 +62,11 @@
           <span class="status-label">主役を選んでください</span>
         </div>
         <div class="selected-chips" id="selectedChips"></div>
+      </div>
+      <div class="grid-legend" title="ボタン右上のマークの意味">
+        <span><span class="lg-mark hl">●</span>配慮優先（既知の特性・対応に配慮）</span>
+        <span><span class="lg-mark wt">■</span>観察優先（情報が少なく意識的に見たい）</span>
+        <span><span class="lg-mark dn">●</span>今日記録済</span>
       </div>
       <div class="student-grid" id="studentGrid"></div>
 
@@ -202,8 +207,8 @@
   <div class="socio-wrap">
     <svg id="socioSvg" width="900" height="700"></svg>
     <div class="socio-legend">
-      <div><span class="dot highlight"></span>要配慮児童</div>
-      <div><span class="dot watch"></span>観察優先</div>
+      <div><span class="dot highlight"></span>配慮優先（既知の特性に配慮）</div>
+      <div><span class="dot watch"></span>観察優先（情報が少ない児童）</div>
       <div>線の太さ = 一緒にいた回数</div>
     </div>
   </div>
@@ -541,8 +546,8 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505c"></script>
-<script src="app.js?v=20260505c"></script>
-<script src="cloud-sync.js?v=20260505c"></script>
+<script src="students.js?v=20260505d"></script>
+<script src="app.js?v=20260505d"></script>
+<script src="cloud-sync.js?v=20260505d"></script>
 </body>
 </html>

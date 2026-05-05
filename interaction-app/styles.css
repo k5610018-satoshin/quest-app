@@ -321,6 +321,30 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   color: var(--muted);
   font-weight: normal;
 }
+/* マーク凡例 (児童グリッド上) */
+.grid-legend {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex-wrap: wrap;
+  font-size: 11px;
+  color: var(--muted);
+  padding: 4px 8px;
+  margin: 2px 0 4px;
+  background: #f7f7fa;
+  border-radius: 4px;
+  border: 1px solid #ececf2;
+}
+.grid-legend .lg-mark {
+  display: inline-block;
+  margin-right: 3px;
+  vertical-align: middle;
+  font-weight: 700;
+}
+.grid-legend .lg-mark.hl { color: #d4a017; font-size: 14px; }
+.grid-legend .lg-mark.wt { color: #6a3eaa; font-size: 12px; }
+.grid-legend .lg-mark.dn { color: #2e7d32; font-size: 10px; }
+
 /* マーク: 形と色の両方で識別 */
 .student-btn.highlight::after {
   content: "●";
