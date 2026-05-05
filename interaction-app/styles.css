@@ -1668,6 +1668,69 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   50% { box-shadow: 0 0 0 4px rgba(39,174,96,0); }
 }
 
+/* ========== 評価材料セレクタ ========== */
+.eval-evidence-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 4px;
+}
+.eval-evidence-row {
+  display: grid;
+  grid-template-columns: 80px 1fr;
+  gap: 4px;
+  align-items: center;
+}
+.eval-evidence-toggle {
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 600;
+  border: 1.5px solid #4a90e2;
+  background: #fff;
+  color: #4a90e2;
+  border-radius: 4px;
+  cursor: pointer;
+  text-align: center;
+}
+.eval-evidence-toggle.active {
+  background: #4a90e2;
+  color: white;
+}
+.eval-evidence-detail {
+  padding: 3px 6px;
+  font-size: 11.5px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+}
+.eval-evidence-detail:disabled {
+  background: #f5f5f5;
+  cursor: not-allowed;
+}
+
+/* ========== 編集モーダル：拡張用 ========== */
+.edit-modal-row {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 10px;
+}
+.edit-modal-row > label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+}
+.edit-modal-row > input[type=text],
+.edit-modal-row > textarea,
+.edit-modal-row > select {
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-family: inherit;
+  font-size: 13px;
+}
+.edit-modal-row > textarea { min-height: 60px; }
+
 /* 一覧表示用のタグチップ */
 .praise-tag-chip {
   display: inline-block;
@@ -2386,80 +2449,170 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== ABA 上下2段式レイアウト ========== */
+/* ========== ABA 2カラム式レイアウト（両カラムスクロール不要を目指す） ========== */
+.aba-flat {
+  height: calc(100vh - 110px);
+  padding: 4px 8px;
+}
 .aba-flat .aba-flat-grid {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-columns: 1.5fr 1fr;
   gap: 6px;
   flex: 1;
   overflow: hidden;
-  padding: 4px;
+  padding: 2px;
 }
-.aba-flat .aba-flat-top {
+.aba-flat .aba-flat-left,
+.aba-flat .aba-flat-right {
   display: flex;
   flex-direction: column;
-  gap: 3px;
-  overflow-y: auto;
+  gap: 2px;
   min-height: 0;
+  overflow: hidden;
 }
-.aba-flat .aba-flat-bottom {
-  display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+.aba-flat .aba-flat-right {
   background: #fef9f9;
   border: 1px solid #f5d0d0;
   border-radius: 6px;
   padding: 4px 6px;
-  overflow-y: auto;
-  max-height: 36vh;
 }
-.aba-flat .aba-flat-row-vertical {
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-  padding: 4px 4px;
+/* 各行をコンパクトに */
+.aba-flat .aba-flat-row {
+  grid-template-columns: 64px 1fr;
+  gap: 4px;
+  padding: 1px 2px 2px;
+  border-bottom: 1px dashed #f0f0f0;
 }
-.aba-flat .aba-flat-row-vertical .aba-flat-label {
-  padding-top: 0;
-  font-size: 11.5px;
-}
-.aba-flat .aba-flat-row-vertical .aba-flat-text textarea {
-  min-height: 22px;
-  font-size: 11.5px;
-}
-.aba-flat .aba-flat-row-vertical .aba-quick-row {
-  margin-top: 0;
-  margin-bottom: 3px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 3px;
-}
-.aba-flat .aba-flat-row-vertical .aba-quick {
+.aba-flat .aba-flat-label {
   font-size: 10.5px;
-  padding: 3px 6px;
+  padding-top: 3px;
+  line-height: 1.2;
+}
+.aba-flat .aba-flat-label .muted { font-size: 9px; }
+
+/* ===== 左カラム: 全選択項目をスクロールなしで詰める ===== */
+.aba-flat .aba-quick-dates { gap: 2px; }
+.aba-flat .aba-date-btn { padding: 3px 8px; font-size: 11px; }
+
+.aba-flat .aba-slot-grid {
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+.aba-flat .aba-slot-btn {
+  padding: 3px 1px;
+  font-size: 10.5px;
+}
+.aba-flat .aba-subject-grid {
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+.aba-flat .aba-subject-btn {
+  padding: 3px 1px;
+  font-size: 10.5px;
+}
+.aba-flat .aba-weather-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 2px;
+}
+.aba-flat .aba-weather-grid > * {
+  padding: 3px 1px;
+  font-size: 10.5px;
 }
 
-/* 行動グリッドを14個ボタン1行に詰める */
+/* 行動グリッド: 14個を 7×2 で展開（スクロール不要） */
 .aba-flat .aba-behavior-grid {
   display: grid;
-  grid-template-columns: repeat(14, 1fr);
+  grid-template-columns: repeat(7, 1fr);
   gap: 2px;
 }
 .aba-flat .aba-behavior-btn {
-  padding: 4px 1px;
+  padding: 3px 1px;
   font-size: 11px;
   border-width: 1px;
   white-space: nowrap;
+  min-height: 26px;
+}
+.aba-flat .aba-behavior-btn small { display: none; }
+
+/* 児童グリッド: 7列でコンパクト表示 */
+.aba-flat .aba-student-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+.aba-flat .aba-student-grid .student-btn {
+  padding: 3px 2px;
+  font-size: 11px;
+  min-height: 30px;
+  position: relative;
+}
+.aba-flat .aba-student-grid .student-btn .num {
+  font-size: 8.5px;
+  color: #aaa;
 }
 
-/* 相手選択グリッドは児童グリッドと同じスタイル */
+/* 相手選択 */
+.aba-flat .aba-target-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
 .aba-flat .aba-target-grid .student-btn {
+  padding: 3px 2px;
+  font-size: 11px;
+  min-height: 30px;
   border-color: #c0392b;
+  color: #c0392b;
 }
 .aba-flat .aba-target-grid .student-btn.active {
   background: #c0392b;
   color: white;
   border-color: #c0392b;
+}
+
+/* ===== 右カラム: A/C/対応 ===== */
+.aba-flat .aba-flat-row-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 3px 2px;
+  border-bottom: 1px dashed #f5d0d0;
+  flex: 1;
+  min-height: 0;
+}
+.aba-flat .aba-flat-row-vertical:last-child { border-bottom: none; }
+.aba-flat .aba-flat-row-vertical .aba-flat-label {
+  padding-top: 0;
+  font-size: 10.5px;
+  line-height: 1.1;
+}
+.aba-flat .aba-flat-row-vertical .aba-quick-row {
+  margin: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+.aba-flat .aba-flat-row-vertical .aba-quick {
+  font-size: 9.5px;
+  padding: 2px 5px;
+}
+.aba-flat .aba-flat-row-vertical .aba-flat-text textarea {
+  min-height: 22px;
+  font-size: 11px;
+  padding: 3px 5px;
+  flex: 1;
+}
+
+/* ステータスバーをコンパクト化 */
+.aba-flat .aba-status-bar {
+  padding: 3px 6px;
+  gap: 6px;
+  font-size: 11px;
+}
+.aba-flat .aba-status-item {
+  padding: 2px 4px;
+  font-size: 11px;
 }
 
 /* ========== 交友関係UI コンパクト化（スクロール削減） ========== */

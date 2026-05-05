@@ -86,6 +86,8 @@ const state = {
     evalScale: 3,               // 3 | 5
     evalActiveGrade: null,      // 'A'|'B'|'C'|'1'..'5' (評価値先行モード)
     evalActiveStudent: null,    // 児童先行モード時の選択児童ID
+    evalEvidences: {},          // {observation: 'detail', notebook: '', ...} 選択+詳細
+    evalNote: '',               // 評価につけるメモ
     abaDate: '',
     abaSlot: '',
     abaSubjectId: '',
@@ -272,6 +274,14 @@ function normalizeAba(a) {
   };
 }
 
+// 評価材料の選択肢
+const EVAL_EVIDENCE_TYPES = [
+  { id: 'observation', label: '行動観察' },
+  { id: 'notebook',    label: 'ノート' },
+  { id: 'product',     label: '成果物' },
+  { id: 'other',       label: 'その他' }
+];
+
 function normalizeEvaluation(ev) {
   if (!ev || typeof ev !== 'object') return null;
   const studentId = parseInt(ev.studentId);
@@ -286,6 +296,18 @@ function normalizeEvaluation(ev) {
     try { date = new Date(timestamp).toISOString().slice(0, 10); }
     catch { date = todayISO(); }
   }
+  // 評価材料: [{type:'observation'|'notebook'|'product'|'other', detail:string}]
+  let evidences = [];
+  if (Array.isArray(ev.evidences)) {
+    evidences = ev.evidences
+      .filter(e => e && typeof e === 'object' && e.type)
+      .map(e => ({
+        type: String(e.type),
+        detail: typeof e.detail === 'string' ? e.detail.slice(0, 300) : ''
+      }))
+      .slice(0, 8);
+  }
+  const note = typeof ev.note === 'string' ? ev.note.slice(0, 300) : '';
   return {
     id: ev.id || uuid(),
     studentId,
@@ -294,6 +316,8 @@ function normalizeEvaluation(ev) {
     viewpoint: String(ev.viewpoint),
     grade,
     scale,
+    evidences,
+    note,
     date,
     timestamp
   };
@@ -3314,6 +3338,42 @@ function refreshEvalUI() {
   refreshEvalGridState();
   refreshEvalSidePanel();
   refreshEvalCriteriaText();
+  renderEvalEvidenceList();
+}
+
+// 評価材料の選択UIを描画（toggle + 自由記述）
+function renderEvalEvidenceList() {
+  const cont = document.getElementById('evalEvidenceList');
+  if (!cont) return;
+  cont.innerHTML = '';
+  if (!state.ui.evalEvidences) state.ui.evalEvidences = {};
+  const map = state.ui.evalEvidences;
+  EVAL_EVIDENCE_TYPES.forEach(t => {
+    const row = document.createElement('div');
+    row.className = 'eval-evidence-row';
+    const isActive = map[t.id] !== undefined;
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'eval-evidence-toggle' + (isActive ? ' active' : '');
+    btn.textContent = t.label;
+    btn.addEventListener('click', () => {
+      if (map[t.id] !== undefined) delete map[t.id];
+      else map[t.id] = '';
+      renderEvalEvidenceList();
+    });
+    const inp = document.createElement('input');
+    inp.type = 'text';
+    inp.className = 'eval-evidence-detail';
+    inp.placeholder = isActive ? t.label + 'の詳細（任意）' : '（材料を選んでから）';
+    inp.value = isActive ? (map[t.id] || '') : '';
+    inp.disabled = !isActive;
+    inp.addEventListener('input', () => {
+      if (map[t.id] !== undefined) map[t.id] = inp.value;
+    });
+    row.appendChild(btn);
+    row.appendChild(inp);
+    cont.appendChild(row);
+  });
 }
 
 function refreshEvalCriteriaText() {
@@ -3374,6 +3434,11 @@ function onEvalStudentClick(studentId) {
 
 // 評価記録を **必ず append** (補助簿として何度でも記録可能)。既存編集はしない。
 function applyEvaluation(studentId, grade) {
+  // 評価材料を配列化（選択中のもののみ）
+  const evMap = state.ui.evalEvidences || {};
+  const evidences = EVAL_EVIDENCE_TYPES
+    .filter(t => evMap[t.id] !== undefined && evMap[t.id] !== null)
+    .map(t => ({ type: t.id, detail: evMap[t.id] || '' }));
   const ev = normalizeEvaluation({
     studentId,
     subjectId: state.ui.evalSubjectId,
@@ -3381,6 +3446,8 @@ function applyEvaluation(studentId, grade) {
     viewpoint: state.ui.evalViewpoint,
     grade,
     scale: state.ui.evalScale,
+    evidences,
+    note: state.ui.evalNote || '',
     date: todayISO()
   });
   if (!ev) { showToast('保存に失敗', 'error'); return; }
@@ -3389,7 +3456,8 @@ function applyEvaluation(studentId, grade) {
   if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(ev, 'add').catch(() => {});
   const s = state.students.find(x => x.id === studentId);
   const list = findEvaluations(studentId, ev.subjectId, ev.unitId, ev.viewpoint);
-  showToast(`${s ? s.name : ''}: ${grade}（この単元観点で${list.length}件目）`);
+  const evMark = evidences.length ? ` 📋${evidences.length}` : '';
+  showToast(`${s ? s.name : ''}: ${grade}${evMark}（この単元観点で${list.length}件目）`);
   refreshEvalUI();
   if (state.ui.currentTab === 'eval-list') refreshEvalList();
 }
@@ -3449,6 +3517,17 @@ function refreshEvalList() {
     const v = vpMap.get(e.viewpoint);
     const name = s ? `${s.id}. ${s.name}` : `(ID:${e.studentId})`;
     const time = e.timestamp ? new Date(e.timestamp).toLocaleString('ja-JP', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : e.date;
+    // 評価材料・メモ表示
+    const evList = Array.isArray(e.evidences) ? e.evidences : [];
+    const evHtml = evList.length
+      ? `<div class="muted small" style="margin-top:3px;">📋 ${evList.map(ee => {
+          const lbl = (EVAL_EVIDENCE_TYPES.find(t => t.id === ee.type) || {}).label || ee.type;
+          return `<b>${escapeHtml(lbl)}</b>${ee.detail ? '：' + escapeHtml(ee.detail) : ''}`;
+        }).join(' / ')}</div>`
+      : '';
+    const noteHtml = e.note
+      ? `<div class="muted small" style="margin-top:3px;">📝 ${escapeHtml(e.note)}</div>`
+      : '';
     return `<li data-id="${e.id}">
       <div class="praise-meta">
         <div>${time}</div>
@@ -3459,13 +3538,19 @@ function refreshEvalList() {
         <span class="eval-grade-inline grade-${e.grade}">${e.grade}</span>
         <span class="muted small">(${e.scale}段階)</span>
       </div>
+      ${evHtml}
+      ${noteHtml}
       <div class="praise-actions">
+        <button class="ghost" data-action="edit-eval" data-id="${e.id}">編集</button>
         <button class="ghost danger" data-action="delete-eval" data-id="${e.id}">削除</button>
       </div>
     </li>`;
   }).join('');
   ul.querySelectorAll('button[data-action="delete-eval"]').forEach(btn => {
     btn.addEventListener('click', () => deleteEvaluation(btn.dataset.id));
+  });
+  ul.querySelectorAll('button[data-action="edit-eval"]').forEach(btn => {
+    btn.addEventListener('click', () => openEvaluationEditModal(btn.dataset.id));
   });
 }
 
@@ -3479,6 +3564,113 @@ function deleteEvaluation(id) {
   refreshEvalList();
   refreshEvalGridState();
   showToast('削除しました');
+}
+
+// 評価記録の編集モーダル（評価値・評価材料・メモを編集可能）
+function openEvaluationEditModal(id) {
+  const e = state.evaluations.find(x => x.id === id);
+  if (!e) return;
+  const s = state.students.find(x => x.id === e.studentId);
+  const sub = state.subjects.find(x => x.id === e.subjectId);
+  const u = state.units.find(x => x.id === e.unitId);
+  const v = state.viewpoints.find(x => x.id === e.viewpoint);
+
+  const grades = e.scale === 5 ? ['1', '2', '3', '4', '5'] : ['A', 'B', 'C'];
+  const evMap = {};
+  (e.evidences || []).forEach(ee => { evMap[ee.type] = ee.detail || ''; });
+
+  const body = document.getElementById('editModalBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="muted small" style="margin-bottom:8px;">
+      ${escapeHtml(s ? s.name : '?')} ・ ${escapeHtml((sub && sub.label) || e.subjectId)} / ${escapeHtml((u && u.name) || e.unitId)} / ${escapeHtml((v && v.short) || e.viewpoint)}
+    </div>
+    <div class="edit-modal-row">
+      <label>評価値</label>
+      <div id="editEvalGradeBtns" style="display:flex; gap:6px;">
+        ${grades.map(g => `<button type="button" class="ket-rating-btn${g === e.grade ? ' active' : ''}" data-grade="${g}" style="min-width:40px;">${g}</button>`).join('')}
+      </div>
+    </div>
+    <div class="edit-modal-row">
+      <label>評価材料 <span class="muted small">(任意・複数可)</span></label>
+      <div id="editEvalEvidenceList" class="eval-evidence-list"></div>
+    </div>
+    <div class="edit-modal-row">
+      <label>メモ</label>
+      <textarea id="editEvalNote" placeholder="評価のメモ（任意）" maxlength="300">${escapeHtml(e.note || '')}</textarea>
+    </div>
+  `;
+  // 評価値ボタン
+  let selectedGrade = e.grade;
+  body.querySelectorAll('#editEvalGradeBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      selectedGrade = b.dataset.grade;
+      body.querySelectorAll('#editEvalGradeBtns button').forEach(x => x.classList.toggle('active', x === b));
+    });
+  });
+  // 評価材料リスト
+  const evList = document.getElementById('editEvalEvidenceList');
+  function renderEv() {
+    evList.innerHTML = '';
+    EVAL_EVIDENCE_TYPES.forEach(t => {
+      const isActive = evMap[t.id] !== undefined;
+      const row = document.createElement('div');
+      row.className = 'eval-evidence-row';
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'eval-evidence-toggle' + (isActive ? ' active' : '');
+      btn.textContent = t.label;
+      btn.addEventListener('click', () => {
+        if (evMap[t.id] !== undefined) delete evMap[t.id];
+        else evMap[t.id] = '';
+        renderEv();
+      });
+      const inp = document.createElement('input');
+      inp.type = 'text';
+      inp.className = 'eval-evidence-detail';
+      inp.placeholder = isActive ? t.label + 'の詳細' : '（材料を選んでから）';
+      inp.value = isActive ? (evMap[t.id] || '') : '';
+      inp.disabled = !isActive;
+      inp.addEventListener('input', () => {
+        if (evMap[t.id] !== undefined) evMap[t.id] = inp.value;
+      });
+      row.appendChild(btn); row.appendChild(inp);
+      evList.appendChild(row);
+    });
+  }
+  renderEv();
+
+  // 保存ハンドラを差し替え
+  const saveBtn = document.getElementById('saveEditBtn');
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  const modal = document.getElementById('editModal');
+  modal.classList.remove('hidden');
+  const closeModal = () => modal.classList.add('hidden');
+  const saveHandler = () => {
+    const note = (document.getElementById('editEvalNote') || {}).value || '';
+    const evidences = EVAL_EVIDENCE_TYPES
+      .filter(t => evMap[t.id] !== undefined)
+      .map(t => ({ type: t.id, detail: evMap[t.id] || '' }));
+    e.grade = selectedGrade;
+    e.note = note.slice(0, 300);
+    e.evidences = evidences;
+    e.timestamp = new Date().toISOString();
+    saveState();
+    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(e, 'edit').catch(() => {});
+    closeModal();
+    refreshEvalList();
+    refreshEvalGridState();
+    showToast('評価を更新しました');
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  const cancelHandler = () => {
+    closeModal();
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  saveBtn.addEventListener('click', saveHandler);
+  cancelBtn.addEventListener('click', cancelHandler);
 }
 
 function toggleEvalMatrix() {
@@ -3541,12 +3733,16 @@ function exportEvalCsv() {
   const sMap = new Map(state.students.map(s => [s.id, s]));
   const subjMap = new Map(state.subjects.map(s => [s.id, s]));
   const unitMap = new Map(state.units.map(u => [u.id, u]));
-  const rows = [['date', 'student_id', 'student_name', 'subject', 'unit', 'viewpoint', 'grade', 'scale']];
+  const rows = [['date', 'student_id', 'student_name', 'subject', 'unit', 'viewpoint', 'grade', 'scale', 'evidences', 'note']];
   for (const e of state.evaluations) {
     const s = sMap.get(e.studentId);
     const sub = subjMap.get(e.subjectId);
     const u = unitMap.get(e.unitId);
-    rows.push([e.date, e.studentId, s ? s.name : '', sub ? sub.label : e.subjectId, u ? u.name : e.unitId, e.viewpoint, e.grade, e.scale]);
+    const evStr = (e.evidences || []).map(ee => {
+      const lbl = (EVAL_EVIDENCE_TYPES.find(t => t.id === ee.type) || {}).label || ee.type;
+      return ee.detail ? `${lbl}:${ee.detail}` : lbl;
+    }).join('|');
+    rows.push([e.date, e.studentId, s ? s.name : '', sub ? sub.label : e.subjectId, u ? u.name : e.unitId, e.viewpoint, e.grade, e.scale, evStr, (e.note || '').replace(/[\r\n]+/g, ' ')]);
   }
   const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -4023,7 +4219,10 @@ function refreshKetSidePanel() {
           const notes = r.notes ? ` <span class="muted small">${escapeHtml(r.notes)}</span>` : '';
           return `<li style="padding:3px 6px; border-bottom:1px solid #eee;" data-rid="${r.id}">
             <b>${s ? escapeHtml(s.name) : '?'}:</b> ${r.rating}${aspects ? '['+aspects+']' : ''}${notes}
-            <button class="ghost danger" data-del="${r.id}" style="float:right; padding:1px 6px; font-size:10px;">削除</button>
+            <span style="float:right;">
+              <button class="ghost" data-edit-ket="${r.id}" style="padding:1px 6px; font-size:10px;">編集</button>
+              <button class="ghost danger" data-del="${r.id}" style="padding:1px 6px; font-size:10px;">削除</button>
+            </span>
           </li>`;
         }).join('');
       ul.querySelectorAll('button[data-del]').forEach(b => {
@@ -4032,8 +4231,85 @@ function refreshKetSidePanel() {
           deleteKetebureRecord(b.dataset.del);
         });
       });
+      ul.querySelectorAll('button[data-edit-ket]').forEach(b => {
+        b.addEventListener('click', e => {
+          e.stopPropagation();
+          openKetebureEditModal(b.dataset.editKet);
+        });
+      });
     }
   }
+}
+
+// けテぶれ記録の編集モーダル
+function openKetebureEditModal(id) {
+  const r = state.ketebureRecords.find(x => x.id === id);
+  if (!r) return;
+  const s = state.students.find(x => x.id === r.studentId);
+  const aspects = KETEBURE_ASPECTS[r.type] || [];
+  const aspectsSet = new Set(r.aspects || []);
+  const body = document.getElementById('editModalBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="muted small" style="margin-bottom:8px;">
+      ${escapeHtml(s ? s.name : '?')} ・ ${escapeHtml(r.date)} ・ ${r.type === 'shukudai' ? '宿題' : '生活'}けテぶれ
+    </div>
+    <div class="edit-modal-row">
+      <label>評価</label>
+      <div id="editKetRatingBtns" style="display:flex; gap:6px;">
+        ${KETEBURE_RATINGS.map(g => `<button type="button" class="ket-rating-btn${g === r.rating ? ' active' : ''}" data-rating="${g}" style="min-width:40px;">${g}</button>`).join('')}
+      </div>
+    </div>
+    <div class="edit-modal-row">
+      <label>観点（複数可）</label>
+      <div id="editKetAspectBtns" style="display:flex; gap:4px; flex-wrap:wrap;">
+        ${aspects.map(a => `<button type="button" class="ket-aspect-btn${aspectsSet.has(a.id) ? ' active' : ''}" data-aspect="${a.id}" data-ket-type="${r.type}">${a.label}</button>`).join('')}
+      </div>
+    </div>
+    <div class="edit-modal-row">
+      <label>メモ</label>
+      <textarea id="editKetNote" placeholder="メモ（任意）" maxlength="300">${escapeHtml(r.notes || '')}</textarea>
+    </div>
+  `;
+  let selRating = r.rating;
+  body.querySelectorAll('#editKetRatingBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      selRating = b.dataset.rating;
+      body.querySelectorAll('#editKetRatingBtns button').forEach(x => x.classList.toggle('active', x === b));
+    });
+  });
+  body.querySelectorAll('#editKetAspectBtns button').forEach(b => {
+    b.addEventListener('click', () => {
+      const aid = b.dataset.aspect;
+      if (aspectsSet.has(aid)) { aspectsSet.delete(aid); b.classList.remove('active'); }
+      else { aspectsSet.add(aid); b.classList.add('active'); }
+    });
+  });
+  const modal = document.getElementById('editModal');
+  modal.classList.remove('hidden');
+  const saveBtn = document.getElementById('saveEditBtn');
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  const closeModal = () => modal.classList.add('hidden');
+  const saveHandler = () => {
+    r.rating = selRating;
+    r.aspects = [...aspectsSet];
+    r.notes = (document.getElementById('editKetNote').value || '').slice(0, 300);
+    r.timestamp = new Date().toISOString();
+    saveState();
+    if (typeof pushKetebureToGas === 'function') pushKetebureToGas(r, 'edit').catch(() => {});
+    closeModal();
+    refreshKetebureUI();
+    showToast('けテぶれ記録を更新');
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  const cancelHandler = () => {
+    closeModal();
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  saveBtn.addEventListener('click', saveHandler);
+  cancelBtn.addEventListener('click', cancelHandler);
 }
 
 function deleteKetebureRecord(id) {
@@ -4705,6 +4981,7 @@ function refreshAbaList() {
         ${r.response ? `<div><b>対応:</b> ${escapeHtml(r.response)}</div>` : ''}
       </div>
       <div class="praise-actions">
+        <button class="ghost" data-action="edit-aba" data-id="${r.id}">編集</button>
         <button class="ghost danger" data-action="delete-aba" data-id="${r.id}">削除</button>
       </div>
     </li>`;
@@ -4712,6 +4989,60 @@ function refreshAbaList() {
   ul.querySelectorAll('button[data-action="delete-aba"]').forEach(btn => {
     btn.addEventListener('click', () => deleteAbaRecord(btn.dataset.id));
   });
+  ul.querySelectorAll('button[data-action="edit-aba"]').forEach(btn => {
+    btn.addEventListener('click', () => openAbaEditModal(btn.dataset.id));
+  });
+}
+
+// ABA記録の編集モーダル（A/C/対応のテキスト微修正用）
+function openAbaEditModal(id) {
+  const r = state.abaRecords.find(x => x.id === id);
+  if (!r) return;
+  const s = state.students.find(x => x.id === r.studentId);
+  const body = document.getElementById('editModalBody');
+  if (!body) return;
+  body.innerHTML = `
+    <div class="muted small" style="margin-bottom:8px;">
+      ${escapeHtml(s ? s.name : '?')} ・ ${escapeHtml(r.date)} ${escapeHtml(ABA_SLOT_LABELS[r.slot] || '')}
+    </div>
+    <div class="edit-modal-row">
+      <label>A: 先行</label>
+      <textarea id="editAbaAnt" maxlength="500">${escapeHtml(r.antecedent || '')}</textarea>
+    </div>
+    <div class="edit-modal-row">
+      <label>C: 結果</label>
+      <textarea id="editAbaCons" maxlength="500">${escapeHtml(r.consequence || '')}</textarea>
+    </div>
+    <div class="edit-modal-row">
+      <label>対応</label>
+      <textarea id="editAbaResp" maxlength="500">${escapeHtml(r.response || '')}</textarea>
+    </div>
+  `;
+  const modal = document.getElementById('editModal');
+  modal.classList.remove('hidden');
+  const saveBtn = document.getElementById('saveEditBtn');
+  const cancelBtn = document.getElementById('cancelEditBtn');
+  const closeModal = () => modal.classList.add('hidden');
+  const saveHandler = () => {
+    r.antecedent = (document.getElementById('editAbaAnt').value || '').slice(0, 500);
+    r.consequence = (document.getElementById('editAbaCons').value || '').slice(0, 500);
+    r.response = (document.getElementById('editAbaResp').value || '').slice(0, 500);
+    r.timestamp = new Date().toISOString();
+    saveState();
+    if (typeof pushAbaToGas === 'function') pushAbaToGas(r, 'edit').catch(() => {});
+    closeModal();
+    refreshAbaList();
+    showToast('ABA記録を更新');
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  const cancelHandler = () => {
+    closeModal();
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  saveBtn.addEventListener('click', saveHandler);
+  cancelBtn.addEventListener('click', cancelHandler);
 }
 
 function deleteAbaRecord(id) {

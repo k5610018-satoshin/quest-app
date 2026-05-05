@@ -275,6 +275,11 @@ if ('serviceWorker' in navigator) {
           <h3>今日の評価</h3>
           <div><span class="big-number" id="todayEvalCount">0</span> 件</div>
         </div>
+        <div class="card" id="evalEvidenceCard">
+          <h3>📋 評価材料 <span class="muted small">(任意・複数可)</span></h3>
+          <div class="eval-evidence-list" id="evalEvidenceList"></div>
+          <div class="muted small" style="margin-top:4px;">選択した材料は次に保存する評価に付与されます</div>
+        </div>
         <div class="card">
           <h3>この単元×観点の進捗</h3>
           <div id="evalUnitProgress"></div>
@@ -389,9 +394,9 @@ if ('serviceWorker' in navigator) {
         <button class="ghost" id="abaResetBtn" style="padding:4px 10px;font-size:11px;">↺ リセット</button>
       </div>
 
-      <!-- 全項目を最初から一覧表示（上下2段：上=選択項目、下=A/C/対応） -->
+      <!-- 全項目を最初から一覧表示（左右2カラム：左=選択項目、右=A/C/対応） -->
       <div class="aba-flat-grid">
-       <div class="aba-flat-top">
+       <div class="aba-flat-left">
         <!-- 日付 -->
         <div class="aba-flat-row">
           <div class="aba-flat-label">📅 日付</div>
@@ -440,7 +445,7 @@ if ('serviceWorker' in navigator) {
         </div>
        </div>
 
-       <div class="aba-flat-bottom">
+       <div class="aba-flat-right">
         <!-- A 先行事象 -->
         <div class="aba-flat-row aba-flat-row-vertical">
           <div class="aba-flat-label">A 先行 <span class="muted small">(任意・複数可)</span></div>
@@ -1093,24 +1098,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506c"></script>
-<script src="students.js?v=20260506c"></script>
-<script src="eval-data.js?v=20260506c"></script>
-<script src="eval-data-extra.js?v=20260506c"></script>
-<script src="app.js?v=20260506c"></script>
-<script src="cloud-sync.js?v=20260506c"></script>
-<script src="analytics-plus.js?v=20260506c"></script>
-<script src="dashboard-overview.js?v=20260506c"></script>
-<script src="seating-planner.js?v=20260506c"></script>
-<script src="print-report.js?v=20260506c"></script>
-<script src="search-bar.js?v=20260506c"></script>
-<script src="centrality-extra.js?v=20260506c"></script>
-<script src="seating-correlation.js?v=20260506c"></script>
-<script src="templates.js?v=20260506c"></script>
-<script src="photo-library.js?v=20260506c"></script>
-<script src="voice-memo.js?v=20260506c"></script>
-<script src="ai-insights.js?v=20260506c"></script>
-<script src="extra-features.js?v=20260506c"></script>
-<script src="onboarding-wizard.js?v=20260506c"></script>
+<script src="config.js?v=20260506d"></script>
+<script src="students.js?v=20260506d"></script>
+<script src="eval-data.js?v=20260506d"></script>
+<script src="eval-data-extra.js?v=20260506d"></script>
+<script src="app.js?v=20260506d"></script>
+<script src="cloud-sync.js?v=20260506d"></script>
+<script src="analytics-plus.js?v=20260506d"></script>
+<script src="dashboard-overview.js?v=20260506d"></script>
+<script src="seating-planner.js?v=20260506d"></script>
+<script src="print-report.js?v=20260506d"></script>
+<script src="search-bar.js?v=20260506d"></script>
+<script src="centrality-extra.js?v=20260506d"></script>
+<script src="seating-correlation.js?v=20260506d"></script>
+<script src="templates.js?v=20260506d"></script>
+<script src="photo-library.js?v=20260506d"></script>
+<script src="voice-memo.js?v=20260506d"></script>
+<script src="ai-insights.js?v=20260506d"></script>
+<script src="extra-features.js?v=20260506d"></script>
+<script src="onboarding-wizard.js?v=20260506d"></script>
 </body>
 </html>
