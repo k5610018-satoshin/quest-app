@@ -91,9 +91,16 @@ if ('serviceWorker' in navigator) {
     </div>
   </div>
 
-  <div class="record-main">
-    <!-- 左: 児童グリッド -->
+  <div class="record-main interaction-main-1col">
     <div class="grid-area">
+      <!-- ミニステータスバー: 今日の件数 + 観察少TOP3を1行で -->
+      <div class="mini-status-bar">
+        <span class="mini-stat">📊 今日 <b id="todayCount">0</b>件 / <b id="todayCovered">0</b>人観察</span>
+        <span class="mini-stat-divider">・</span>
+        <span class="mini-stat">⚠ 観察少:</span>
+        <ol class="watch-inline" id="watchList"></ol>
+      </div>
+
       <div class="grid-header">
         <div class="status-line" id="statusLine">
           <span class="status-label">関わっていた児童をタップしてグループを作成</span>
@@ -101,8 +108,9 @@ if ('serviceWorker' in navigator) {
         <div class="selected-chips" id="selectedChips"></div>
       </div>
       <div class="grid-legend" title="ボタン上のマークの意味">
-        <span><span class="lg-mark dn">●</span>今日記録済</span>
-        <span><span class="lg-mark wt">■</span>記録日数が少ない（下位1/3・自動判定）</span>
+        <span><b style="color:#2e7d32;">●</b> 今日記録済（緑）</span>
+        <span><b style="color:#6a3eaa;">■</b> 観察少（紫・下位1/3）</span>
+        <span><b style="color:#d32f2f;">枠</b> 5日以上未観察</span>
       </div>
       <div class="student-grid" id="studentGrid"></div>
 
@@ -121,32 +129,18 @@ if ('serviceWorker' in navigator) {
         <input type="text" id="noteInput" placeholder="質的観察メモ (任意): 例「下釜が長田にボールを譲った」" maxlength="200">
       </div>
       <div class="action-row">
-        <span class="action-hint">関わっていた児童を順不同でタップ → 全員で1グループ / Enter=保存 / Esc=クリア / 右クリック=個別分析</span>
+        <span class="action-hint">児童を順不同でタップ → Enter=保存 / Esc=クリア / 右クリック=個別分析</span>
         <div style="display:flex; gap:8px;">
           <button class="ghost" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
           <button class="primary" id="saveBtn" disabled>💾 保存して次へ (Enter)</button>
         </div>
       </div>
-    </div>
 
-    <!-- 右: サイドパネル -->
-    <aside class="side-panel">
-      <div class="card today-stats">
-        <h3>今日の記録</h3>
-        <div><span class="big-number" id="todayCount">0</span> 件 ・ <b id="todayCovered">0</b>/28人観察</div>
-      </div>
-
-      <div class="card">
-        <h3>最近観察していない子 TOP3</h3>
-        <ol class="watch-list" id="watchList"></ol>
-        <div class="muted small">最終記録から日数の多い順</div>
-      </div>
-
-      <div class="card">
-        <h3>直近の記録</h3>
+      <details class="recent-records">
+        <summary>📜 直近の記録（クリックで開く・編集削除可）</summary>
         <ul class="recent-list" id="recentList"></ul>
-      </div>
-    </aside>
+      </details>
+    </div>
   </div>
   </div><!-- /interactionRecordView -->
 
@@ -199,12 +193,24 @@ if ('serviceWorker' in navigator) {
             <button type="button" class="praise-tag-btn" data-tag="教える">💡 教える</button>
             <button type="button" class="praise-tag-btn" data-tag="代わりに">🔄 代わりに</button>
             <button type="button" class="praise-tag-btn" data-tag="集中">🎯 集中</button>
-            <button type="button" class="praise-tag-btn" data-tag="協力">🤝 協力</button>
+            <button type="button" class="praise-tag-btn" data-tag="協力">🤜 協力</button>
             <button type="button" class="praise-tag-btn" data-tag="挙手・発表">🙋 発表</button>
             <button type="button" class="praise-tag-btn" data-tag="優しさ">💖 優しさ</button>
             <button type="button" class="praise-tag-btn" data-tag="あいさつ">👋 あいさつ</button>
             <button type="button" class="praise-tag-btn" data-tag="片付け">🧹 片付け</button>
             <button type="button" class="praise-tag-btn" data-tag="頑張り">💪 頑張り</button>
+            <button type="button" class="praise-tag-btn" data-tag="成長">🌱 成長</button>
+            <button type="button" class="praise-tag-btn" data-tag="粘り強さ">🔥 粘り強さ</button>
+            <button type="button" class="praise-tag-btn" data-tag="発言の勇気">🎤 発言の勇気</button>
+            <button type="button" class="praise-tag-btn" data-tag="気配り">👀 気配り</button>
+            <button type="button" class="praise-tag-btn" data-tag="振り返り">✋ 振り返り</button>
+            <button type="button" class="praise-tag-btn" data-tag="我慢・自制">🛡 我慢・自制</button>
+            <button type="button" class="praise-tag-btn" data-tag="創意工夫">🎨 創意工夫</button>
+            <button type="button" class="praise-tag-btn" data-tag="時間守る">⏰ 時間守る</button>
+            <button type="button" class="praise-tag-btn" data-tag="感謝">🙏 感謝</button>
+            <button type="button" class="praise-tag-btn" data-tag="立ち直り">🌊 立ち直り</button>
+            <button type="button" class="praise-tag-btn" data-tag="リーダー">⭐ リーダー</button>
+            <button type="button" class="praise-tag-btn" data-tag="SOS気づき">🛟 SOS気づき</button>
             <button type="button" class="praise-tag-btn" data-tag="">✏️ 自由入力</button>
           </div>
           <textarea id="praiseInput" placeholder="（タグだけでもOK / ここに詳細を書ける）" rows="3" maxlength="500"></textarea>
@@ -1098,24 +1104,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506d"></script>
-<script src="students.js?v=20260506d"></script>
-<script src="eval-data.js?v=20260506d"></script>
-<script src="eval-data-extra.js?v=20260506d"></script>
-<script src="app.js?v=20260506d"></script>
-<script src="cloud-sync.js?v=20260506d"></script>
-<script src="analytics-plus.js?v=20260506d"></script>
-<script src="dashboard-overview.js?v=20260506d"></script>
-<script src="seating-planner.js?v=20260506d"></script>
-<script src="print-report.js?v=20260506d"></script>
-<script src="search-bar.js?v=20260506d"></script>
-<script src="centrality-extra.js?v=20260506d"></script>
-<script src="seating-correlation.js?v=20260506d"></script>
-<script src="templates.js?v=20260506d"></script>
-<script src="photo-library.js?v=20260506d"></script>
-<script src="voice-memo.js?v=20260506d"></script>
-<script src="ai-insights.js?v=20260506d"></script>
-<script src="extra-features.js?v=20260506d"></script>
-<script src="onboarding-wizard.js?v=20260506d"></script>
+<script src="config.js?v=20260506e"></script>
+<script src="students.js?v=20260506e"></script>
+<script src="eval-data.js?v=20260506e"></script>
+<script src="eval-data-extra.js?v=20260506e"></script>
+<script src="app.js?v=20260506e"></script>
+<script src="cloud-sync.js?v=20260506e"></script>
+<script src="analytics-plus.js?v=20260506e"></script>
+<script src="dashboard-overview.js?v=20260506e"></script>
+<script src="seating-planner.js?v=20260506e"></script>
+<script src="print-report.js?v=20260506e"></script>
+<script src="search-bar.js?v=20260506e"></script>
+<script src="centrality-extra.js?v=20260506e"></script>
+<script src="seating-correlation.js?v=20260506e"></script>
+<script src="templates.js?v=20260506e"></script>
+<script src="photo-library.js?v=20260506e"></script>
+<script src="voice-memo.js?v=20260506e"></script>
+<script src="ai-insights.js?v=20260506e"></script>
+<script src="extra-features.js?v=20260506e"></script>
+<script src="onboarding-wizard.js?v=20260506e"></script>
 </body>
 </html>

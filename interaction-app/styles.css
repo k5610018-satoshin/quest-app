@@ -364,26 +364,40 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   color: #d4a017;
   text-shadow: 0 0 2px white;
 }
+/* 観察少（記録日数下位1/3）: 薄紫背景 + 大きい紫■を右上 */
+.student-btn.watch {
+  background: #f3e5f5;
+}
 .student-btn.watch::after {
   content: "■";
   position: absolute;
-  top: 1px;
-  right: 3px;
-  font-size: 11px;
+  top: 0px;
+  right: 2px;
+  font-size: 14px;
+  font-weight: 700;
   color: #6a3eaa;
-  text-shadow: 0 0 2px white;
+  text-shadow: 0 0 2px white, 0 0 4px white;
+  line-height: 1;
 }
-/* 今日記録済みドット (左下に小さい緑●) */
+/* 今日記録済: 薄緑背景 + 大きい緑●を左下 */
+.student-btn.covered-today {
+  background: #e8f5e9;
+  border-color: #66bb6a;
+}
 .student-btn.covered-today::before {
-  content: "";
+  content: "●";
   position: absolute;
-  bottom: 3px;
-  left: 4px;
-  width: 7px;
-  height: 7px;
-  background: var(--selected);
-  border-radius: 50%;
-  border: 1.5px solid white;
+  bottom: 0px;
+  left: 2px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #2e7d32;
+  text-shadow: 0 0 2px white, 0 0 4px white;
+  line-height: 1;
+}
+/* 両方該当: 斜めグラデで両方を視認 */
+.student-btn.watch.covered-today {
+  background: linear-gradient(135deg, #e8f5e9 50%, #f3e5f5 50%);
 }
 /* 5日以上未観察: 赤縁 */
 .student-btn.alert {
@@ -2615,7 +2629,94 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== 交友関係UI コンパクト化（スクロール削減） ========== */
+/* ========== ほめモードUI（6カラム + 拡大タグ + サイドパネル360px） ========== */
+#praiseRecordView .record-main {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 10px;
+}
+#praiseRecordView .student-grid {
+  grid-template-columns: repeat(6, 1fr);
+  gap: 5px;
+}
+#praiseRecordView .student-btn {
+  padding: 8px 4px;
+  font-size: 13px;
+  min-height: 48px;
+}
+#praiseRecordView .praise-quick-tags {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 4px;
+  margin-bottom: 8px;
+}
+#praiseRecordView .praise-tag-btn {
+  padding: 7px 8px;
+  font-size: 12px;
+  white-space: nowrap;
+  text-align: center;
+}
+#praiseRecordView #praiseInput {
+  min-height: 90px;
+  font-size: 14px;
+}
+
+/* ========== 交友関係UI 1カラム化（サイドパネル廃止） ========== */
+#interactionRecordView .record-main.interaction-main-1col {
+  display: block;
+  grid-template-columns: none;
+}
+#interactionRecordView .grid-area {
+  padding: 6px 10px 8px;
+}
+.mini-status-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  background: #f7f7fa;
+  border-radius: 6px;
+  font-size: 11.5px;
+  margin: 4px 0 6px;
+  border: 1px solid #ececf2;
+}
+.mini-status-bar .mini-stat { color: #555; }
+.mini-status-bar .mini-stat-divider { color: #aaa; }
+.mini-status-bar b { color: var(--primary); font-weight: 700; }
+.watch-inline {
+  list-style: none;
+  display: inline-flex;
+  gap: 8px;
+  padding: 0;
+  margin: 0;
+}
+.watch-inline li { font-size: 11.5px; }
+.watch-inline .alert-day { color: var(--danger); font-weight: 700; }
+details.recent-records {
+  margin-top: 8px;
+  font-size: 12px;
+}
+details.recent-records summary {
+  cursor: pointer;
+  padding: 4px 8px;
+  background: #f7f7fa;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #555;
+  user-select: none;
+}
+details.recent-records summary:hover { background: #eef0f5; }
+details.recent-records .recent-list {
+  margin-top: 6px;
+  padding-left: 0;
+  list-style: none;
+  max-height: 280px;
+  overflow-y: auto;
+}
+
+/* ========== 交友関係UI コンパクト化（旧設定 - 余分なtoolbar系のみ残す） ========== */
 #interactionRecordView .record-toolbar {
   gap: 10px;
   padding: 4px 10px;
@@ -2639,10 +2740,7 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   padding: 2px 6px;
   font-size: 10.5px;
 }
-#interactionRecordView .record-main {
-  grid-template-columns: 1fr 240px;
-  gap: 8px;
-}
+/* 交友関係は1カラム化済（サイドパネル廃止） */
 #interactionRecordView .grid-area {
   padding: 6px 10px 8px;
 }

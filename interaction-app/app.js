@@ -39,7 +39,7 @@ if (!window.APP_DATA) {
       { id: 'lunch_eat', label: '給食',       category: 'class' },
       { id: 'other',     label: 'その他',     category: 'other' }
     ],
-    activities: ['おにごっこ','ボール遊び','ドッジボール','サッカー','鉄棒・遊具',
+    activities: ['カードゲーム','ホワイトボード','お絵描き','マットスペース','読書',
                  'おしゃべり','教室で過ごす','図書室','係・当番活動','学習・自主勉',
                  '給食準備','もくもく作業','その他']
   };
@@ -1232,11 +1232,9 @@ function refreshSidePanel() {
   ol.innerHTML = '';
   for (const r of ranking) {
     const li = document.createElement('li');
-    const span = document.createElement('span');
-    span.className = 'days' + (r.days >= ALERT_DAYS ? ' alert-day' : '');
-    span.textContent = r.days === 999 ? ' (未記録)' : ` (${r.days}日前)`;
-    li.textContent = r.student.name;
-    li.appendChild(span);
+    const days = r.days === 999 ? '未' : r.days + 'd';
+    const cls = (r.days >= ALERT_DAYS || r.days === 999) ? 'alert-day' : '';
+    li.innerHTML = `<span class="${cls}">${escapeHtml(r.student.name)}(${days})</span>`;
     ol.appendChild(li);
   }
 
