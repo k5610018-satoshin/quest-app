@@ -21,9 +21,34 @@ const SPECIAL_LABELS = {
 };
 
 // ========== State ==========
-if (!window.APP_DATA || !Array.isArray(window.APP_DATA.students)) {
-  document.body.innerHTML = '<p style="padding:20px;color:#c00">データ読込失敗。students.jsを確認してください。</p>';
-  throw new Error('APP_DATA missing');
+// APP_DATAは個人版で5年4組がプリロード。配布版では空フォールバックで起動。
+if (!window.APP_DATA) {
+  window.APP_DATA = {
+    version: 1,
+    class: '',
+    school: '',
+    year: new Date().getFullYear(),
+    students: [],
+    scenes: [
+      { id: 'morning',   label: '朝の時間',   category: 'rest' },
+      { id: 'break1',    label: '業間休み',   category: 'rest' },
+      { id: 'lunch',     label: '昼休み',     category: 'rest' },
+      { id: 'after',     label: '放課後',     category: 'rest' },
+      { id: 'cleaning',  label: '掃除',       category: 'class' },
+      { id: 'lesson',    label: '授業中',     category: 'class' },
+      { id: 'lunch_eat', label: '給食',       category: 'class' },
+      { id: 'other',     label: 'その他',     category: 'other' }
+    ],
+    activities: ['おにごっこ','ボール遊び','ドッジボール','サッカー','鉄棒・遊具',
+                 'おしゃべり','教室で過ごす','図書室','係・当番活動','学習・自主勉',
+                 '給食準備','もくもく作業','その他']
+  };
+}
+const _CFG = window.APP_CONFIG || {};
+const _IS_DIST = _CFG.mode === 'distribution';
+// 配布版でAPP_DATA.studentsが空 → サンプル名簿で初期化（後でlocalStorage上書き）
+if (_IS_DIST && (!Array.isArray(window.APP_DATA.students) || window.APP_DATA.students.length === 0)) {
+  window.APP_DATA.students = (_CFG.sampleStudents || []).map(s => ({ ...s }));
 }
 const state = {
   students: window.APP_DATA.students.map(s => ({ ...s })),
@@ -31,7 +56,11 @@ const state = {
   activities: [...window.APP_DATA.activities],
   settings: {
     sceneLabels: {},
-    customActivities: null
+    customActivities: null,
+    schoolName:  window.APP_DATA.school || '',
+    classLabel:  window.APP_DATA.class  || '',
+    activeGrade: _IS_DIST ? null : 5,        // 個人版は5年生デフォルト、配布版は未設定
+    customStudents: null                     // 名簿が編集されたらここに入る
   },
   records: [],
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
@@ -60,6 +89,7 @@ const state = {
     abaSlot: '',
     abaSubjectId: '',
     abaTargetId: null,
+    abaWeather: '',             // 任意: ☀晴/⛅曇/☔雨/❄雪/🌬風/その他
     abaBehaviors: new Set(),    // 選択中の行動
     abaOtherText: '',           // その他選択時の記述
     abaStep: 'date',            // 現在のステップ: date/slot/subject/student/behavior/input
@@ -71,7 +101,8 @@ const state = {
     numBuf: '',
     numTimer: null,
     recordDate: '',    // 観察日。空なら todayISO() を使う
-    centerId: null     // 中心人物のID（任意指定）
+    centerId: null,    // 中心人物のID（任意指定）
+    lessonSubjectId: null  // 授業中シーン時の任意教科ID
   },
   events: [],          // [{date:'YYYY-MM-DD', label:'席替え'}]
   attributes: {}       // {studentId: {gender:'M|F', group: 1|2|...}}
@@ -127,6 +158,10 @@ function loadState() {
     if (data.attributes && typeof data.attributes === 'object') state.attributes = data.attributes;
     if (state.settings.customActivities) {
       state.activities = state.settings.customActivities;
+    }
+    // 名簿: localStorage の customStudents が正
+    if (Array.isArray(state.settings.customStudents) && state.settings.customStudents.length > 0) {
+      state.students = state.settings.customStudents.map(s => ({ ...s }));
     }
   } catch (e) {
     console.error('保存データのパース失敗', e);
@@ -198,7 +233,8 @@ function normalizeRecord(r) {
     special: r.special && SPECIAL_LABELS[r.special] ? r.special : null,
     activity: r.activity || null,
     note: typeof r.note === 'string' ? r.note.slice(0, 500) : '',
-    center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null
+    center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null,
+    lessonSubjectId: typeof r.lessonSubjectId === 'string' ? r.lessonSubjectId : null
   };
 }
 
@@ -222,6 +258,7 @@ function normalizeAba(a) {
     timestamp,
     slot: a.slot || '',
     subject: a.subject || '',
+    weather: typeof a.weather === 'string' ? a.weather : '',
     behaviors,
     antecedent: typeof a.antecedent === 'string' ? a.antecedent.slice(0, 500) : '',
     consequence: typeof a.consequence === 'string' ? a.consequence.slice(0, 500) : '',
@@ -279,7 +316,14 @@ function normalizePraise(p) {
 }
 
 function mergeSettings(incoming) {
-  const safe = { sceneLabels: {}, customActivities: null };
+  const safe = {
+    sceneLabels: {},
+    customActivities: null,
+    schoolName:  state.settings.schoolName  || '',
+    classLabel:  state.settings.classLabel  || '',
+    activeGrade: state.settings.activeGrade,
+    customStudents: null
+  };
   if (incoming && typeof incoming === 'object') {
     if (incoming.sceneLabels && typeof incoming.sceneLabels === 'object') {
       for (const [k, v] of Object.entries(incoming.sceneLabels)) {
@@ -288,6 +332,24 @@ function mergeSettings(incoming) {
     }
     if (Array.isArray(incoming.customActivities)) {
       safe.customActivities = incoming.customActivities.filter(s => typeof s === 'string');
+    }
+    if (typeof incoming.schoolName === 'string') safe.schoolName = incoming.schoolName;
+    if (typeof incoming.classLabel === 'string') safe.classLabel = incoming.classLabel;
+    if (typeof incoming.activeGrade === 'number' && incoming.activeGrade >= 1 && incoming.activeGrade <= 6) {
+      safe.activeGrade = incoming.activeGrade;
+    }
+    if (Array.isArray(incoming.customStudents) && incoming.customStudents.length > 0) {
+      safe.customStudents = incoming.customStudents
+        .filter(s => s && typeof s.id === 'number' && typeof s.name === 'string')
+        .map(s => ({
+          id: s.id,
+          name: s.name,
+          kana: typeof s.kana === 'string' ? s.kana : '',
+          gender: (s.gender === 'M' || s.gender === 'F') ? s.gender : undefined,
+          highlight: !!s.highlight,
+          watch: !!s.watch,
+          note: typeof s.note === 'string' ? s.note : undefined
+        }));
     }
   }
   return safe;
@@ -347,6 +409,10 @@ function showToast(msg, type = 'success') {
 function init() {
   if (!checkLocalStorage()) return;
   loadState();
+  // 学年別の評価データを適用
+  if (typeof applyGradeData === 'function') {
+    applyGradeData(state.settings.activeGrade);
+  }
   renderToday();
   initRecordDatePicker();
   renderSceneButtons();
@@ -369,6 +435,8 @@ function init() {
   initHelpModal();
   updateHealthBadge();
   showStartupBanners();
+  applyAppHeader();
+  applyFeatureFlags();
   refreshAll();
   maybeShowOnboarding();
 }
@@ -500,10 +568,62 @@ function renderSceneButtons() {
     btn.textContent = getSceneLabel(sc.id);
     btn.addEventListener('click', () => {
       state.ui.currentScene = sc.id;
+      // シーン切替時に教科選択をクリア（授業中以外なら不要）
+      if (sc.id !== 'lesson') state.ui.lessonSubjectId = null;
       renderSceneButtons();
+      renderLessonSubjectButtons();
       saveState();
     });
     container.appendChild(btn);
+  }
+  // 授業中シーンのみ教科ボタンを表示
+  renderLessonSubjectButtons();
+}
+
+function renderLessonSubjectButtons() {
+  const row = document.getElementById('lessonSubjectRow');
+  if (!row) return;
+  if (state.ui.currentScene !== 'lesson') {
+    row.style.display = 'none';
+    return;
+  }
+  row.style.display = '';
+  const cont = document.getElementById('lessonSubjectButtons');
+  if (!cont) return;
+  cont.innerHTML = '';
+  // 「指定なし」ボタン
+  const noneBtn = document.createElement('button');
+  noneBtn.className = 'scene-btn' + (!state.ui.lessonSubjectId ? ' active' : '');
+  noneBtn.textContent = '指定なし';
+  noneBtn.style.fontSize = '11px';
+  noneBtn.addEventListener('click', () => {
+    state.ui.lessonSubjectId = null;
+    renderLessonSubjectButtons();
+    saveState();
+  });
+  cont.appendChild(noneBtn);
+  // 学年に応じた教科リスト
+  const subjects = state.subjects || [];
+  for (const sub of subjects) {
+    const btn = document.createElement('button');
+    btn.className = 'scene-btn' + (state.ui.lessonSubjectId === sub.id ? ' active' : '');
+    btn.dataset.subjectId = sub.id;
+    btn.textContent = sub.label;
+    btn.style.fontSize = '11px';
+    if (state.ui.lessonSubjectId === sub.id) {
+      btn.style.background = sub.color;
+      btn.style.color = 'white';
+      btn.style.borderColor = sub.color;
+    } else {
+      btn.style.color = sub.color;
+      btn.style.borderColor = sub.color;
+    }
+    btn.addEventListener('click', () => {
+      state.ui.lessonSubjectId = (state.ui.lessonSubjectId === sub.id) ? null : sub.id;
+      renderLessonSubjectButtons();
+      saveState();
+    });
+    cont.appendChild(btn);
   }
 }
 
@@ -907,7 +1027,8 @@ function saveRecord() {
       center,                          // 中心人物（指定時のみ）
       special: state.ui.specialState,
       activity: state.ui.currentMode === 'activity' ? state.ui.selectedActivity : null,
-      note: noteVal
+      note: noteVal,
+      lessonSubjectId: (sceneId === 'lesson' ? (state.ui.lessonSubjectId || null) : null)
     };
     if (noteEl) noteEl.value = '';
     state.records.push(rec);
@@ -1791,6 +1912,8 @@ function initSettingsEvents() {
   document.getElementById('viewArchivesBtn')?.addEventListener('click', listArchives);
   document.getElementById('resetBtn').addEventListener('click', resetAll);
   document.getElementById('saveActivitiesBtn').addEventListener('click', saveActivities);
+  document.getElementById('saveAppSettingsBtn')?.addEventListener('click', saveAppSettings);
+  setupRosterEvents();
 }
 
 function refreshSettings() {
@@ -1842,6 +1965,257 @@ function refreshSettings() {
   }
 
   document.getElementById('activitySettings').value = state.activities.join('\n');
+
+  // ===== 新カードのリフレッシュ =====
+  refreshAppSettingsCard();
+  refreshRosterTable();
+  applyFeatureFlags();
+}
+
+// ========== App Header & Feature Flags ==========
+function applyAppHeader() {
+  const brand = (window.APP_CONFIG && window.APP_CONFIG.brandName) || '担任記録アプリ';
+  const cls = state.settings.classLabel || '';
+  const h1 = document.getElementById('appTitleEl');
+  if (h1) h1.textContent = cls ? `${cls} 担任記録` : brand;
+  document.title = cls ? `${cls} ${brand}` : brand;
+}
+
+function applyFeatureFlags() {
+  if (!window.APP_CONFIG || !window.APP_CONFIG.features) return;
+  const f = window.APP_CONFIG.features;
+  document.querySelectorAll('[data-feature]').forEach(el => {
+    const name = el.getAttribute('data-feature');
+    if (Object.prototype.hasOwnProperty.call(f, name) && f[name] === false) {
+      el.style.display = 'none';
+    }
+  });
+}
+
+// ========== App Settings Card ==========
+function refreshAppSettingsCard() {
+  const schoolEl = document.getElementById('settingSchoolName');
+  const classEl  = document.getElementById('settingClassLabel');
+  const gradeEl  = document.getElementById('settingGrade');
+  const statusEl = document.getElementById('gradeDataStatus');
+  if (schoolEl) schoolEl.value = state.settings.schoolName || '';
+  if (classEl)  classEl.value  = state.settings.classLabel || '';
+  if (gradeEl)  gradeEl.value  = state.settings.activeGrade ? String(state.settings.activeGrade) : '5';
+  if (statusEl) {
+    const g = state.settings.activeGrade;
+    const count = countUnitsForGrade(g);
+    statusEl.textContent = g ? `${g}年生 単元 ${count} 件` : '未選択';
+  }
+}
+
+function countUnitsForGrade(grade) {
+  if (!grade) return 0;
+  if (window.EVAL_DATA && typeof window.EVAL_DATA.getUnitsForGrade === 'function') {
+    return window.EVAL_DATA.getUnitsForGrade(grade).length;
+  }
+  const units = (window.EVAL_DATA && window.EVAL_DATA.units) || [];
+  return grade === 5 ? units.length : 0;
+}
+
+function applyGradeData(grade) {
+  if (!window.EVAL_DATA) return;
+  if (typeof window.EVAL_DATA.getSubjectsForGrade === 'function') {
+    state.subjects = window.EVAL_DATA.getSubjectsForGrade(grade) || [];
+  }
+  if (typeof window.EVAL_DATA.getUnitsForGrade === 'function') {
+    state.units = window.EVAL_DATA.getUnitsForGrade(grade) || [];
+  }
+  // 評価タブ初期化: 選択中の教科が新学年に存在しなければリセット
+  const subjectIds = new Set(state.subjects.map(s => s.id));
+  if (state.ui.evalSubjectId && !subjectIds.has(state.ui.evalSubjectId)) {
+    state.ui.evalSubjectId = '';
+    state.ui.evalUnitId = '';
+  }
+}
+
+function saveAppSettings() {
+  const schoolEl = document.getElementById('settingSchoolName');
+  const classEl  = document.getElementById('settingClassLabel');
+  const gradeEl  = document.getElementById('settingGrade');
+  if (schoolEl) state.settings.schoolName = schoolEl.value.trim();
+  if (classEl)  state.settings.classLabel = classEl.value.trim();
+  if (gradeEl)  state.settings.activeGrade = parseInt(gradeEl.value, 10) || null;
+  applyGradeData(state.settings.activeGrade);
+  saveState();
+  applyAppHeader();
+  refreshAppSettingsCard();
+  if (typeof refreshEvalGridState === 'function') refreshEvalGridState();
+  // 教科ボタン等の再描画
+  if (typeof renderEvalSubjectButtons === 'function') renderEvalSubjectButtons();
+  showToast('設定を保存しました');
+}
+
+// ========== Roster Editor ==========
+function refreshRosterTable() {
+  const table = document.getElementById('rosterTable');
+  if (!table) return;
+  const rows = state.students.slice().sort((a,b) => a.id - b.id);
+  table.innerHTML = '';
+  const thead = document.createElement('tr');
+  thead.innerHTML = '<th>番号</th><th>名前</th><th>かな</th><th>性別</th><th>備考</th><th></th>';
+  table.appendChild(thead);
+  rows.forEach(s => {
+    const tr = document.createElement('tr');
+    tr.dataset.studentId = String(s.id);
+    tr.innerHTML = `
+      <td><input type="number" class="roster-id"   value="${s.id}" min="1" style="width:50px;"></td>
+      <td><input type="text"   class="roster-name" value="${escapeHtml(s.name||'')}" style="width:140px;"></td>
+      <td><input type="text"   class="roster-kana" value="${escapeHtml(s.kana||'')}" style="width:140px;"></td>
+      <td>
+        <select class="roster-gender" style="width:60px;">
+          <option value=""  ${!s.gender ? 'selected' : ''}>—</option>
+          <option value="M" ${s.gender==='M' ? 'selected' : ''}>男</option>
+          <option value="F" ${s.gender==='F' ? 'selected' : ''}>女</option>
+        </select>
+      </td>
+      <td><input type="text" class="roster-note" value="${escapeHtml(s.note||'')}" style="width:160px;"></td>
+      <td><button class="ghost roster-del" title="削除" style="padding:2px 6px;">🗑</button></td>`;
+    table.appendChild(tr);
+  });
+}
+
+function commitRosterFromTable() {
+  const trs = document.querySelectorAll('#rosterTable tr[data-student-id]');
+  const newStudents = [];
+  trs.forEach(tr => {
+    const idEl = tr.querySelector('.roster-id');
+    const nameEl = tr.querySelector('.roster-name');
+    if (!idEl || !nameEl) return;
+    const id = parseInt(idEl.value, 10);
+    const name = nameEl.value.trim();
+    if (!id || !name) return;
+    const obj = { id, name };
+    const kana = tr.querySelector('.roster-kana').value.trim();
+    const gender = tr.querySelector('.roster-gender').value;
+    const note = tr.querySelector('.roster-note').value.trim();
+    if (kana) obj.kana = kana;
+    if (gender === 'M' || gender === 'F') obj.gender = gender;
+    if (note) obj.note = note;
+    const cur = state.students.find(x => x.id === id);
+    if (cur) {
+      if (cur.highlight) obj.highlight = true;
+      if (cur.watch) obj.watch = true;
+    }
+    newStudents.push(obj);
+  });
+  if (newStudents.length === 0) {
+    showToast('名簿が空になります。1人以上必要です', 'error');
+    return false;
+  }
+  state.students = newStudents;
+  state.settings.customStudents = newStudents.slice();
+  saveState();
+  if (typeof renderStudentButtons === 'function') renderStudentButtons();
+  return true;
+}
+
+function rosterAddRow() {
+  const maxId = state.students.reduce((m, s) => Math.max(m, s.id), 0);
+  state.students.push({ id: maxId + 1, name: '' });
+  state.settings.customStudents = state.students.slice();
+  saveState();
+  refreshRosterTable();
+}
+
+function rosterDeleteRow(id) {
+  if (!confirm(`出席番号${id}番を削除しますか？（記録は残ります）`)) return;
+  state.students = state.students.filter(s => s.id !== id);
+  state.settings.customStudents = state.students.slice();
+  saveState();
+  refreshRosterTable();
+  if (typeof renderStudentButtons === 'function') renderStudentButtons();
+}
+
+function applyRosterCsv() {
+  const ta = document.getElementById('rosterCsvInput');
+  if (!ta) return;
+  const text = ta.value.trim();
+  if (!text) { showToast('CSVが空です', 'error'); return; }
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const newStudents = [];
+  for (const line of lines) {
+    const cols = line.split(/[\t,]/).map(c => c.trim());
+    const id = parseInt(cols[0], 10);
+    const name = cols[1] || '';
+    if (!id || !name) continue;
+    const obj = { id, name };
+    if (cols[2]) obj.kana = cols[2];
+    if (cols[3] === 'M' || cols[3] === '男') obj.gender = 'M';
+    if (cols[3] === 'F' || cols[3] === '女') obj.gender = 'F';
+    newStudents.push(obj);
+  }
+  if (newStudents.length === 0) { showToast('有効な行がありません', 'error'); return; }
+  if (!confirm(`${newStudents.length}人を取り込みます。現在の名簿を置き換えますか？`)) return;
+  state.students = newStudents;
+  state.settings.customStudents = newStudents.slice();
+  saveState();
+  refreshRosterTable();
+  if (typeof renderStudentButtons === 'function') renderStudentButtons();
+  document.getElementById('rosterImportArea').style.display = 'none';
+  ta.value = '';
+  showToast(`${newStudents.length}人を取り込みました`);
+}
+
+function exportRosterCsv() {
+  const lines = ['出席番号,名前,かな,性別'];
+  for (const s of state.students.slice().sort((a,b)=>a.id-b.id)) {
+    const gender = s.gender === 'M' ? '男' : (s.gender === 'F' ? '女' : '');
+    lines.push([s.id, s.name||'', s.kana||'', gender].join(','));
+  }
+  const blob = new Blob(['﻿' + lines.join('\n')], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const ts = new Date().toISOString().slice(0, 10);
+  a.download = `roster-${ts}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+  showToast('名簿CSVをダウンロードしました');
+}
+
+function setupRosterEvents() {
+  document.getElementById('rosterAddBtn')?.addEventListener('click', rosterAddRow);
+  document.getElementById('rosterImportBtn')?.addEventListener('click', () => {
+    const area = document.getElementById('rosterImportArea');
+    if (area) area.style.display = area.style.display === 'none' ? 'block' : 'none';
+  });
+  document.getElementById('rosterCsvApplyBtn')?.addEventListener('click', applyRosterCsv);
+  document.getElementById('rosterCsvCancelBtn')?.addEventListener('click', () => {
+    const area = document.getElementById('rosterImportArea');
+    const ta = document.getElementById('rosterCsvInput');
+    if (area) area.style.display = 'none';
+    if (ta) ta.value = '';
+  });
+  document.getElementById('rosterExportBtn')?.addEventListener('click', exportRosterCsv);
+  document.getElementById('rosterClearBtn')?.addEventListener('click', () => {
+    if (!confirm('名簿を全削除します。記録自体は残りますが、児童名が表示できなくなります。本当に？')) return;
+    state.students = [];
+    state.settings.customStudents = [];
+    saveState();
+    refreshRosterTable();
+    if (typeof renderStudentButtons === 'function') renderStudentButtons();
+  });
+  const table = document.getElementById('rosterTable');
+  if (table) {
+    table.addEventListener('change', e => {
+      if (e.target.matches('.roster-id, .roster-name, .roster-kana, .roster-gender, .roster-note')) {
+        commitRosterFromTable();
+      }
+    });
+    table.addEventListener('click', e => {
+      const btn = e.target.closest('.roster-del');
+      if (btn) {
+        const tr = btn.closest('tr');
+        const id = parseInt(tr.dataset.studentId, 10);
+        rosterDeleteRow(id);
+      }
+    });
+  }
 }
 
 function saveActivities() {
@@ -1856,25 +2230,42 @@ function saveActivities() {
 }
 
 function exportJSON() {
+  // 全モードのデータを完全バックアップ
   const data = {
     version: APP_VERSION,
     exported_at: new Date().toISOString(),
-    class: window.APP_DATA.class,
+    class: state.settings.classLabel || window.APP_DATA.class,
+    school: state.settings.schoolName || window.APP_DATA.school,
+    grade: state.settings.activeGrade,
     students: state.students,
     settings: state.settings,
-    records: state.records
+    records: state.records,
+    praises: state.praises,
+    evaluations: state.evaluations,
+    abaRecords: state.abaRecords,
+    seatingSnapshots: state.seatingSnapshots,
+    events: state.events,
+    attributes: state.attributes
   };
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
   const ts = new Date().toISOString().slice(0, 10);
-  a.download = `interaction-${ts}.json`;
+  const cls = (state.settings.classLabel || 'class').replace(/[\\/:*?"<>|]/g, '');
+  a.download = `${cls}-backup-${ts}.json`;
   a.click();
   URL.revokeObjectURL(url);
   try { localStorage.setItem(LAST_BACKUP_KEY, String(Date.now())); } catch (_) {}
   updateHealthBadge();
-  showToast(`JSONをエクスポートしました (${state.records.length}件)`);
+  const counts = [
+    `交友 ${state.records.length}`,
+    `ほめ ${state.praises.length}`,
+    `評価 ${state.evaluations.length}`,
+    `ABA ${state.abaRecords.length}`,
+    `席 ${state.seatingSnapshots.length}`
+  ].join(' / ');
+  showToast(`バックアップ完了: ${counts}`);
 }
 
 function importJSON(file) {
@@ -1883,38 +2274,77 @@ function importJSON(file) {
     let data;
     try { data = JSON.parse(e.target.result); }
     catch (err) { showToast('JSONパース失敗: ' + err.message, 'error'); return; }
-    if (!data || !Array.isArray(data.records)) {
-      showToast('records 配列が見つかりません', 'error'); return;
+    if (!data || typeof data !== 'object') {
+      showToast('JSONが不正です', 'error'); return;
     }
-    const normalized = data.records.map(normalizeRecord).filter(Boolean);
-    if (normalized.length === 0) {
-      showToast('有効な記録が見つかりません', 'error'); return;
+
+    // 各データの正規化（複数モード対応）
+    const normRecords = Array.isArray(data.records) ? data.records.map(normalizeRecord).filter(Boolean) : [];
+    const normPraises = Array.isArray(data.praises) ? data.praises.map(normalizePraise).filter(Boolean) : [];
+    const normEvals   = Array.isArray(data.evaluations) ? data.evaluations.map(normalizeEvaluation).filter(Boolean) : [];
+    const normAbas    = Array.isArray(data.abaRecords) ? data.abaRecords.map(normalizeAba).filter(Boolean) : [];
+    const normSeats   = Array.isArray(data.seatingSnapshots)
+      ? data.seatingSnapshots.filter(s => s && Array.isArray(s.groups))
+      : [];
+
+    const totals = [
+      ['交友', normRecords.length],
+      ['ほめ', normPraises.length],
+      ['評価', normEvals.length],
+      ['ABA',  normAbas.length],
+      ['席替え', normSeats.length]
+    ].filter(t => t[1] > 0).map(t => `${t[0]} ${t[1]}件`).join(' / ');
+
+    if (totals === '') {
+      showToast('有効なデータが見つかりません', 'error');
+      return;
     }
-    const append = confirm(`${normalized.length}件のデータが見つかりました。\n\n[OK] = 既存データに追加 (重複ID除外)\n[キャンセル] = 全置換 (既存データ削除)`);
+
+    const append = confirm(`バックアップデータを検出: ${totals}\n\n[OK] = 既存データに追加（重複ID除外）\n[キャンセル] = 全置換（既存削除）`);
+
     if (append) {
-      const existingIds = new Set(state.records.map(r => r.id));
-      const newRecs = normalized.filter(r => !existingIds.has(r.id));
+      // 各モード: 既存IDと重複しないものだけ追加
+      const newRecs = normRecords.filter(r => !state.records.some(x => x.id === r.id));
+      const newPra  = normPraises.filter(p => !state.praises.some(x => x.id === p.id));
+      const newEv   = normEvals.filter(e2 => !state.evaluations.some(x => x.id === e2.id));
+      const newAba  = normAbas.filter(a => !state.abaRecords.some(x => x.id === a.id));
+      const newSeat = normSeats.filter(s => !state.seatingSnapshots.some(x => x.id === s.id));
       state.records.push(...newRecs);
+      state.praises.push(...newPra);
+      state.evaluations.push(...newEv);
+      state.abaRecords.push(...newAba);
+      state.seatingSnapshots.push(...newSeat);
       saveState();
       refreshAll();
       updateHealthBadge();
-      showToast(`✓ ${newRecs.length}件を追加 (重複${normalized.length - newRecs.length}件除外)`);
+      const added = `交友${newRecs.length} / ほめ${newPra.length} / 評価${newEv.length} / ABA${newAba.length} / 席${newSeat.length}`;
+      showToast(`✓ 追加: ${added}（重複は除外）`);
     } else {
-      // 全置換: 自動退避
       if (!confirm('本当に既存データを全て置き換えますか？\n念のため、現在のデータを退避エクスポートします。')) return;
       try { exportJSON(); } catch (_) {}
-      state.records = normalized;
+      state.records = normRecords;
+      state.praises = normPraises;
+      state.evaluations = normEvals;
+      state.abaRecords = normAbas;
+      state.seatingSnapshots = normSeats;
+      if (Array.isArray(data.events)) state.events = data.events;
+      if (data.attributes && typeof data.attributes === 'object') state.attributes = data.attributes;
       if (data.settings) {
         state.settings = mergeSettings(data.settings);
         if (state.settings.customActivities) state.activities = state.settings.customActivities;
         else state.activities = [...window.APP_DATA.activities];
+        if (Array.isArray(state.settings.customStudents) && state.settings.customStudents.length > 0) {
+          state.students = state.settings.customStudents.map(s => ({ ...s }));
+        }
         renderActivityButtons();
         renderSceneButtons();
+        if (typeof renderStudentButtons === 'function') renderStudentButtons();
       }
       saveState();
+      applyAppHeader();
       refreshAll();
       updateHealthBadge();
-      showToast(`✓ ${normalized.length}件で置換`);
+      showToast(`✓ 全置換: ${totals}`);
     }
   };
   reader.readAsText(file);
@@ -3114,6 +3544,51 @@ function initAbaEvents() {
     });
   }
 
+  // 天気選択（任意）
+  const weatherGrid = document.getElementById('abaWeatherGrid');
+  if (weatherGrid) {
+    weatherGrid.innerHTML = '';
+    const WEATHERS = [
+      { id: 'sunny',  label: '☀ 晴' },
+      { id: 'cloudy', label: '⛅ 曇' },
+      { id: 'rainy',  label: '☔ 雨' },
+      { id: 'snowy',  label: '❄ 雪' },
+      { id: 'windy',  label: '🌬 風強' },
+      { id: 'hot',    label: '🥵 暑' },
+      { id: 'cold',   label: '🥶 寒' },
+      { id: 'other',  label: 'その他' }
+    ];
+    // 「指定なし」
+    const noneBtn = document.createElement('button');
+    noneBtn.type = 'button';
+    noneBtn.className = 'aba-subject-btn' + (!state.ui.abaWeather ? ' active' : '');
+    noneBtn.textContent = '—';
+    noneBtn.style.borderColor = '#999';
+    noneBtn.style.color = !state.ui.abaWeather ? 'white' : '#666';
+    noneBtn.style.background = !state.ui.abaWeather ? '#999' : '';
+    noneBtn.addEventListener('click', () => {
+      state.ui.abaWeather = '';
+      renderAbaWeatherSelection();
+    });
+    weatherGrid.appendChild(noneBtn);
+    WEATHERS.forEach(w => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'aba-subject-btn' + (state.ui.abaWeather === w.id ? ' active' : '');
+      btn.dataset.weatherId = w.id;
+      btn.textContent = w.label;
+      btn.style.borderColor = '#4a90e2';
+      btn.style.color = state.ui.abaWeather === w.id ? 'white' : '#4a90e2';
+      btn.style.background = state.ui.abaWeather === w.id ? '#4a90e2' : '';
+      btn.addEventListener('click', () => {
+        state.ui.abaWeather = (state.ui.abaWeather === w.id) ? '' : w.id;
+        renderAbaWeatherSelection();
+        updateAbaStatusBar();
+      });
+      weatherGrid.appendChild(btn);
+    });
+  }
+
   // 行動ステップ
   const behGrid = document.getElementById('abaBehaviorGrid');
   if (behGrid) {
@@ -3127,6 +3602,7 @@ function initAbaEvents() {
       btn.style.color = b.color;
       btn.innerHTML = `${b.label}<small>${b.id}</small>`;
       btn.addEventListener('click', () => {
+        const wasEmpty = state.ui.abaBehaviors.size === 0;
         if (state.ui.abaBehaviors.has(b.id)) {
           state.ui.abaBehaviors.delete(b.id);
           btn.classList.remove('active');
@@ -3140,6 +3616,23 @@ function initAbaEvents() {
         }
         renderAbaOtherInput();
         updateAbaStatusBar();
+        // 自動保存: 児童選択済み + 行動を新規に追加 + 「その他」以外 + 時間帯選択済み
+        // 「その他」は記述待ちのため自動保存しない
+        if (wasEmpty
+            && state.ui.abaTargetId
+            && state.ui.abaBehaviors.has(b.id)
+            && b.id !== 'other'
+            && state.ui.abaSlot) {
+          // 短いディレイで誤タップ防止＋ユーザーが追加行動を選ぶ余地
+          if (state.ui._autoSaveTimer) clearTimeout(state.ui._autoSaveTimer);
+          state.ui._autoSaveTimer = setTimeout(() => {
+            // タイマー発火時にまだ条件を満たしていれば保存
+            if (state.ui.abaBehaviors.size > 0 && state.ui.abaTargetId) {
+              saveAbaRecord({ autoSaved: true });
+            }
+            state.ui._autoSaveTimer = null;
+          }, 1200);
+        }
       });
       behGrid.appendChild(btn);
     });
@@ -3169,13 +3662,10 @@ function initAbaEvents() {
   });
   document.getElementById('abaResetBtn')?.addEventListener('click', resetAbaAll);
 
-  // クイック挿入
+  // クイックボタン: 選択式（active toggle）。複数選択可。textareaは自由記述用に併存。
   document.querySelectorAll('.aba-quick').forEach(btn => {
     btn.addEventListener('click', () => {
-      const target = document.getElementById(btn.dataset.fill);
-      if (!target) return;
-      target.value = target.value ? (target.value + ' / ' + btn.dataset.text) : btn.dataset.text;
-      target.focus();
+      btn.classList.toggle('active');
     });
   });
 
@@ -3219,47 +3709,48 @@ function initAbaEvents() {
   if (expBtn) expBtn.addEventListener('click', exportAbaCsv);
 }
 
-// ステップ式UIの遷移
+function renderAbaWeatherSelection() {
+  document.querySelectorAll('#abaWeatherGrid .aba-subject-btn').forEach(b => {
+    const wid = b.dataset.weatherId || '';
+    const isActive = (state.ui.abaWeather === wid) || (!wid && !state.ui.abaWeather);
+    b.classList.toggle('active', isActive);
+    if (isActive) {
+      b.style.background = wid ? '#4a90e2' : '#999';
+      b.style.color = 'white';
+    } else {
+      b.style.background = '';
+      b.style.color = wid ? '#4a90e2' : '#666';
+    }
+  });
+}
+
+// フラット式UI: 全項目を常時表示。setAbaStep はステータスバーのフォーカスのみ更新。
 function setAbaStep(step) {
   state.ui.abaStep = step;
-  document.querySelectorAll('.aba-step').forEach(el => {
-    el.classList.toggle('hidden', el.dataset.step !== step);
-  });
-  document.getElementById('abaInputArea').classList.toggle('hidden', step !== 'input');
-  // ステータスバーの強調
+  // ステータスバーの強調（どの項目を編集中か）
   document.querySelectorAll('#abaStatusBar .aba-status-item').forEach(el => {
     el.classList.toggle('active', el.dataset.step === step);
   });
-  // 行動ステップ表示時に行動グリッドのアクティブ状態を反映
-  if (step === 'behavior') {
-    document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(btn => {
-      const id = btn.dataset.behaviorId;
-      const beh = ABA_BEHAVIORS.find(b => b.id === id);
-      const active = state.ui.abaBehaviors.has(id);
-      btn.classList.toggle('active', active);
-      btn.style.background = active && beh ? beh.color : '';
-      btn.style.color = active ? 'white' : (beh ? beh.color : '');
-    });
-    renderAbaOtherInput();
-  }
-  // 児童ステップ表示時にハイライト
-  if (step === 'student') {
-    document.querySelectorAll('#abaStudentGrid .student-btn').forEach(btn => {
-      btn.classList.toggle('subject', parseInt(btn.dataset.studentId) === state.ui.abaTargetId);
-    });
-  }
-  // 時間帯ステップ表示時にハイライト
-  if (step === 'slot') {
-    document.querySelectorAll('#abaSlotGrid .aba-slot-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.slotId === state.ui.abaSlot);
-    });
-  }
-  // 教科ステップ
-  if (step === 'subject') {
-    document.querySelectorAll('#abaSubjectGrid .aba-subject-btn').forEach(btn => {
-      btn.classList.toggle('active', btn.dataset.subjectId === state.ui.abaSubjectId);
-    });
-  }
+  // 各グリッドのアクティブ状態を常に反映
+  document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(btn => {
+    const id = btn.dataset.behaviorId;
+    const beh = (typeof ABA_BEHAVIORS !== 'undefined') ? ABA_BEHAVIORS.find(b => b.id === id) : null;
+    const active = state.ui.abaBehaviors.has(id);
+    btn.classList.toggle('active', active);
+    btn.style.background = active && beh ? beh.color : '';
+    btn.style.color = active ? 'white' : (beh ? beh.color : '');
+  });
+  if (typeof renderAbaOtherInput === 'function') renderAbaOtherInput();
+  document.querySelectorAll('#abaStudentGrid .student-btn').forEach(btn => {
+    btn.classList.toggle('active', parseInt(btn.dataset.studentId) === state.ui.abaTargetId);
+    btn.classList.toggle('subject', parseInt(btn.dataset.studentId) === state.ui.abaTargetId);
+  });
+  document.querySelectorAll('#abaSlotGrid .aba-slot-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.slotId === state.ui.abaSlot);
+  });
+  document.querySelectorAll('#abaSubjectGrid .aba-subject-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.subjectId === state.ui.abaSubjectId);
+  });
 }
 
 function updateAbaStatusBar() {
@@ -3286,6 +3777,11 @@ function updateAbaStatusBar() {
     } else {
       bEl.textContent = labels.join('+');
     }
+  }
+  const wEl = document.getElementById('abaStatusWeather');
+  if (wEl) {
+    const W_LABELS = {sunny:'☀晴', cloudy:'⛅曇', rainy:'☔雨', snowy:'❄雪', windy:'🌬風', hot:'🥵暑', cold:'🥶寒', other:'その他'};
+    wEl.textContent = W_LABELS[state.ui.abaWeather] || '—';
   }
 }
 
@@ -3333,22 +3829,37 @@ function resetAbaAll() {
   ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
+  // クイックボタンのactive選択もクリア
+  document.querySelectorAll('.aba-quick.active').forEach(b => b.classList.remove('active'));
   renderAbaOtherInput();
   updateAbaStatusBar();
   setAbaStep('date');
 }
 
-function saveAbaRecord() {
+function saveAbaRecord(opts) {
+  opts = opts || {};
   if (!state.ui.abaTargetId || state.ui.abaBehaviors.size === 0 || !state.ui.abaSlot) {
-    showToast('時間帯・児童・行動を選択してください', 'error'); return;
+    if (!opts.autoSaved) showToast('時間帯・児童・行動を選択してください', 'error');
+    return;
   }
   if (state.ui.abaBehaviors.has('other') && !state.ui.abaOtherText.trim()) {
-    showToast('「その他」の内容を記述してください', 'error'); return;
+    if (!opts.autoSaved) showToast('「その他」の内容を記述してください', 'error');
+    return;
   }
-  const ant = document.getElementById('abaAntecedent').value || '';
-  const cons = document.getElementById('abaConsequence').value || '';
-  const resp = document.getElementById('abaResponse').value || '';
-  // 「その他」の内容を behaviors の付帯情報として保存
+  // クイックボタンの選択結果をテキストに集約 + textareaの自由記述と連結
+  function gatherQuickButtons(fillId) {
+    const btns = document.querySelectorAll('.aba-quick.active[data-fill="' + fillId + '"]');
+    return Array.from(btns).map(b => b.dataset.text).join(' / ');
+  }
+  const antTxt = (document.getElementById('abaAntecedent') || {}).value || '';
+  const consTxt = (document.getElementById('abaConsequence') || {}).value || '';
+  const respTxt = (document.getElementById('abaResponse') || {}).value || '';
+  const antBtns = gatherQuickButtons('abaAntecedent');
+  const consBtns = gatherQuickButtons('abaConsequence');
+  const respBtns = gatherQuickButtons('abaResponse');
+  const ant = [antBtns, antTxt].filter(Boolean).join(' / ');
+  const cons = [consBtns, consTxt].filter(Boolean).join(' / ');
+  const resp = [respBtns, respTxt].filter(Boolean).join(' / ');
   let antWithOther = ant;
   if (state.ui.abaBehaviors.has('other') && state.ui.abaOtherText) {
     antWithOther = `[その他: ${state.ui.abaOtherText}]` + (ant ? ' / ' + ant : '');
@@ -3358,32 +3869,40 @@ function saveAbaRecord() {
     date: state.ui.abaDate || todayISO(),
     slot: state.ui.abaSlot,
     subject: state.ui.abaSubjectId || '',
+    weather: state.ui.abaWeather || '',
     behaviors: [...state.ui.abaBehaviors],
     antecedent: antWithOther,
     consequence: cons,
     response: resp
   });
-  if (!rec) { showToast('保存に失敗', 'error'); return; }
+  if (!rec) { if (!opts.autoSaved) showToast('保存に失敗', 'error'); return; }
   state.abaRecords.push(rec);
   saveState();
   if (typeof pushAbaToGas === 'function') pushAbaToGas(rec, 'add').catch(() => {});
   const s = state.students.find(x => x.id === rec.studentId);
-  showToast(`${s ? s.name : ''} のABA記録を保存`);
-  // 行動・テキストはクリア。日付/時間帯/教科/児童は維持で連続記録
+  const prefix = opts.autoSaved ? '⚡ 自動保存: ' : '';
+  showToast(`${prefix}${s ? s.name : ''} のABA記録を保存`);
+  // 行動・テキスト・児童をクリア。日付/時間帯/教科/天気は維持で連続記録
   state.ui.abaBehaviors = new Set();
   state.ui.abaOtherText = '';
+  state.ui.abaTargetId = null;
   document.querySelectorAll('.aba-behavior-btn').forEach(b => {
     b.classList.remove('active');
     const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
     b.style.background = '';
     if (beh) b.style.color = beh.color;
   });
+  document.querySelectorAll('#abaStudentGrid .student-btn').forEach(b => {
+    b.classList.remove('active', 'subject');
+  });
   ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
+  // クイックボタンのactive選択もクリア
+  document.querySelectorAll('.aba-quick.active').forEach(b => b.classList.remove('active'));
   renderAbaOtherInput();
   updateAbaStatusBar();
-  setAbaStep('behavior'); // 同じ児童で次の行動を記録できるように
+  setAbaStep('student'); // 次は児童選択へフォーカス
   if (state.ui.currentTab === 'aba-list') refreshAbaList();
 }
 
@@ -5395,6 +5914,20 @@ init = function() {
   document.getElementById('dashboardModal')?.addEventListener('click', e => {
     if (e.target.id === 'dashboardModal') closeDashboard();
   });
+};
+
+// ========== グローバル公開 (他script用) ==========
+window.state = state;
+window.getStudent = getStudent;
+window.getStudentName = getStudentName;
+window.escapeHtml = escapeHtml;
+window.saveState = saveState;
+window.openStudentDashboard = function(id) {
+  if (typeof openStudentDashboard === 'function') return openStudentDashboard(id);
+};
+// refreshAll は後で wrap されるので関数ラッパー経由
+window.refreshAll = function() {
+  if (typeof refreshAll === 'function') return refreshAll();
 };
 
 // ========== Boot ==========

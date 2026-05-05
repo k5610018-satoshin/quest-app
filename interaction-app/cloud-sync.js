@@ -12,12 +12,15 @@ const PENDING_QUEUE_KEY = 'interactionApp_pendingQueue';
 const LAST_PULL_KEY     = 'interactionApp_lastPull';
 
 // ===== 同期設定 (デフォルト値・初回起動時に自動適用) =====
-// 注意: ユーザー本人専用前提でGAS URL/APIキーをハードコード
+// 個人版: APP_CONFIG.defaultSync から GAS URL/APIキーを取得（ハードコード）
+// 配布版: defaultSync は空 → ユーザーが設定タブで手入力
+const _CFG_SYNC = (window.APP_CONFIG && window.APP_CONFIG.defaultSync) || { endpoint: '', apiKey: '' };
+const _IS_PERSONAL = (window.APP_CONFIG && window.APP_CONFIG.mode === 'personal');
 const DEFAULT_SYNC = {
-  enabled:  true,
-  endpoint: 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec',
-  apiKey:   'cLgXe27Zo-2w7cfL',
-  autoSync: true
+  enabled:  _IS_PERSONAL && !!_CFG_SYNC.endpoint,
+  endpoint: _CFG_SYNC.endpoint || '',
+  apiKey:   _CFG_SYNC.apiKey   || '',
+  autoSync: _IS_PERSONAL && !!_CFG_SYNC.endpoint
 };
 const syncConfig = { ...DEFAULT_SYNC };
 
@@ -64,20 +67,25 @@ function getOrCreateDeviceId() {
 // ===== 設定の読み書き =====
 
 function loadSyncConfig() {
-  // 単一ユーザー運用: endpoint/apiKey は常にデフォルト値を強制使用。
-  // 過去の手動入力ミス（spreadsheet URL貼付け等）が残っていても DEFAULT_SYNC が勝つ。
-  // localStorage は enabled/autoSync のトグル状態のみ復元する。
-  syncConfig.endpoint = DEFAULT_SYNC.endpoint;
-  syncConfig.apiKey   = DEFAULT_SYNC.apiKey;
+  // 個人版: endpoint/apiKey は常にデフォルト値を強制使用（過去の手動入力ミスを上書き）。
+  // 配布版: localStorageが正、未設定ならDEFAULT_SYNC（空）。各先生がGAS URL/APIキーを設定。
+  if (_IS_PERSONAL) {
+    syncConfig.endpoint = DEFAULT_SYNC.endpoint;
+    syncConfig.apiKey   = DEFAULT_SYNC.apiKey;
+  }
   try {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
+      if (!_IS_PERSONAL) {
+        // 配布版のみendpoint/apiKeyを復元
+        if (typeof saved.endpoint === 'string') syncConfig.endpoint = saved.endpoint;
+        if (typeof saved.apiKey   === 'string') syncConfig.apiKey   = saved.apiKey;
+      }
       if (typeof saved.enabled  === 'boolean') syncConfig.enabled  = saved.enabled;
       if (typeof saved.autoSync === 'boolean') syncConfig.autoSync = saved.autoSync;
     }
   } catch (_) {}
-  // 必ず最新のデフォルト値で上書き保存（古い不正値を一掃）
   saveSyncConfig();
 }
 
