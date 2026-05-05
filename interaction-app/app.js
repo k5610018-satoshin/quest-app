@@ -89,7 +89,7 @@ const state = {
     abaSlot: '',
     abaSubjectId: '',
     abaTargetId: null,
-    abaWeather: '',             // 任意: ☀晴/⛅曇/☔雨/❄雪/🌬風/その他
+    abaWeathers: new Set(),     // 任意・複数選択可: ☀/⛅/☔/❄/🌬/🥵/🥶/その他
     abaBehaviors: new Set(),    // 選択中の行動
     abaOtherText: '',           // その他選択時の記述
     abaStep: 'date',            // 現在のステップ: date/slot/subject/student/behavior/input
@@ -3193,7 +3193,7 @@ function refreshEvalCriteriaText() {
   const text = document.getElementById('evalCriteriaText');
   const hint = document.getElementById('evalCriteriaHint');
   if (!u || !u.criteria) {
-    if (text) text.textContent = '単元を選択すると評価基準を表示';
+    if (text) text.textContent = '単元を選択すると評価規準を表示';
     if (hint) hint.textContent = '';
     return;
   }
@@ -3433,15 +3433,38 @@ function exportEvalCsv() {
 // ========== ABAアセスメントモード ==========
 
 const ABA_BEHAVIORS = [
-  { id: 'leave',    label: '離席',    color: '#e74c3c' },
-  { id: 'verbal',   label: '暴言',    color: '#c0392b' },
-  { id: 'physical', label: '暴力',    color: '#922b21' },
-  { id: 'sleep',    label: '寝る',    color: '#7f8c8d' },
-  { id: 'reading',  label: '読書',    color: '#16a085' },
+  { id: 'leave',    label: '離席',     color: '#e74c3c' },
+  { id: 'runaway',  label: '飛び出し', color: '#cd1818' },
+  { id: 'verbal',   label: '暴言',     color: '#c0392b' },
+  { id: 'physical', label: '暴力',     color: '#922b21' },
+  { id: 'destroy',  label: '破壊',     color: '#7b241c' },
+  { id: 'hitobj',   label: '物に当たる', color: '#a93226' },
+  { id: 'sleep',    label: '寝る',     color: '#7f8c8d' },
+  { id: 'reading',  label: '読書',     color: '#16a085' },
   { id: 'refuse',   label: '課題放棄', color: '#d35400' },
-  { id: 'shout',    label: '叫ぶ',    color: '#e67e22' },
-  { id: 'cry',      label: '泣く',    color: '#9b59b6' },
-  { id: 'other',    label: 'その他',  color: '#34495e' }
+  { id: 'shout',    label: '叫ぶ',     color: '#e67e22' },
+  { id: 'cry',      label: '泣く',     color: '#9b59b6' },
+  { id: 'sulk',     label: 'すねる',   color: '#8e44ad' },
+  { id: 'other',    label: 'その他',   color: '#34495e' }
+];
+
+// ABA専用の場面リスト（評価教科より広い：場面・行事を含む）
+const ABA_SUBJECTS = [
+  { id: 'kokugo',    label: '国語',    color: '#e74c3c' },
+  { id: 'sansu',     label: '算数',    color: '#4a90e2' },
+  { id: 'rika',      label: '理科',    color: '#27ae60' },
+  { id: 'shakai',    label: '社会',    color: '#f39c12' },
+  { id: 'taiiku',    label: '体育',    color: '#9b59b6' },
+  { id: 'zukou',     label: '図工',    color: '#e67e22' },
+  { id: 'ongaku',    label: '音楽',    color: '#673ab7' },
+  { id: 'katei',     label: '家庭',    color: '#e91e63' },
+  { id: 'shosha',    label: '書写',    color: '#795548' },
+  { id: 'gaikoku',   label: '外国語',  color: '#00bcd4' },
+  { id: 'doutoku',   label: '道徳',    color: '#16a085' },
+  { id: 'sougou',    label: '総合',    color: '#8bc34a' },
+  { id: 'tokukatsu', label: '特活',    color: '#607d8b' },
+  { id: 'gyoji',     label: '行事',    color: '#ff5722' },
+  { id: 'other',     label: 'その他',  color: '#9e9e9e' }
 ];
 
 const ABA_SLOT_LABELS = {
@@ -3494,31 +3517,64 @@ function initAbaEvents() {
     });
   }
 
-  // 教科ステップ - グリッド
+  // 教科/場面ステップ - ABA専用リスト（行事・特活・書写などを含む）
   const subjGrid = document.getElementById('abaSubjectGrid');
   if (subjGrid) {
     subjGrid.innerHTML = '';
-    state.subjects.forEach(s => {
+    // 「指定なし」
+    const noneBtn = document.createElement('button');
+    noneBtn.type = 'button';
+    noneBtn.className = 'aba-subject-btn' + (!state.ui.abaSubjectId ? ' active' : '');
+    noneBtn.textContent = '—';
+    noneBtn.style.borderColor = '#999';
+    noneBtn.style.color = !state.ui.abaSubjectId ? 'white' : '#666';
+    noneBtn.style.background = !state.ui.abaSubjectId ? '#999' : '';
+    noneBtn.addEventListener('click', () => {
+      state.ui.abaSubjectId = '';
+      // 全ボタンの active 状態を再描画
+      document.querySelectorAll('#abaSubjectGrid .aba-subject-btn').forEach(b => {
+        const sid = b.dataset.subjectId || '';
+        const isActive = (state.ui.abaSubjectId === sid) || (!sid && !state.ui.abaSubjectId);
+        b.classList.toggle('active', isActive);
+        if (isActive) {
+          b.style.background = sid ? (ABA_SUBJECTS.find(x => x.id === sid)||{}).color || '#999' : '#999';
+          b.style.color = 'white';
+        } else {
+          b.style.background = '';
+          b.style.color = sid ? (ABA_SUBJECTS.find(x => x.id === sid)||{}).color || '#666' : '#666';
+        }
+      });
+      updateAbaStatusBar();
+    });
+    subjGrid.appendChild(noneBtn);
+    ABA_SUBJECTS.forEach(s => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'aba-subject-btn';
+      btn.className = 'aba-subject-btn' + (state.ui.abaSubjectId === s.id ? ' active' : '');
       btn.dataset.subjectId = s.id;
       btn.style.borderColor = s.color;
-      btn.style.color = s.color;
+      btn.style.color = state.ui.abaSubjectId === s.id ? 'white' : s.color;
+      btn.style.background = state.ui.abaSubjectId === s.id ? s.color : '';
       btn.textContent = s.label;
       btn.addEventListener('click', () => {
-        state.ui.abaSubjectId = s.id;
+        state.ui.abaSubjectId = (state.ui.abaSubjectId === s.id) ? '' : s.id;
+        document.querySelectorAll('#abaSubjectGrid .aba-subject-btn').forEach(b => {
+          const sid = b.dataset.subjectId || '';
+          const isActive = (state.ui.abaSubjectId === sid) || (!sid && !state.ui.abaSubjectId);
+          b.classList.toggle('active', isActive);
+          if (isActive) {
+            b.style.background = sid ? (ABA_SUBJECTS.find(x => x.id === sid)||{}).color || '#999' : '#999';
+            b.style.color = 'white';
+          } else {
+            b.style.background = '';
+            b.style.color = sid ? (ABA_SUBJECTS.find(x => x.id === sid)||{}).color || '#666' : '#666';
+          }
+        });
         updateAbaStatusBar();
-        setAbaStep('student');
       });
       subjGrid.appendChild(btn);
     });
   }
-  document.getElementById('abaSkipSubjectBtn')?.addEventListener('click', () => {
-    state.ui.abaSubjectId = '';
-    updateAbaStatusBar();
-    setAbaStep('student');
-  });
 
   // 児童ステップ - 既存と同じ student-grid
   const stGrid = document.getElementById('abaStudentGrid');
@@ -3544,7 +3600,7 @@ function initAbaEvents() {
     });
   }
 
-  // 天気選択（任意）
+  // 天気選択（任意・複数選択可）
   const weatherGrid = document.getElementById('abaWeatherGrid');
   if (weatherGrid) {
     weatherGrid.innerHTML = '';
@@ -3558,30 +3614,22 @@ function initAbaEvents() {
       { id: 'cold',   label: '🥶 寒' },
       { id: 'other',  label: 'その他' }
     ];
-    // 「指定なし」
-    const noneBtn = document.createElement('button');
-    noneBtn.type = 'button';
-    noneBtn.className = 'aba-subject-btn' + (!state.ui.abaWeather ? ' active' : '');
-    noneBtn.textContent = '—';
-    noneBtn.style.borderColor = '#999';
-    noneBtn.style.color = !state.ui.abaWeather ? 'white' : '#666';
-    noneBtn.style.background = !state.ui.abaWeather ? '#999' : '';
-    noneBtn.addEventListener('click', () => {
-      state.ui.abaWeather = '';
-      renderAbaWeatherSelection();
-    });
-    weatherGrid.appendChild(noneBtn);
     WEATHERS.forEach(w => {
       const btn = document.createElement('button');
       btn.type = 'button';
-      btn.className = 'aba-subject-btn' + (state.ui.abaWeather === w.id ? ' active' : '');
+      const isActive = state.ui.abaWeathers.has(w.id);
+      btn.className = 'aba-subject-btn' + (isActive ? ' active' : '');
       btn.dataset.weatherId = w.id;
       btn.textContent = w.label;
       btn.style.borderColor = '#4a90e2';
-      btn.style.color = state.ui.abaWeather === w.id ? 'white' : '#4a90e2';
-      btn.style.background = state.ui.abaWeather === w.id ? '#4a90e2' : '';
+      btn.style.color = isActive ? 'white' : '#4a90e2';
+      btn.style.background = isActive ? '#4a90e2' : '';
       btn.addEventListener('click', () => {
-        state.ui.abaWeather = (state.ui.abaWeather === w.id) ? '' : w.id;
+        if (state.ui.abaWeathers.has(w.id)) {
+          state.ui.abaWeathers.delete(w.id);
+        } else {
+          state.ui.abaWeathers.add(w.id);
+        }
         renderAbaWeatherSelection();
         updateAbaStatusBar();
       });
@@ -3602,7 +3650,6 @@ function initAbaEvents() {
       btn.style.color = b.color;
       btn.innerHTML = `${b.label}<small>${b.id}</small>`;
       btn.addEventListener('click', () => {
-        const wasEmpty = state.ui.abaBehaviors.size === 0;
         if (state.ui.abaBehaviors.has(b.id)) {
           state.ui.abaBehaviors.delete(b.id);
           btn.classList.remove('active');
@@ -3616,23 +3663,7 @@ function initAbaEvents() {
         }
         renderAbaOtherInput();
         updateAbaStatusBar();
-        // 自動保存: 児童選択済み + 行動を新規に追加 + 「その他」以外 + 時間帯選択済み
-        // 「その他」は記述待ちのため自動保存しない
-        if (wasEmpty
-            && state.ui.abaTargetId
-            && state.ui.abaBehaviors.has(b.id)
-            && b.id !== 'other'
-            && state.ui.abaSlot) {
-          // 短いディレイで誤タップ防止＋ユーザーが追加行動を選ぶ余地
-          if (state.ui._autoSaveTimer) clearTimeout(state.ui._autoSaveTimer);
-          state.ui._autoSaveTimer = setTimeout(() => {
-            // タイマー発火時にまだ条件を満たしていれば保存
-            if (state.ui.abaBehaviors.size > 0 && state.ui.abaTargetId) {
-              saveAbaRecord({ autoSaved: true });
-            }
-            state.ui._autoSaveTimer = null;
-          }, 1200);
-        }
+        // 自動保存は廃止: A/C/対応を入力する時間を確保。明示的に保存ボタンクリックで保存。
       });
       behGrid.appendChild(btn);
     });
@@ -3712,14 +3743,14 @@ function initAbaEvents() {
 function renderAbaWeatherSelection() {
   document.querySelectorAll('#abaWeatherGrid .aba-subject-btn').forEach(b => {
     const wid = b.dataset.weatherId || '';
-    const isActive = (state.ui.abaWeather === wid) || (!wid && !state.ui.abaWeather);
+    const isActive = wid && state.ui.abaWeathers.has(wid);
     b.classList.toggle('active', isActive);
     if (isActive) {
-      b.style.background = wid ? '#4a90e2' : '#999';
+      b.style.background = '#4a90e2';
       b.style.color = 'white';
     } else {
       b.style.background = '';
-      b.style.color = wid ? '#4a90e2' : '#666';
+      b.style.color = '#4a90e2';
     }
   });
 }
@@ -3760,7 +3791,7 @@ function updateAbaStatusBar() {
   if (sEl) sEl.textContent = ABA_SLOT_LABELS[state.ui.abaSlot] || '未選択';
   const subEl = document.getElementById('abaStatusSubject');
   if (subEl) {
-    const sub = state.subjects.find(x => x.id === state.ui.abaSubjectId);
+    const sub = ABA_SUBJECTS.find(x => x.id === state.ui.abaSubjectId);
     subEl.textContent = sub ? sub.label : '—';
   }
   const stEl = document.getElementById('abaStatusStudent');
@@ -3780,8 +3811,9 @@ function updateAbaStatusBar() {
   }
   const wEl = document.getElementById('abaStatusWeather');
   if (wEl) {
-    const W_LABELS = {sunny:'☀晴', cloudy:'⛅曇', rainy:'☔雨', snowy:'❄雪', windy:'🌬風', hot:'🥵暑', cold:'🥶寒', other:'その他'};
-    wEl.textContent = W_LABELS[state.ui.abaWeather] || '—';
+    const W_LABELS = {sunny:'☀', cloudy:'⛅', rainy:'☔', snowy:'❄', windy:'🌬', hot:'🥵', cold:'🥶', other:'他'};
+    if (!state.ui.abaWeathers || state.ui.abaWeathers.size === 0) wEl.textContent = '—';
+    else wEl.textContent = [...state.ui.abaWeathers].map(w => W_LABELS[w] || w).join('');
   }
 }
 
@@ -3869,7 +3901,9 @@ function saveAbaRecord(opts) {
     date: state.ui.abaDate || todayISO(),
     slot: state.ui.abaSlot,
     subject: state.ui.abaSubjectId || '',
-    weather: state.ui.abaWeather || '',
+    weather: state.ui.abaWeathers && state.ui.abaWeathers.size > 0
+      ? [...state.ui.abaWeathers].join(',')
+      : '',
     behaviors: [...state.ui.abaBehaviors],
     antecedent: antWithOther,
     consequence: cons,

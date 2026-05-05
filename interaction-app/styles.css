@@ -2024,3 +2024,61 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   color: #b0b0b0;
   font-size: 11px;
 }
+
+/* ========== ABA 2カラム式レイアウト ========== */
+.aba-flat .aba-flat-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 8px;
+  flex: 1;
+  overflow: hidden;
+  padding: 6px;
+}
+.aba-flat .aba-flat-left,
+.aba-flat .aba-flat-right {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.aba-flat .aba-flat-right {
+  background: #fef9f9;
+  border: 1px solid #f5d0d0;
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+.aba-flat .aba-flat-row-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-bottom: 1px dashed #f5d0d0;
+  padding: 6px 4px;
+}
+.aba-flat .aba-flat-row-vertical:last-child { border-bottom: none; }
+.aba-flat .aba-flat-row-vertical .aba-flat-label {
+  padding-top: 0;
+  font-size: 11.5px;
+}
+.aba-flat .aba-flat-row-vertical .aba-flat-text textarea {
+  min-height: 24px;
+  font-size: 11.5px;
+}
+.aba-flat .aba-flat-row-vertical .aba-quick-row {
+  margin-top: 0;
+  margin-bottom: 4px;
+}
+.aba-flat .aba-flat-row-vertical .aba-quick {
+  font-size: 10.5px;
+  padding: 3px 7px;
+}
+
+/* 教科グリッドを2カラム左側でも表示できるように調整 */
+.aba-flat .aba-flat-left .aba-subject-grid {
+  grid-template-columns: repeat(8, 1fr);
+}
+.aba-flat .aba-flat-left .aba-weather-grid {
+  display: grid;
+  grid-template-columns: repeat(8, 1fr);
+  gap: 3px;
+}
