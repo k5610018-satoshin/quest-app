@@ -3904,46 +3904,287 @@ function refreshCentrality() {
   const recs = filterRecords({ category, period });
   document.getElementById('centralityInfo').textContent = `対象記録: ${recs.length}件`;
 
-  const data = computeCentrality(recs);
-  // 孤立順 TOP 5
-  const isolated = [...data].sort((a, b) => a.degree - b.degree || a.totalCount - b.totalCount).slice(0, 5);
-  renderCentralityTable('centralityIsolatedTable', isolated, 'degree');
-  // ハブ順 TOP 5
-  const hub = [...data].sort((a, b) => b.degree - a.degree || b.totalCount - a.totalCount).slice(0, 5);
-  renderCentralityTable('centralityHubTable', hub, 'degree');
-  // 非対称性 (絶対値の大きい順 TOP 5)
-  const asym = [...data].filter(d => d.totalCount >= 3).sort((a, b) => Math.abs(b.asymmetry) - Math.abs(a.asymmetry)).slice(0, 5);
-  renderCentralityTable('centralityAsymmetryTable', asym, 'asymmetry');
-  // クラスタ
-  const pairs = computePairs(recs);
-  const clusters = detectClusters(pairs, 3);
-  const clCont = document.getElementById('centralityClusters');
-  if (clusters.length === 0) {
-    clCont.innerHTML = '<div class="muted">共起≥3のクラスタはまだありません</div>';
-  } else {
-    clCont.innerHTML = clusters.map((g, i) =>
-      `<div style="margin-bottom:6px;"><b>グループ${i+1} (${g.length}人):</b> ${g.map(s => escapeHtml(s.name)).join('・')}</div>`
-    ).join('');
+  const network = buildUndirectedNetwork(recs);
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+
+  // ========== ① Degree Centrality ==========
+  const deg = computeDegree(network);
+  const sortedByDeg = state.students
+    .map(s => ({ s, deg: deg[s.id] || 0 }))
+    .sort((a, b) => b.deg - a.deg);
+  renderSimpleRankTable('centralityDegreeTopTable',
+    sortedByDeg.slice(0, 10), '人数');
+  renderSimpleRankTable('centralityDegreeBottomTable',
+    sortedByDeg.slice().reverse().slice(0, 10), '人数', 'isolated');
+
+  // ========== ② Weighted Strength ==========
+  const strength = computeStrength(network);
+  const sortedByStr = state.students
+    .map(s => ({
+      s,
+      str: strength[s.id] || 0,
+      deg: deg[s.id] || 0,
+      ratio: (deg[s.id] || 0) > 0 ? Math.round((strength[s.id] || 0) / deg[s.id] * 10) / 10 : 0
+    }))
+    .sort((a, b) => b.str - a.str)
+    .slice(0, 10);
+  renderStrengthTable('centralityStrengthTable', sortedByStr);
+
+  // ========== ③ Betweenness + Clustering ==========
+  const bw = computeBetweenness(network);
+  const cc = computeClusteringCoeff(network);
+  const sortedByBw = state.students
+    .map(s => ({
+      s,
+      bw: Math.round((bw[s.id] || 0) * 10000) / 10000,
+      cc: Math.round((cc[s.id] || 0) * 100) / 100,
+      deg: deg[s.id] || 0
+    }))
+    .sort((a, b) => b.bw - a.bw)
+    .slice(0, 10);
+  renderBetweennessTable('centralityBetweennessTable', sortedByBw);
+
+  // ========== ④ Louvain Communities ==========
+  const community = louvainCommunities(network);
+  const groups = {};
+  for (const id of network.nodes) {
+    const c = community[id];
+    if (!groups[c]) groups[c] = [];
+    groups[c].push(id);
+  }
+  const palette = ['#e74c3c','#3498db','#27ae60','#f39c12','#9b59b6','#e67e22','#16a085','#34495e','#c0392b','#2980b9'];
+  const sortedGroups = Object.entries(groups)
+    .map(([cid, ids]) => ({ cid: parseInt(cid), ids, size: ids.length }))
+    .sort((a, b) => b.size - a.size);
+  const cont = document.getElementById('centralityCommunities');
+  if (cont) {
+    if (sortedGroups.length === 0) {
+      cont.innerHTML = '<div class="muted">記録が不足しています</div>';
+    } else {
+      cont.innerHTML = sortedGroups.map((g, i) => {
+        const color = palette[i % palette.length];
+        // 中心人物 = グループ内で次数 (グループ内エッジ数) が最多
+        const groupAdj = {};
+        for (const id of g.ids) groupAdj[id] = 0;
+        for (const e of network.edges) {
+          if (g.ids.includes(e.a) && g.ids.includes(e.b)) {
+            groupAdj[e.a]++; groupAdj[e.b]++;
+          }
+        }
+        const centerId = g.ids.slice().sort((a, b) => (groupAdj[b]||0) - (groupAdj[a]||0))[0];
+        const centerName = (sMap.get(centerId) || {}).name || '';
+        const memberNames = g.ids.map(id => (sMap.get(id) || {}).name || '?').join('・');
+        return `<div style="margin-bottom:6px; padding:4px 8px; border-left:4px solid ${color}; background:${color}1a;">
+          <b style="color:${color};">グループ${i+1} (${g.size}人)</b>
+          <span class="muted small">中心: ${escapeHtml(centerName)}</span><br>
+          <span style="font-size:12px;">${escapeHtml(memberNames)}</span>
+        </div>`;
+      }).join('');
+    }
+  }
+
+  // ネットワーク統計
+  const stats = document.getElementById('centralityNetworkStats');
+  if (stats) {
+    const nEdges = network.edges.length;
+    const totalW = network.edges.reduce((a, e) => a + e.w, 0);
+    const maxPossible = state.students.length * (state.students.length - 1) / 2;
+    const density = maxPossible > 0 ? (nEdges / maxPossible * 100).toFixed(1) : '0';
+    stats.textContent = `ネットワーク密度: ${density}% (${nEdges}/${maxPossible}ペア) / 総接触: ${totalW}回 / コミュニティ数: ${sortedGroups.length}`;
   }
 }
 
-function renderCentralityTable(tableId, rows, focusKey) {
+function renderSimpleRankTable(tableId, rows, label, mark) {
   const t = document.getElementById(tableId);
   if (!t) return;
-  let html = '<thead><tr><th>児童</th><th>degree</th><th>total</th><th>選/被</th><th>asym</th></tr></thead><tbody>';
-  for (const d of rows) {
-    const cls = d.student.highlight ? 'highlight-row' : '';
-    const asymStr = d.asymmetry === 0 ? '0' : (d.asymmetry > 0 ? `+${d.asymmetry}` : String(d.asymmetry));
-    html += `<tr class="${cls}">
-      <td><b>${escapeHtml(d.student.name)}</b></td>
-      <td>${d.degree}</td>
-      <td>${d.totalCount}</td>
-      <td>${d.given}/${d.received}</td>
-      <td>${asymStr}</td>
-    </tr>`;
-  }
+  let html = `<thead><tr><th>順</th><th>児童</th><th>${label}</th></tr></thead><tbody>`;
+  rows.forEach((r, i) => {
+    const cls = r.s.highlight ? 'highlight-row' : '';
+    const lowMark = (mark === 'isolated' && r.deg <= 3) ? ' 🔴' : '';
+    html += `<tr class="${cls}"><td>${i+1}</td><td><b>${escapeHtml(r.s.name)}</b>${lowMark}</td><td class="num">${r.deg}</td></tr>`;
+  });
   html += '</tbody>';
   t.innerHTML = html;
+}
+
+function renderStrengthTable(tableId, rows) {
+  const t = document.getElementById(tableId);
+  if (!t) return;
+  let html = '<thead><tr><th>順</th><th>児童</th><th>強度</th><th>人数</th><th>偏り</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const cls = r.s.highlight ? 'highlight-row' : '';
+    const warn = r.str >= 10 && r.deg <= 5 ? ' ⚠' : ''; // 高強度×低人数=偏り
+    html += `<tr class="${cls}"><td>${i+1}</td><td><b>${escapeHtml(r.s.name)}</b>${warn}</td>
+      <td class="num">${r.str}</td><td class="num">${r.deg}</td>
+      <td class="num">${r.ratio}<span class="muted small">/人</span></td></tr>`;
+  });
+  html += '</tbody>';
+  t.innerHTML = html;
+}
+
+function renderBetweennessTable(tableId, rows) {
+  const t = document.getElementById(tableId);
+  if (!t) return;
+  let html = '<thead><tr><th>順</th><th>児童</th><th>媒介性</th><th>クラスタ係数</th><th>判定</th></tr></thead><tbody>';
+  rows.forEach((r, i) => {
+    const cls = r.s.highlight ? 'highlight-row' : '';
+    let verdict = '';
+    if (r.bw >= 0.05 && r.cc <= 0.3) verdict = '🔗 橋渡し役';
+    else if (r.cc >= 0.6) verdict = '👥 固定グループ';
+    else if (r.deg <= 2) verdict = '🔴 孤立気味';
+    html += `<tr class="${cls}"><td>${i+1}</td><td><b>${escapeHtml(r.s.name)}</b></td>
+      <td class="num">${r.bw}</td><td class="num">${r.cc}</td><td>${verdict}</td></tr>`;
+  });
+  html += '</tbody>';
+  t.innerHTML = html;
+}
+
+// ========== SNA: 無向ネットワーク指標 ==========
+//
+// 本アプリの記録は順不同共起観察 (誰と誰が一緒にいたか) なので、
+// 方向性のあるピア指名指標 (sociometric status, asymmetry) は不適切。
+// 以下は無向ネットワークの標準SNA指標 (Wasserman & Faust 1994, Brandes 2001, Blondel et al. 2008 Louvain)
+// 教室の友人関係解析の参考: Cairns & Cairns 1994, Kindermann 2007, Veenstra et al. 2013
+
+function buildUndirectedNetwork(recs) {
+  const pairs = computePairs(recs);
+  const nodes = state.students.map(s => s.id);
+  const edges = [];
+  for (const k in pairs) {
+    const [a, b] = k.split('-').map(Number);
+    edges.push({ a, b, w: pairs[k] });
+  }
+  return { nodes, edges };
+}
+
+function computeDegree(network) {
+  const d = {};
+  for (const id of network.nodes) d[id] = 0;
+  for (const e of network.edges) { d[e.a]++; d[e.b]++; }
+  return d;
+}
+
+function computeStrength(network) {
+  const s = {};
+  for (const id of network.nodes) s[id] = 0;
+  for (const e of network.edges) { s[e.a] += e.w; s[e.b] += e.w; }
+  return s;
+}
+
+function computeClusteringCoeff(network) {
+  const adj = {};
+  for (const id of network.nodes) adj[id] = new Set();
+  for (const e of network.edges) { adj[e.a].add(e.b); adj[e.b].add(e.a); }
+  const cc = {};
+  for (const id of network.nodes) {
+    const N = [...adj[id]];
+    if (N.length < 2) { cc[id] = 0; continue; }
+    let triangles = 0;
+    for (let i = 0; i < N.length; i++) for (let j = i+1; j < N.length; j++) {
+      if (adj[N[i]].has(N[j])) triangles++;
+    }
+    cc[id] = triangles / (N.length * (N.length - 1) / 2);
+  }
+  return cc;
+}
+
+// Brandes 2001 アルゴリズム (無向・非加重)
+function computeBetweenness(network) {
+  const adj = {};
+  for (const id of network.nodes) adj[id] = [];
+  for (const e of network.edges) { adj[e.a].push(e.b); adj[e.b].push(e.a); }
+  const cb = {};
+  for (const id of network.nodes) cb[id] = 0;
+  for (const s of network.nodes) {
+    const stack = [];
+    const pred = {}; for (const v of network.nodes) pred[v] = [];
+    const sigma = {}; for (const v of network.nodes) sigma[v] = 0;
+    sigma[s] = 1;
+    const dist = {}; for (const v of network.nodes) dist[v] = -1;
+    dist[s] = 0;
+    const queue = [s];
+    while (queue.length) {
+      const v = queue.shift();
+      stack.push(v);
+      for (const w of adj[v]) {
+        if (dist[w] < 0) { dist[w] = dist[v] + 1; queue.push(w); }
+        if (dist[w] === dist[v] + 1) { sigma[w] += sigma[v]; pred[w].push(v); }
+      }
+    }
+    const delta = {}; for (const v of network.nodes) delta[v] = 0;
+    while (stack.length) {
+      const w = stack.pop();
+      for (const v of pred[w]) {
+        delta[v] += (sigma[v] / sigma[w]) * (1 + delta[w]);
+      }
+      if (w !== s) cb[w] += delta[w];
+    }
+  }
+  // 無向グラフのため /2、正規化 = (n-1)(n-2)/2
+  const n = network.nodes.length;
+  const norm = (n - 1) * (n - 2) / 2;
+  for (const id of network.nodes) cb[id] = norm > 0 ? (cb[id] / 2) / norm : 0;
+  return cb;
+}
+
+// Louvain 法 (Blondel et al. 2008) — 簡易実装 (1レベル, ローカル移動のみ)
+function louvainCommunities(network) {
+  if (network.edges.length === 0) {
+    const c = {}; network.nodes.forEach((id, i) => c[id] = i); return c;
+  }
+  const adjW = {};
+  const k = {};
+  for (const id of network.nodes) { adjW[id] = {}; k[id] = 0; }
+  let m2 = 0;
+  for (const e of network.edges) {
+    adjW[e.a][e.b] = (adjW[e.a][e.b] || 0) + e.w;
+    adjW[e.b][e.a] = (adjW[e.b][e.a] || 0) + e.w;
+    k[e.a] += e.w; k[e.b] += e.w;
+    m2 += 2 * e.w;
+  }
+  const m = m2 / 2;
+  const com = {};
+  network.nodes.forEach(id => com[id] = id);
+  // コミュニティの内部重み総和を保持
+  const sumIn = {}; const sumTot = {};
+  for (const id of network.nodes) { sumIn[id] = 0; sumTot[id] = k[id]; }
+
+  let improved = true; let iter = 0;
+  while (improved && iter < 30) {
+    improved = false; iter++;
+    for (const v of network.nodes) {
+      const cV = com[v];
+      // v をコミュニティから外したときの k_iC (隣接重み) を計算
+      const neighborC = {};
+      for (const u in adjW[v]) {
+        const cu = com[u];
+        neighborC[cu] = (neighborC[cu] || 0) + adjW[v][u];
+      }
+      // v を現在のコミュニティから一旦除外
+      sumTot[cV] -= k[v];
+      sumIn[cV] -= 2 * (neighborC[cV] || 0);
+
+      let bestC = cV, bestGain = 0;
+      for (const cStr in neighborC) {
+        const c = parseInt(cStr);
+        const kIC = neighborC[c];
+        // ΔQ = kIC/m - sumTot[c] * k[v] / (2 m^2)
+        const gain = kIC / m - (sumTot[c] * k[v]) / (2 * m * m);
+        if (gain > bestGain) { bestGain = gain; bestC = c; }
+      }
+      com[v] = bestC;
+      sumTot[bestC] += k[v];
+      sumIn[bestC] += 2 * (neighborC[bestC] || 0);
+      if (bestC !== cV) improved = true;
+    }
+  }
+  // リナンバリング
+  const remap = {}; let nxt = 0;
+  for (const v of network.nodes) {
+    if (!(com[v] in remap)) remap[com[v]] = nxt++;
+    com[v] = remap[com[v]];
+  }
+  return com;
 }
 
 // ========== Timeline ==========

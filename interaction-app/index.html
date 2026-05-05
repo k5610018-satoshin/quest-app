@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505k">
+<link rel="stylesheet" href="styles.css?v=20260505l">
 </head>
 <body>
 
@@ -509,25 +509,38 @@
     <span class="filter-info" id="centralityInfo"></span>
   </div>
   <div class="centrality-intro card">
-    <p><b>degree</b> = 関わったユニーク相手数 (max 27) ／ <b>total</b> = 関わり総回数 ／ <b>asymmetry</b> = (主役で選ぶ - 他人主役で選ばれる)。
-    asymmetry &gt; 0 = 積極的に近寄る／&lt; 0 = 受け身。<b>クラスタ</b> = 共起≥3のグループ。</p>
+    <p style="margin:6px 0;"><b>📐 解説:</b> 本アプリの記録は <b>順不同の共起観察</b>（誰と誰が一緒にいたか）です。
+    そのため社会ネットワーク分析(SNA)の<b>無向ネットワーク指標</b>を使います。
+    <br>
+    <b>関わり人数</b>=ユニークな相手数 / <b>関わり強度</b>=累計接触回数 /
+    <b>クラスタ係数</b>=自分の友達同士がどれだけ繋がっているか (高=固定グループ, 低=橋渡し的) /
+    <b>媒介中心性</b>=異なるグループの繋ぎ役度 (Brandesアルゴリズム) /
+    <b>コミュニティ</b>=Louvain法による自然発生小グループ検出</p>
   </div>
   <div class="centrality-grid">
     <div class="card">
-      <h3>孤立順 TOP (degreeが低い)</h3>
-      <table class="centrality-table" id="centralityIsolatedTable"></table>
+      <h3>① 関わり人数 (Degree centrality)</h3>
+      <p class="muted small" style="margin:0 0 6px;">多様な相手と関わる子(TOP) / 関わりが少ない子(BOTTOM)</p>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <div><b>多い順 TOP10</b><table class="centrality-table" id="centralityDegreeTopTable"></table></div>
+        <div><b>少ない順 BOTTOM10</b><table class="centrality-table" id="centralityDegreeBottomTable"></table></div>
+      </div>
     </div>
     <div class="card">
-      <h3>ハブ順 TOP (degreeが高い)</h3>
-      <table class="centrality-table" id="centralityHubTable"></table>
+      <h3>② 関わり強度 (Weighted strength)</h3>
+      <p class="muted small" style="margin:0 0 6px;">累計接触回数。<b>強度高×人数少</b>=限定友達と濃密(要注意の偏り)</p>
+      <table class="centrality-table" id="centralityStrengthTable"></table>
     </div>
     <div class="card">
-      <h3>非対称性が極端 (要注意)</h3>
-      <table class="centrality-table" id="centralityAsymmetryTable"></table>
+      <h3>③ 橋渡し役 (Betweenness)</h3>
+      <p class="muted small" style="margin:0 0 6px;">異なるグループを繋ぐ子。クラスタ係数も併記</p>
+      <table class="centrality-table" id="centralityBetweennessTable"></table>
     </div>
     <div class="card">
-      <h3>自然発生クラスタ (共起≥3)</h3>
-      <div id="centralityClusters"></div>
+      <h3>④ コミュニティ検出 (Louvain)</h3>
+      <p class="muted small" style="margin:0 0 6px;">自然発生する小グループ。色分けで表示</p>
+      <div id="centralityCommunities"></div>
+      <div style="margin-top:8px; font-size:11px; color:var(--muted);" id="centralityNetworkStats"></div>
     </div>
   </div>
 </section>
@@ -913,9 +926,9 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505k"></script>
-<script src="eval-data.js?v=20260505k"></script>
-<script src="app.js?v=20260505k"></script>
-<script src="cloud-sync.js?v=20260505k"></script>
+<script src="students.js?v=20260505g"></script>
+<script src="eval-data.js?v=20260505g"></script>
+<script src="app.js?v=20260505g"></script>
+<script src="cloud-sync.js?v=20260505g"></script>
 </body>
 </html>
