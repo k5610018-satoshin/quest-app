@@ -1362,3 +1362,172 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 .record-mode-btn[data-record-mode="evaluation"].active {
   border-color: #1976d2;
 }
+.record-mode-btn[data-record-mode="aba"].active {
+  border-color: #c62828;
+}
+
+/* ========== ABAアセスメントモード ========== */
+.aba-layout {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 130px);
+  padding: 6px 10px;
+  gap: 6px;
+}
+.aba-meta-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  background: #fff;
+  padding: 6px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex-wrap: wrap;
+}
+.aba-meta-group {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.aba-meta-group.right { margin-left: auto; }
+.aba-meta-group label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+}
+.aba-meta-group select, .aba-meta-group input {
+  padding: 3px 6px;
+  font-size: 12px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+
+.aba-section {
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 10px;
+  flex-shrink: 0;
+}
+.aba-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+  margin-bottom: 4px;
+}
+.aba-behavior-grid {
+  display: grid;
+  grid-template-columns: repeat(9, 1fr);
+  gap: 5px;
+}
+.aba-behavior-btn {
+  padding: 8px 4px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  background: #fff;
+  border-radius: 6px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.12s;
+}
+.aba-behavior-btn small {
+  display: block;
+  font-size: 9px;
+  color: var(--muted);
+  font-weight: normal;
+}
+.aba-behavior-btn:hover { background: #fff5f5; transform: translateY(-1px); }
+.aba-behavior-btn.active {
+  background: #c62828;
+  color: white;
+  border-color: #8a1d1d;
+  transform: scale(1.04);
+}
+.aba-behavior-btn.active small { color: rgba(255,255,255,0.85); }
+
+.aba-bottom-row {
+  display: flex;
+  gap: 8px;
+  flex: 1;
+  min-height: 0;
+}
+.aba-abc-area {
+  flex: 1;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+}
+.aba-field {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.aba-field label {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+.aba-field input {
+  padding: 6px 8px;
+  font-size: 13px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+}
+.aba-field input:focus { outline: none; border-color: var(--primary); }
+
+.aba-quick-row {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.aba-quick {
+  padding: 3px 9px;
+  font-size: 11px;
+  background: #f0f4f8;
+  border: 1px solid #d0d8e0;
+  border-radius: 12px;
+  color: var(--text);
+  cursor: pointer;
+}
+.aba-quick:hover { background: #e0eaf3; }
+
+.aba-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 6px;
+  border-top: 1px solid var(--border);
+}
+.aba-actions button { padding: 6px 14px; font-size: 13px; }
+#abaSelectedSummary { flex: 1; }
+
+.aba-side {
+  width: 290px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+.aba-side .card {
+  margin: 0;
+  padding: 8px 10px;
+}
+.aba-side .card h3 {
+  margin: 0 0 4px;
+  font-size: 12px;
+}
+.aba-side .recent-list {
+  font-size: 11px;
+  margin: 0;
+  padding-left: 14px;
+  max-height: 200px;
+  overflow-y: auto;
+}

@@ -210,7 +210,7 @@ async function syncNow() {
 async function pullFromGas() {
   if (!checkSyncReady()) return;
   const since = localStorage.getItem(LAST_PULL_KEY) || '2000-01-01T00:00:00.000Z';
-  // dataType=all で records と praises を一括取得
+  // dataType=all で records, praises, evaluations, aba を一括取得
   const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=${encodeURIComponent(since)}&deviceId=${encodeURIComponent(_deviceId)}&dataType=all`;
 
   const res = await fetch(url);
@@ -255,16 +255,34 @@ async function pullFromGas() {
     }
   }
 
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0) {
+  // ===== ABA =====
+  const pulledAba = data.abaRecords || [];
+  let mergedAba = 0;
+  if (Array.isArray(state.abaRecords)) {
+    const existingAbaIds = new Set(state.abaRecords.map(r => r.id));
+    for (const r of pulledAba) {
+      if (String(r.deleted) === '1') continue;
+      if (existingAbaIds.has(r.id)) continue;
+      // behaviorsはJSON文字列の場合パース
+      if (typeof r.behaviors === 'string' && r.behaviors) {
+        try { r.behaviors = JSON.parse(r.behaviors); } catch(_) { r.behaviors = [r.behaviors]; }
+      }
+      const n = (typeof normalizeAba === 'function') ? normalizeAba(r) : r;
+      if (n) { state.abaRecords.push(n); mergedAba++; }
+    }
+  }
+
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0) {
     saveState();
     if (typeof refreshAll === 'function') refreshAll();
   }
   updateLastPullTime();
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0) {
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0) {
     const parts = [];
     if (mergedRecs > 0) parts.push(`記録 ${mergedRecs}件`);
     if (mergedPraises > 0) parts.push(`ほめ ${mergedPraises}件`);
     if (mergedEvals > 0) parts.push(`評価 ${mergedEvals}件`);
+    if (mergedAba > 0) parts.push(`ABA ${mergedAba}件`);
     showSyncStatus(`新規 ${parts.join(' / ')} を取得`);
   }
 }
@@ -296,6 +314,66 @@ async function pushPraiseToGas(praise, action) {
     console.warn('[sync] praise push失敗、キューへ:', err.message);
     addToPendingQueue({ action: action || 'add', praise, dataType: 'praise' });
     return false;
+  }
+}
+
+// ===== ABA push/pull =====
+
+async function pushAbaToGas(rec, action) {
+  if (!checkSyncReady()) return false;
+  if (!navigator.onLine) {
+    addToPendingQueue({ action: action || 'add', aba: rec, dataType: 'aba' });
+    return false;
+  }
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: action || 'add',
+        dataType: 'aba',
+        aba: rec,
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return true;
+  } catch (err) {
+    console.warn('[sync] aba push失敗:', err.message);
+    addToPendingQueue({ action: action || 'add', aba: rec, dataType: 'aba' });
+    return false;
+  }
+}
+
+async function pushAllAba() {
+  if (!checkSyncReady()) return;
+  if (!Array.isArray(state.abaRecords) || state.abaRecords.length === 0) {
+    showToast('送信するABA記録がありません', 'error');
+    return;
+  }
+  if (_isSyncing) return;
+  _isSyncing = true;
+  showSyncStatus(`ABA全${state.abaRecords.length}件送信中…`);
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulk_add',
+        dataType: 'aba',
+        abaRecords: state.abaRecords,
+        deviceId: _deviceId
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    showSyncStatus(`ABA送信完了: ${data.added}件追加 / ${data.skipped}件重複`);
+  } catch (err) {
+    showSyncStatus('ABA送信失敗: ' + err.message, true);
+  } finally {
+    _isSyncing = false;
   }
 }
 

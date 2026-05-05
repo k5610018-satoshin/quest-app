@@ -36,6 +36,8 @@ const state = {
   records: [],
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
   evaluations: [],     // [{id, studentId, subjectId, unitId, viewpoint, grade, scale, date, timestamp, deviceId?}]
+  abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], antecedent, consequence, response}]
+  seatingSnapshots: [],// [{id, date, label, groups: [[ids],...]}]
   subjects: (window.EVAL_DATA && window.EVAL_DATA.subjects) || [],
   viewpoints: (window.EVAL_DATA && window.EVAL_DATA.viewpoints) || [],
   units: (window.EVAL_DATA && window.EVAL_DATA.units) || [],
@@ -52,6 +54,10 @@ const state = {
     evalViewpoint: 'knowledge',
     evalScale: 3,               // 3 | 5
     evalActiveGrade: null,      // 'A'|'B'|'C'|'1'..'5'
+    abaSlot: 'p1',
+    abaSubjectId: '',
+    abaTargetId: null,
+    abaBehaviors: new Set(),    // 選択中の行動
     subjectId: null,
     selectedMembers: [],
     specialState: null,
@@ -99,6 +105,12 @@ function loadState() {
     if (Array.isArray(data.evaluations)) {
       state.evaluations = data.evaluations.map(normalizeEvaluation).filter(Boolean);
     }
+    if (Array.isArray(data.abaRecords)) {
+      state.abaRecords = data.abaRecords.map(normalizeAba).filter(Boolean);
+    }
+    if (Array.isArray(data.seatingSnapshots)) {
+      state.seatingSnapshots = data.seatingSnapshots.filter(s => s && Array.isArray(s.groups));
+    }
     if (data.lastEvalSubject) state.ui.evalSubjectId = data.lastEvalSubject;
     if (data.lastEvalUnit) state.ui.evalUnitId = data.lastEvalUnit;
     if (data.lastEvalViewpoint) state.ui.evalViewpoint = data.lastEvalViewpoint;
@@ -123,6 +135,8 @@ function saveState() {
     records: state.records,
     praises: state.praises,
     evaluations: state.evaluations,
+    abaRecords: state.abaRecords,
+    seatingSnapshots: state.seatingSnapshots,
     settings: state.settings,
     events: state.events,
     attributes: state.attributes,
@@ -180,6 +194,33 @@ function normalizeRecord(r) {
     activity: r.activity || null,
     note: typeof r.note === 'string' ? r.note.slice(0, 500) : '',
     center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null
+  };
+}
+
+// ABA(応用行動分析)記録の正規化
+function normalizeAba(a) {
+  if (!a || typeof a !== 'object') return null;
+  const studentId = parseInt(a.studentId);
+  if (!studentId || studentId < 1) return null;
+  const behaviors = Array.isArray(a.behaviors) ? a.behaviors.map(String) : (a.behavior ? [String(a.behavior)] : []);
+  if (!behaviors.length) return null;
+  const timestamp = a.timestamp || new Date().toISOString();
+  let date = a.date;
+  if (!date) {
+    try { date = new Date(timestamp).toISOString().slice(0, 10); }
+    catch { date = todayISO(); }
+  }
+  return {
+    id: a.id || uuid(),
+    studentId,
+    date,
+    timestamp,
+    slot: a.slot || '',
+    subject: a.subject || '',
+    behaviors,
+    antecedent: typeof a.antecedent === 'string' ? a.antecedent.slice(0, 500) : '',
+    consequence: typeof a.consequence === 'string' ? a.consequence.slice(0, 500) : '',
+    response: typeof a.response === 'string' ? a.response.slice(0, 500) : ''
   };
 }
 
@@ -317,6 +358,8 @@ function init() {
   initPraiseEvents();
   renderPraiseStudentGrid();
   initEvaluationEvents();
+  initAbaEvents();
+  initSeatingSnapshotEvents();
   initKeyboardShortcuts();
   initHelpModal();
   updateHealthBadge();
@@ -953,6 +996,7 @@ function switchTab(name) {
   else if (name === 'settings') refreshSettings();
   else if (name === 'praise-list') refreshPraiseList();
   else if (name === 'eval-list') refreshEvalList();
+  else if (name === 'aba-list') refreshAbaList();
 }
 
 // ========== Side Panel ==========
@@ -1904,7 +1948,7 @@ function initPraiseEvents() {
 }
 
 function switchRecordMode(mode) {
-  if (!['interaction', 'praise', 'evaluation'].includes(mode)) mode = 'interaction';
+  if (!['interaction', 'praise', 'evaluation', 'aba'].includes(mode)) mode = 'interaction';
   state.ui.recordMode = mode;
   document.querySelectorAll('.record-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.recordMode === mode);
@@ -1912,12 +1956,15 @@ function switchRecordMode(mode) {
   document.getElementById('interactionRecordView').classList.toggle('hidden', mode !== 'interaction');
   document.getElementById('praiseRecordView').classList.toggle('hidden', mode !== 'praise');
   document.getElementById('evaluationRecordView').classList.toggle('hidden', mode !== 'evaluation');
+  document.getElementById('abaRecordView').classList.toggle('hidden', mode !== 'aba');
   if (mode === 'praise') {
     refreshPraiseGridState();
     refreshPraiseSidePanel();
   } else if (mode === 'evaluation') {
     refreshEvalGridState();
     refreshEvalSidePanel();
+  } else if (mode === 'aba') {
+    refreshAbaSidePanel();
   }
 }
 
@@ -2658,6 +2705,444 @@ function exportEvalCsv() {
   URL.revokeObjectURL(url);
 }
 
+// ========== ABAアセスメントモード ==========
+
+const ABA_BEHAVIORS = [
+  { id: 'leave',    label: '離席',    color: '#e74c3c' },
+  { id: 'verbal',   label: '暴言',    color: '#c0392b' },
+  { id: 'physical', label: '暴力',    color: '#922b21' },
+  { id: 'sleep',    label: '寝る',    color: '#7f8c8d' },
+  { id: 'reading',  label: '読書',    color: '#16a085' },
+  { id: 'refuse',   label: '課題放棄', color: '#d35400' },
+  { id: 'shout',    label: '叫ぶ',    color: '#e67e22' },
+  { id: 'cry',      label: '泣く',    color: '#9b59b6' },
+  { id: 'other',    label: 'その他',  color: '#34495e' }
+];
+
+const ABA_SLOT_LABELS = {
+  morning: '朝の会前', kaikai: '朝の会', p1: '1限', b1: '1限休', p2: '2限', b2: '2限休',
+  p3: '3限', b3: '3限休', p4: '4限', lunch: '給食', lbreak: '昼休み', cleaning: '掃除',
+  p5: '5限', b5: '5限休', p6: '6限', hr: '帰りの会', after: '放課後'
+};
+
+function initAbaEvents() {
+  // 日付
+  const dateInp = document.getElementById('abaDate');
+  if (dateInp) {
+    dateInp.value = todayISO();
+    document.getElementById('abaDateTodayBtn').addEventListener('click', () => {
+      dateInp.value = todayISO();
+    });
+  }
+
+  // 教科プルダウン
+  const subjSel = document.getElementById('abaSubject');
+  if (subjSel) {
+    state.subjects.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id; o.textContent = s.label;
+      subjSel.appendChild(o);
+    });
+  }
+
+  // 対象児童プルダウン
+  const tgt = document.getElementById('abaTarget');
+  if (tgt) {
+    state.students.forEach(s => {
+      const o = document.createElement('option');
+      o.value = String(s.id);
+      o.textContent = `${s.id}. ${s.name}`;
+      tgt.appendChild(o);
+    });
+    tgt.addEventListener('change', () => {
+      state.ui.abaTargetId = tgt.value ? parseInt(tgt.value) : null;
+      const s = state.students.find(x => x.id === state.ui.abaTargetId);
+      const mark = document.getElementById('abaTargetMark');
+      if (mark) mark.textContent = s && s.note ? `[${s.note}]` : '';
+      refreshAbaSidePanel();
+      refreshAbaSaveBtn();
+    });
+  }
+
+  // 行動ボタン
+  const grid = document.getElementById('abaBehaviorGrid');
+  if (grid) {
+    grid.innerHTML = '';
+    ABA_BEHAVIORS.forEach(b => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'aba-behavior-btn';
+      btn.dataset.behaviorId = b.id;
+      btn.style.borderColor = b.color;
+      btn.style.color = b.color;
+      btn.innerHTML = `${b.label}<small>${b.id}</small>`;
+      btn.addEventListener('click', () => {
+        if (state.ui.abaBehaviors.has(b.id)) {
+          state.ui.abaBehaviors.delete(b.id);
+          btn.classList.remove('active');
+          btn.style.background = '';
+          btn.style.color = b.color;
+        } else {
+          state.ui.abaBehaviors.add(b.id);
+          btn.classList.add('active');
+          btn.style.background = b.color;
+          btn.style.color = 'white';
+        }
+        refreshAbaSaveBtn();
+        refreshAbaSelectedSummary();
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  // クイック挿入
+  document.querySelectorAll('.aba-quick').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const target = document.getElementById(btn.dataset.fill);
+      if (!target) return;
+      target.value = target.value
+        ? (target.value + ' / ' + btn.dataset.text)
+        : btn.dataset.text;
+      target.focus();
+    });
+  });
+
+  // 保存・クリア
+  document.getElementById('saveAbaBtn').addEventListener('click', saveAbaRecord);
+  document.getElementById('abaClearBtn').addEventListener('click', clearAbaForm);
+
+  // 時間帯・教科の保存
+  document.getElementById('abaSlot').addEventListener('change', e => {
+    state.ui.abaSlot = e.target.value;
+  });
+  if (subjSel) subjSel.addEventListener('change', e => {
+    state.ui.abaSubjectId = e.target.value;
+  });
+
+  refreshAbaSidePanel();
+
+  // ABA一覧タブ
+  const lstSt = document.getElementById('abaListStudent');
+  if (lstSt) {
+    state.students.forEach(s => {
+      const o = document.createElement('option');
+      o.value = String(s.id); o.textContent = `${s.id}. ${s.name}`;
+      lstSt.appendChild(o);
+    });
+    lstSt.addEventListener('change', refreshAbaList);
+  }
+  const lstSlot = document.getElementById('abaListSlot');
+  if (lstSlot) {
+    Object.entries(ABA_SLOT_LABELS).forEach(([k, v]) => {
+      const o = document.createElement('option');
+      o.value = k; o.textContent = v;
+      lstSlot.appendChild(o);
+    });
+    lstSlot.addEventListener('change', refreshAbaList);
+  }
+  const lstBh = document.getElementById('abaListBehavior');
+  if (lstBh) {
+    ABA_BEHAVIORS.forEach(b => {
+      const o = document.createElement('option');
+      o.value = b.id; o.textContent = b.label;
+      lstBh.appendChild(o);
+    });
+    lstBh.addEventListener('change', refreshAbaList);
+  }
+  const lstP = document.getElementById('abaListPeriod');
+  if (lstP) lstP.addEventListener('change', refreshAbaList);
+  const expBtn = document.getElementById('exportAbaCsvBtn');
+  if (expBtn) expBtn.addEventListener('click', exportAbaCsv);
+}
+
+function refreshAbaSelectedSummary() {
+  const summary = document.getElementById('abaSelectedSummary');
+  if (!summary) return;
+  const labels = [...state.ui.abaBehaviors].map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id);
+  summary.textContent = labels.length ? `選択中: ${labels.join(' + ')}` : '';
+}
+
+function refreshAbaSaveBtn() {
+  const btn = document.getElementById('saveAbaBtn');
+  if (!btn) return;
+  btn.disabled = !(state.ui.abaTargetId && state.ui.abaBehaviors.size > 0);
+}
+
+function clearAbaForm() {
+  state.ui.abaBehaviors = new Set();
+  document.querySelectorAll('.aba-behavior-btn').forEach(b => {
+    b.classList.remove('active');
+    const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
+    b.style.background = '';
+    if (beh) b.style.color = beh.color;
+  });
+  document.getElementById('abaAntecedent').value = '';
+  document.getElementById('abaConsequence').value = '';
+  document.getElementById('abaResponse').value = '';
+  refreshAbaSaveBtn();
+  refreshAbaSelectedSummary();
+}
+
+function saveAbaRecord() {
+  if (!state.ui.abaTargetId || state.ui.abaBehaviors.size === 0) {
+    showToast('対象児童と行動を選んでください', 'error'); return;
+  }
+  const date = (document.getElementById('abaDate') || {}).value || todayISO();
+  const rec = normalizeAba({
+    studentId: state.ui.abaTargetId,
+    date,
+    slot: document.getElementById('abaSlot').value,
+    subject: document.getElementById('abaSubject').value || '',
+    behaviors: [...state.ui.abaBehaviors],
+    antecedent: document.getElementById('abaAntecedent').value || '',
+    consequence: document.getElementById('abaConsequence').value || '',
+    response: document.getElementById('abaResponse').value || ''
+  });
+  if (!rec) { showToast('保存に失敗', 'error'); return; }
+  state.abaRecords.push(rec);
+  saveState();
+  if (typeof pushAbaToGas === 'function') pushAbaToGas(rec, 'add').catch(() => {});
+  const s = state.students.find(x => x.id === rec.studentId);
+  showToast(`${s ? s.name : ''} のABA記録を保存`);
+  // 行動・テキストはクリア。対象児童・時間帯は維持して連続記録できるように。
+  state.ui.abaBehaviors = new Set();
+  document.querySelectorAll('.aba-behavior-btn').forEach(b => {
+    b.classList.remove('active');
+    const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
+    b.style.background = '';
+    if (beh) b.style.color = beh.color;
+  });
+  document.getElementById('abaAntecedent').value = '';
+  document.getElementById('abaConsequence').value = '';
+  document.getElementById('abaResponse').value = '';
+  refreshAbaSaveBtn();
+  refreshAbaSelectedSummary();
+  refreshAbaSidePanel();
+  if (state.ui.currentTab === 'aba-list') refreshAbaList();
+}
+
+function refreshAbaSidePanel() {
+  const today = todayISO();
+  const todays = state.abaRecords.filter(r => r.date === today);
+  const cnt = document.getElementById('todayAbaCount');
+  if (cnt) cnt.textContent = todays.length;
+  const ul = document.getElementById('todayAbaList');
+  if (ul) {
+    if (!todays.length) {
+      ul.innerHTML = '<li class="muted">記録なし</li>';
+    } else {
+      const sMap = new Map(state.students.map(s => [s.id, s]));
+      ul.innerHTML = todays.slice().sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 10).map(r => {
+        const s = sMap.get(r.studentId);
+        const labels = r.behaviors.map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id).join('+');
+        return `<li><b>${ABA_SLOT_LABELS[r.slot] || ''}</b> ${s ? s.name : ''}: ${escapeHtml(labels)}</li>`;
+      }).join('');
+    }
+  }
+  // 対象児童の直近
+  const stRecent = document.getElementById('abaStudentRecent');
+  if (stRecent) {
+    const tid = state.ui.abaTargetId;
+    if (!tid) {
+      stRecent.innerHTML = '<li class="muted">対象児童を選ぶと表示</li>';
+    } else {
+      const items = state.abaRecords.filter(r => r.studentId === tid)
+        .sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||'')).slice(0, 8);
+      const s = state.students.find(x => x.id === tid);
+      document.getElementById('abaStudentRecentTitle').textContent = (s ? s.name : '') + ' の直近記録';
+      stRecent.innerHTML = items.length
+        ? items.map(r => {
+            const labels = r.behaviors.map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id).join('+');
+            return `<li>${r.date} ${ABA_SLOT_LABELS[r.slot] || ''} ${escapeHtml(labels)}${r.consequence ? ' → ' + escapeHtml(r.consequence) : ''}</li>`;
+          }).join('')
+        : '<li class="muted">この子の記録なし</li>';
+    }
+  }
+}
+
+function refreshAbaList() {
+  const period = (document.getElementById('abaListPeriod') || {}).value || 'week';
+  const sid = (document.getElementById('abaListStudent') || {}).value;
+  const slot = (document.getElementById('abaListSlot') || {}).value;
+  const beh = (document.getElementById('abaListBehavior') || {}).value;
+
+  const today = todayISO();
+  const todayMs = new Date(today + 'T00:00:00').getTime();
+  const filtered = state.abaRecords.filter(r => {
+    if (period === 'today' && r.date !== today) return false;
+    if (period === 'week') {
+      const rMs = new Date(r.date + 'T00:00:00').getTime();
+      if ((todayMs - rMs) > 6 * 86400000 || (todayMs - rMs) < 0) return false;
+    }
+    if (period === 'month') {
+      const rMs = new Date(r.date + 'T00:00:00').getTime();
+      if ((todayMs - rMs) > 30 * 86400000 || (todayMs - rMs) < 0) return false;
+    }
+    if (sid && r.studentId !== parseInt(sid)) return false;
+    if (slot && r.slot !== slot) return false;
+    if (beh && !(r.behaviors || []).includes(beh)) return false;
+    return true;
+  }).sort((a,b) => (b.timestamp||'').localeCompare(a.timestamp||''));
+
+  const info = document.getElementById('abaListInfo');
+  if (info) info.textContent = `${filtered.length}件`;
+
+  // サマリ: 行動別件数 + 児童別件数 + 時間帯別件数
+  const behCount = {}, stCount = {}, slotCount = {};
+  filtered.forEach(r => {
+    r.behaviors.forEach(b => behCount[b] = (behCount[b]||0)+1);
+    stCount[r.studentId] = (stCount[r.studentId]||0)+1;
+    if (r.slot) slotCount[r.slot] = (slotCount[r.slot]||0)+1;
+  });
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const summary = document.getElementById('abaSummary');
+  if (summary) {
+    const behLines = Object.entries(behCount).sort((a,b) => b[1]-a[1]).map(([k,v]) =>
+      `<li><b>${(ABA_BEHAVIORS.find(x => x.id === k) || {}).label || k}</b> ${v}件</li>`).join('');
+    const stLines = Object.entries(stCount).sort((a,b) => b[1]-a[1]).slice(0,5).map(([k,v]) => {
+      const s = sMap.get(parseInt(k)); return `<li>${s ? s.name : k}: ${v}件</li>`;
+    }).join('');
+    const slotLines = Object.entries(slotCount).sort((a,b) => b[1]-a[1]).slice(0,5).map(([k,v]) =>
+      `<li>${ABA_SLOT_LABELS[k] || k}: ${v}件</li>`).join('');
+    summary.innerHTML = `
+      <h3>サマリ (${filtered.length}件)</h3>
+      <div style="display:flex; gap:18px; flex-wrap:wrap;">
+        <div><b>行動別:</b><ul class="praise-rank-list">${behLines || '<li class="muted">なし</li>'}</ul></div>
+        <div><b>児童別 TOP5:</b><ul class="praise-rank-list">${stLines || '<li class="muted">なし</li>'}</ul></div>
+        <div><b>時間帯 TOP5:</b><ul class="praise-rank-list">${slotLines || '<li class="muted">なし</li>'}</ul></div>
+      </div>`;
+  }
+
+  const ul = document.getElementById('abaList');
+  if (!ul) return;
+  if (!filtered.length) {
+    ul.innerHTML = '<li class="empty">該当するABA記録はありません</li>'; return;
+  }
+  ul.innerHTML = filtered.slice(0, 300).map(r => {
+    const s = sMap.get(r.studentId);
+    const time = r.timestamp ? new Date(r.timestamp).toLocaleString('ja-JP', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : r.date;
+    const labels = r.behaviors.map(id => `<span class="eval-grade-inline grade-C">${(ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id}</span>`).join(' ');
+    const subj = (state.subjects.find(x => x.id === r.subject) || {}).label || '';
+    return `<li data-id="${r.id}">
+      <div class="praise-meta">
+        <div>${time}</div>
+        <div class="praise-name">${s ? s.id+'. '+s.name : '?'}</div>
+        <div class="muted small">${ABA_SLOT_LABELS[r.slot] || ''}${subj ? ' / ' + subj : ''}</div>
+      </div>
+      <div class="praise-content">
+        ${labels}
+        ${r.antecedent ? `<div><b>A:</b> ${escapeHtml(r.antecedent)}</div>` : ''}
+        ${r.consequence ? `<div><b>C:</b> ${escapeHtml(r.consequence)}</div>` : ''}
+        ${r.response ? `<div><b>対応:</b> ${escapeHtml(r.response)}</div>` : ''}
+      </div>
+      <div class="praise-actions">
+        <button class="ghost danger" data-action="delete-aba" data-id="${r.id}">削除</button>
+      </div>
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('button[data-action="delete-aba"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteAbaRecord(btn.dataset.id));
+  });
+}
+
+function deleteAbaRecord(id) {
+  if (!confirm('このABA記録を削除しますか？')) return;
+  const idx = state.abaRecords.findIndex(r => r.id === id);
+  if (idx < 0) return;
+  state.abaRecords.splice(idx, 1);
+  saveState();
+  if (typeof pushAbaToGas === 'function') pushAbaToGas({ id }, 'delete').catch(() => {});
+  refreshAbaList();
+  refreshAbaSidePanel();
+  showToast('削除しました');
+}
+
+function exportAbaCsv() {
+  if (!state.abaRecords.length) { showToast('ABA記録がありません', 'error'); return; }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const rows = [['date','time','student_id','student_name','slot','subject','behaviors','antecedent','consequence','response']];
+  for (const r of state.abaRecords) {
+    const s = sMap.get(r.studentId);
+    const time = r.timestamp ? new Date(r.timestamp).toLocaleTimeString('ja-JP') : '';
+    const beh = (r.behaviors || []).map(id => (ABA_BEHAVIORS.find(b => b.id === id) || {}).label || id).join('+');
+    const subj = (state.subjects.find(x => x.id === r.subject) || {}).label || '';
+    rows.push([r.date, time, r.studentId, s ? s.name : '', ABA_SLOT_LABELS[r.slot] || r.slot, subj, beh,
+      (r.antecedent||'').replace(/[\r\n]+/g,' '),
+      (r.consequence||'').replace(/[\r\n]+/g,' '),
+      (r.response||'').replace(/[\r\n]+/g,' ')]);
+  }
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = `aba_${todayISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
+// ========== 席替えスナップショット ==========
+
+function initSeatingSnapshotEvents() {
+  const btn = document.createElement('button');
+  btn.id = 'saveSeatingSnapshotBtn';
+  btn.className = 'primary';
+  btn.style.marginLeft = '8px';
+  btn.textContent = '💾 この座席を履歴保存';
+  btn.title = '現在の班分けを履歴に保存。後で集計や交友分析に活用';
+  btn.addEventListener('click', saveSeatingSnapshot);
+  // generateSeatingBtn の隣に挿入
+  const gen = document.getElementById('generateSeatingBtn');
+  if (gen && gen.parentNode) gen.parentNode.insertBefore(btn, gen.nextSibling);
+}
+
+function getCurrentSeatingGroups() {
+  // generateSeating の HTML から復元: .seating-group div の中の .member span(s.id)
+  const groups = [];
+  document.querySelectorAll('#seatingResult .seating-group').forEach(g => {
+    const ids = [...g.querySelectorAll('.member .muted')].map(el => parseInt(el.textContent)).filter(Number.isFinite);
+    if (ids.length) groups.push(ids);
+  });
+  return groups;
+}
+
+function saveSeatingSnapshot() {
+  const groups = getCurrentSeatingGroups();
+  if (!groups.length) { showToast('まず「班案を生成」を実行してください', 'error'); return; }
+  const label = prompt('この座席に名前を付けてください（例: 5月席替え）', `${todayISO()} 席替え`);
+  if (!label) return;
+  const snap = {
+    id: 'seat-' + Date.now(),
+    date: todayISO(),
+    label,
+    groups
+  };
+  state.seatingSnapshots.push(snap);
+  saveState();
+  showToast(`座席「${label}」を保存しました（履歴 ${state.seatingSnapshots.length}件）`);
+}
+
+// 同班経験ペアスコア: {pairKey: count}
+function computeCoGroupCounts() {
+  const counts = {};
+  for (const snap of state.seatingSnapshots || []) {
+    for (const g of snap.groups || []) {
+      for (let i = 0; i < g.length; i++) {
+        for (let j = i+1; j < g.length; j++) {
+          const a = g[i], b = g[j];
+          const k = `${Math.min(a,b)}-${Math.max(a,b)}`;
+          counts[k] = (counts[k] || 0) + 1;
+        }
+      }
+    }
+  }
+  return counts;
+}
+
+function getCoGroupCount(a, b) {
+  const counts = computeCoGroupCounts();
+  return counts[`${Math.min(a,b)}-${Math.max(a,b)}`] || 0;
+}
+
 function refreshAll() {
   refreshSidePanel();
   refreshAfterSelectionChange();
@@ -2666,6 +3151,8 @@ function refreshAll() {
     refreshPraiseSidePanel();
   } else if (state.ui.recordMode === 'evaluation') {
     refreshEvalUI();
+  } else if (state.ui.recordMode === 'aba') {
+    refreshAbaSidePanel();
   }
   if (state.ui.currentTab === 'summary') refreshSummary();
   else if (state.ui.currentTab === 'compare') refreshCompare();

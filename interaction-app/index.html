@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505h">
+<link rel="stylesheet" href="styles.css?v=20260505i">
 </head>
 <body>
 
@@ -25,7 +25,8 @@
     <button class="tab-btn" data-tab="seating">席替え</button>
     <button class="tab-btn" data-tab="history">履歴</button>
     <button class="tab-btn" data-tab="praise-list">🌟 ほめたい</button>
-    <button class="tab-btn" data-tab="eval-list">📊 評価一覧</button>
+    <button class="tab-btn" data-tab="eval-list">📊 評価</button>
+    <button class="tab-btn" data-tab="aba-list">🚨 ABA</button>
     <button class="tab-btn" data-tab="settings">設定</button>
     <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
   </nav>
@@ -33,11 +34,12 @@
 
 <!-- =================== 記録タブ =================== -->
 <section class="tab-panel active" id="tab-record">
-  <!-- 記録モード切替（交友関係 / ほめたい / 評価） -->
+  <!-- 記録モード切替 -->
   <div class="record-mode-bar">
-    <button class="record-mode-btn active" data-record-mode="interaction" type="button">📝 交友関係を記録</button>
-    <button class="record-mode-btn" data-record-mode="praise" type="button">🌟 ほめたいことを記録</button>
-    <button class="record-mode-btn" data-record-mode="evaluation" type="button">📊 観点別評価を記録</button>
+    <button class="record-mode-btn active" data-record-mode="interaction" type="button">📝 交友関係</button>
+    <button class="record-mode-btn" data-record-mode="praise" type="button">🌟 ほめたい</button>
+    <button class="record-mode-btn" data-record-mode="evaluation" type="button">📊 観点別評価</button>
+    <button class="record-mode-btn" data-record-mode="aba" type="button">🚨 ABAアセスメント</button>
   </div>
 
   <div id="interactionRecordView">
@@ -243,6 +245,125 @@
       </aside>
     </div>
   </div><!-- /evaluationRecordView -->
+
+  <!-- ABAアセスメントモード -->
+  <div id="abaRecordView" class="hidden">
+    <div class="aba-layout">
+      <!-- 上段: メタ情報 -->
+      <div class="aba-meta-row">
+        <div class="aba-meta-group">
+          <label>日付</label>
+          <input type="date" id="abaDate">
+          <button class="ghost" id="abaDateTodayBtn" style="padding:3px 8px;font-size:11px;">今日</button>
+        </div>
+        <div class="aba-meta-group">
+          <label>時間帯</label>
+          <select id="abaSlot" style="min-width:140px;">
+            <option value="morning">朝の会前</option>
+            <option value="kaikai">朝の会・健康観察</option>
+            <option value="p1">1時間目</option>
+            <option value="b1">1時間目休み</option>
+            <option value="p2">2時間目</option>
+            <option value="b2">2時間目休み</option>
+            <option value="p3">3時間目</option>
+            <option value="b3">3時間目休み</option>
+            <option value="p4">4時間目</option>
+            <option value="lunch">給食</option>
+            <option value="lbreak">昼休み</option>
+            <option value="cleaning">掃除</option>
+            <option value="p5">5時間目</option>
+            <option value="b5">5時間目休み</option>
+            <option value="p6">6時間目</option>
+            <option value="hr">帰りの会</option>
+            <option value="after">放課後</option>
+          </select>
+        </div>
+        <div class="aba-meta-group">
+          <label>教科</label>
+          <select id="abaSubject" style="min-width:90px;">
+            <option value="">—</option>
+          </select>
+        </div>
+        <div class="aba-meta-group">
+          <label>対象児童</label>
+          <select id="abaTarget" style="min-width:140px;">
+            <option value="">— 選択 —</option>
+          </select>
+          <span id="abaTargetMark" class="muted small"></span>
+        </div>
+        <div class="aba-meta-group right">
+          <span class="muted small">A=先行 → B=行動 → C=結果。タップで素早く記録</span>
+        </div>
+      </div>
+
+      <!-- 中段: B(行動) ワンタップ -->
+      <div class="aba-section">
+        <div class="aba-section-label">B 行動（タップで複数選択可）</div>
+        <div class="aba-behavior-grid" id="abaBehaviorGrid"></div>
+      </div>
+
+      <!-- 下段: A・C・対応 + サイドの一覧 -->
+      <div class="aba-bottom-row">
+        <div class="aba-abc-area">
+          <div class="aba-field">
+            <label>A 先行事象（直前にあったこと）</label>
+            <input type="text" id="abaAntecedent" placeholder="例: グループ活動の指示があった / 隣の子と教科書を見るよう促された" maxlength="200">
+            <div class="aba-quick-row">
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="授業の指示・課題提示">授業指示</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="グループ活動・話し合い">グループ活動</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="課題が難しい・解けない">課題が難しい</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="移動・場面切替">移動・切替</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="他児童との接触・トラブル">児童間トラブル</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="教師の注意・叱責">教師の注意</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="休み時間・自由時間">休み時間</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="特になし／突然">特になし</button>
+            </div>
+          </div>
+          <div class="aba-field">
+            <label>C 結果（行動の直後に起きたこと）</label>
+            <input type="text" id="abaConsequence" placeholder="例: 周囲の児童が驚いて静かになった / 授業が中断した" maxlength="200">
+            <div class="aba-quick-row">
+              <button class="aba-quick" data-fill="abaConsequence" data-text="授業が中断した">授業中断</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="周囲の注目を集めた">注目集めた</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="課題から逃れられた">課題回避成立</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="他児童とトラブルになった">トラブル発展</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="自然に収まった">自然収束</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="本人がクールダウンできた">クールダウン</button>
+            </div>
+          </div>
+          <div class="aba-field">
+            <label>対応（教師の介入）</label>
+            <input type="text" id="abaResponse" placeholder="例: 別室でクールダウン / 個別に声かけ / 黙認" maxlength="200">
+            <div class="aba-quick-row">
+              <button class="aba-quick" data-fill="abaResponse" data-text="個別に声かけ・傾聴">個別声かけ</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="別室でクールダウン">別室CD</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="課題の修正・選択肢提示">課題修正</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="座席・班の配置調整">座席調整</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="意図的に注目しない（消去）">意図的無視</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="保護者連絡">保護者連絡</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="管理職・SC連絡">管理職連絡</button>
+            </div>
+          </div>
+          <div class="aba-actions">
+            <span class="muted small" id="abaSelectedSummary"></span>
+            <button class="ghost" id="abaClearBtn">クリア</button>
+            <button class="primary" id="saveAbaBtn" disabled>💾 保存</button>
+          </div>
+        </div>
+
+        <aside class="aba-side">
+          <div class="card">
+            <h3>今日の記録 <span class="muted small">(<span id="todayAbaCount">0</span>件)</span></h3>
+            <ul class="recent-list" id="todayAbaList"></ul>
+          </div>
+          <div class="card">
+            <h3 id="abaStudentRecentTitle">この子の直近記録</h3>
+            <ul class="recent-list" id="abaStudentRecent"><li class="muted">対象児童を選ぶと表示</li></ul>
+          </div>
+        </aside>
+      </div>
+    </div>
+  </div><!-- /abaRecordView -->
 </section>
 
 <!-- =================== 集計タブ =================== -->
@@ -586,6 +707,33 @@
   </div>
 </section>
 
+<!-- =================== ABA一覧タブ =================== -->
+<section class="tab-panel" id="tab-aba-list">
+  <div class="filter-bar">
+    <label>期間:
+      <select id="abaListPeriod">
+        <option value="today">今日</option>
+        <option value="week" selected>今週</option>
+        <option value="month">今月</option>
+        <option value="all">累計</option>
+      </select>
+    </label>
+    <label>児童:
+      <select id="abaListStudent"><option value="">全員</option></select>
+    </label>
+    <label>時間帯:
+      <select id="abaListSlot"><option value="">すべて</option></select>
+    </label>
+    <label>行動:
+      <select id="abaListBehavior"><option value="">すべて</option></select>
+    </label>
+    <span class="filter-info" id="abaListInfo"></span>
+    <button class="ghost" id="exportAbaCsvBtn" title="ABA記録のCSV出力">📥 CSV</button>
+  </div>
+  <div class="card praise-summary" id="abaSummary" style="margin:8px 12px;"></div>
+  <ul class="praise-list" id="abaList"></ul>
+</section>
+
 <!-- =================== 設定タブ =================== -->
 <section class="tab-panel" id="tab-settings">
   <div class="settings-grid">
@@ -741,9 +889,9 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505h"></script>
-<script src="eval-data.js?v=20260505h"></script>
-<script src="app.js?v=20260505h"></script>
-<script src="cloud-sync.js?v=20260505h"></script>
+<script src="students.js?v=20260505g"></script>
+<script src="eval-data.js?v=20260505g"></script>
+<script src="app.js?v=20260505g"></script>
+<script src="cloud-sync.js?v=20260505g"></script>
 </body>
 </html>
