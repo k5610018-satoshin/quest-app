@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505f">
+<link rel="stylesheet" href="styles.css?v=20260505h">
 </head>
 <body>
 
@@ -25,6 +25,7 @@
     <button class="tab-btn" data-tab="seating">席替え</button>
     <button class="tab-btn" data-tab="history">履歴</button>
     <button class="tab-btn" data-tab="praise-list">🌟 ほめたい</button>
+    <button class="tab-btn" data-tab="eval-list">📊 評価一覧</button>
     <button class="tab-btn" data-tab="settings">設定</button>
     <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
   </nav>
@@ -32,10 +33,11 @@
 
 <!-- =================== 記録タブ =================== -->
 <section class="tab-panel active" id="tab-record">
-  <!-- 記録モード切替（交友関係 / ほめたい） -->
+  <!-- 記録モード切替（交友関係 / ほめたい / 評価） -->
   <div class="record-mode-bar">
     <button class="record-mode-btn active" data-record-mode="interaction" type="button">📝 交友関係を記録</button>
     <button class="record-mode-btn" data-record-mode="praise" type="button">🌟 ほめたいことを記録</button>
+    <button class="record-mode-btn" data-record-mode="evaluation" type="button">📊 観点別評価を記録</button>
   </div>
 
   <div id="interactionRecordView">
@@ -179,6 +181,68 @@
       </aside>
     </div>
   </div><!-- /praiseRecordView -->
+
+  <!-- 評価モード -->
+  <div id="evaluationRecordView" class="hidden">
+    <div class="record-toolbar">
+      <div class="toolbar-group">
+        <label>教科</label>
+        <select id="evalSubject" title="評価する教科"></select>
+      </div>
+      <div class="toolbar-group">
+        <label>単元</label>
+        <select id="evalUnit" title="評価する単元" style="min-width:240px;"></select>
+      </div>
+      <div class="toolbar-group">
+        <label>観点</label>
+        <div class="mode-switch" id="evalViewpoints"></div>
+      </div>
+      <div class="toolbar-group">
+        <label>尺度</label>
+        <div class="mode-switch">
+          <button class="mode-btn active" data-eval-scale="3" type="button">3段階<small>ABC</small></button>
+          <button class="mode-btn" data-eval-scale="5" type="button">5段階<small>1〜5</small></button>
+        </div>
+      </div>
+      <div class="toolbar-group right">
+        <span class="muted small" id="evalCriteriaHint"></span>
+      </div>
+    </div>
+
+    <div class="record-main">
+      <div class="grid-area">
+        <div class="grid-header">
+          <div class="status-line">
+            <span class="status-label" id="evalStatusLabel">評価値を選んで児童をタップ</span>
+          </div>
+          <div class="eval-grade-buttons" id="evalGradeButtons"></div>
+        </div>
+        <div class="grid-legend" title="ボタン上のマークの意味（評価モード）">
+          <span><span class="lg-mark dn">●</span>この単元×観点で評価済</span>
+          <span><span class="lg-mark wt">■</span>未評価</span>
+        </div>
+        <div class="student-grid" id="evalStudentGrid"></div>
+        <div class="action-row">
+          <span class="action-hint">尺度・観点・単元を選び、評価値ボタンを選択 → 児童をタップで一括記録 / 同じ児童を再タップで取消</span>
+        </div>
+      </div>
+
+      <aside class="side-panel">
+        <div class="card today-stats">
+          <h3>今日の評価</h3>
+          <div><span class="big-number" id="todayEvalCount">0</span> 件</div>
+        </div>
+        <div class="card">
+          <h3>この単元×観点の進捗</h3>
+          <div id="evalUnitProgress"></div>
+        </div>
+        <div class="card">
+          <h3>評価基準（参考）</h3>
+          <div class="muted small" id="evalCriteriaText" style="white-space:pre-wrap; font-size:12px;"></div>
+        </div>
+      </aside>
+    </div>
+  </div><!-- /evaluationRecordView -->
 </section>
 
 <!-- =================== 集計タブ =================== -->
@@ -481,6 +545,47 @@
   <ul class="praise-list" id="praiseList"></ul>
 </section>
 
+<!-- =================== 評価一覧タブ =================== -->
+<section class="tab-panel" id="tab-eval-list">
+  <div class="filter-bar">
+    <label>教科:
+      <select id="evalListSubject"><option value="">すべて</option></select>
+    </label>
+    <label>単元:
+      <select id="evalListUnit" style="min-width:200px;"><option value="">すべて</option></select>
+    </label>
+    <label>観点:
+      <select id="evalListViewpoint">
+        <option value="">すべて</option>
+        <option value="knowledge">知識・技能</option>
+        <option value="thinking">思考・判断・表現</option>
+        <option value="attitude">主体的な態度</option>
+      </select>
+    </label>
+    <label>期間:
+      <select id="evalListPeriod">
+        <option value="all" selected>累計</option>
+        <option value="week">今週</option>
+        <option value="today">今日</option>
+      </select>
+    </label>
+    <span class="filter-info" id="evalListInfo"></span>
+    <button class="ghost" id="evalMatrixBtn" title="教科×単元の評価マトリクスを表示（児童 × 単元・観点）">📋 マトリクス表示</button>
+    <button class="ghost" id="exportEvalCsvBtn" title="評価記録のCSV出力">📥 CSV</button>
+  </div>
+  <div id="evalListContent">
+    <div class="praise-summary card" id="evalListSummary"></div>
+    <ul class="praise-list" id="evalList"></ul>
+  </div>
+  <div id="evalMatrixContent" class="hidden" style="margin:8px 12px;">
+    <h3 style="margin:6px 0;">📋 評価マトリクス（児童×単元観点）</h3>
+    <p class="muted small">成績入力ソフトへのコピー用。Ctrl+A → Ctrl+C で全コピーできます。</p>
+    <div style="overflow:auto; max-height:calc(100vh - 220px);">
+      <table id="evalMatrixTable" class="history-table" style="font-size:12px; white-space:nowrap;"></table>
+    </div>
+  </div>
+</section>
+
 <!-- =================== 設定タブ =================== -->
 <section class="tab-panel" id="tab-settings">
   <div class="settings-grid">
@@ -636,8 +741,9 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505f"></script>
-<script src="app.js?v=20260505f"></script>
-<script src="cloud-sync.js?v=20260505f"></script>
+<script src="students.js?v=20260505h"></script>
+<script src="eval-data.js?v=20260505h"></script>
+<script src="app.js?v=20260505h"></script>
+<script src="cloud-sync.js?v=20260505h"></script>
 </body>
 </html>

@@ -1297,3 +1297,68 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   background: transparent;
   border: none;
 }
+
+/* ========== 評価モード ========== */
+.eval-grade-buttons {
+  display: flex;
+  gap: 6px;
+  margin: 4px 0;
+  flex-wrap: wrap;
+}
+.eval-grade-btn {
+  min-width: 48px;
+  padding: 8px 16px;
+  font-size: 18px;
+  font-weight: 700;
+  border: 2px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  color: var(--text);
+  transition: all 0.12s;
+}
+.eval-grade-btn.grade-A, .eval-grade-btn.grade-5 { border-color: #2e7d32; color: #2e7d32; }
+.eval-grade-btn.grade-4 { border-color: #66bb6a; color: #4a8b3e; }
+.eval-grade-btn.grade-B, .eval-grade-btn.grade-3 { border-color: #1976d2; color: #1976d2; }
+.eval-grade-btn.grade-2 { border-color: #f57c00; color: #f57c00; }
+.eval-grade-btn.grade-C, .eval-grade-btn.grade-1 { border-color: #c62828; color: #c62828; }
+.eval-grade-btn:hover { transform: translateY(-1px); box-shadow: 0 2px 6px rgba(0,0,0,0.12); }
+.eval-grade-btn.active {
+  color: white;
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0,0,0,0.18);
+}
+.eval-grade-btn.grade-A.active, .eval-grade-btn.grade-5.active { background: #2e7d32; }
+.eval-grade-btn.grade-4.active { background: #66bb6a; }
+.eval-grade-btn.grade-B.active, .eval-grade-btn.grade-3.active { background: #1976d2; }
+.eval-grade-btn.grade-2.active { background: #f57c00; }
+.eval-grade-btn.grade-C.active, .eval-grade-btn.grade-1.active { background: #c62828; }
+
+.student-btn .eval-grade-tag {
+  position: absolute;
+  bottom: 2px;
+  right: 3px;
+  padding: 1px 6px;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 3px;
+  background: #2e7d32;
+  color: white;
+  line-height: 1.2;
+}
+
+.eval-grade-inline {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-weight: 700;
+  background: #2e7d32;
+  color: white;
+}
+.eval-grade-inline.grade-B, .eval-grade-inline.grade-3 { background: #1976d2; }
+.eval-grade-inline.grade-C, .eval-grade-inline.grade-1 { background: #c62828; }
+.eval-grade-inline.grade-2 { background: #f57c00; }
+.eval-grade-inline.grade-4 { background: #66bb6a; }
+
+.record-mode-btn[data-record-mode="evaluation"].active {
+  border-color: #1976d2;
+}

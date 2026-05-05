@@ -242,15 +242,29 @@ async function pullFromGas() {
     }
   }
 
-  if (mergedRecs > 0 || mergedPraises > 0) {
+  // ===== 評価 =====
+  const pulledEvals = data.evaluations || [];
+  let mergedEvals = 0;
+  if (Array.isArray(state.evaluations)) {
+    const existingEvIds = new Set(state.evaluations.map(e => e.id));
+    for (const e of pulledEvals) {
+      if (String(e.deleted) === '1') continue;
+      if (existingEvIds.has(e.id)) continue;
+      const n = (typeof normalizeEvaluation === 'function') ? normalizeEvaluation(e) : e;
+      if (n) { state.evaluations.push(n); mergedEvals++; }
+    }
+  }
+
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0) {
     saveState();
     if (typeof refreshAll === 'function') refreshAll();
   }
   updateLastPullTime();
-  if (mergedRecs > 0 || mergedPraises > 0) {
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0) {
     const parts = [];
     if (mergedRecs > 0) parts.push(`記録 ${mergedRecs}件`);
     if (mergedPraises > 0) parts.push(`ほめ ${mergedPraises}件`);
+    if (mergedEvals > 0) parts.push(`評価 ${mergedEvals}件`);
     showSyncStatus(`新規 ${parts.join(' / ')} を取得`);
   }
 }
@@ -282,6 +296,78 @@ async function pushPraiseToGas(praise, action) {
     console.warn('[sync] praise push失敗、キューへ:', err.message);
     addToPendingQueue({ action: action || 'add', praise, dataType: 'praise' });
     return false;
+  }
+}
+
+// ===== 評価 push/pull =====
+
+function enrichEvaluation(ev) {
+  // GASマトリクスシート用に学生名・単元名を付与
+  const s = state.students.find(x => x.id === ev.studentId);
+  const u = state.units && state.units.find(x => x.id === ev.unitId);
+  return Object.assign({}, ev, {
+    studentName: s ? s.name : '',
+    unitName: u ? u.name : ev.unitId
+  });
+}
+
+async function pushEvaluationToGas(evaluation, action) {
+  if (!checkSyncReady()) return false;
+  if (!navigator.onLine) {
+    addToPendingQueue({ action: action || 'add', evaluation, dataType: 'evaluation' });
+    return false;
+  }
+  const payload = action === 'delete' ? evaluation : enrichEvaluation(evaluation);
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: action || 'add',
+        dataType: 'evaluation',
+        evaluation: payload,
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return true;
+  } catch (err) {
+    console.warn('[sync] evaluation push失敗:', err.message);
+    addToPendingQueue({ action: action || 'add', evaluation, dataType: 'evaluation' });
+    return false;
+  }
+}
+
+async function pushAllEvaluations() {
+  if (!checkSyncReady()) return;
+  if (!Array.isArray(state.evaluations) || state.evaluations.length === 0) {
+    showToast('送信する評価がありません', 'error');
+    return;
+  }
+  if (_isSyncing) return;
+  _isSyncing = true;
+  showSyncStatus(`評価全${state.evaluations.length}件送信中…`);
+  try {
+    const enriched = state.evaluations.map(enrichEvaluation);
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulk_add',
+        dataType: 'evaluation',
+        evaluations: enriched,
+        deviceId: _deviceId
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    showSyncStatus(`評価送信完了: ${data.added}件追加 / ${data.skipped}件重複`);
+  } catch (err) {
+    showSyncStatus('評価送信失敗: ' + err.message, true);
+  } finally {
+    _isSyncing = false;
   }
 }
 

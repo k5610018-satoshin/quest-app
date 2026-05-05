@@ -35,14 +35,23 @@ const state = {
   },
   records: [],
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
+  evaluations: [],     // [{id, studentId, subjectId, unitId, viewpoint, grade, scale, date, timestamp, deviceId?}]
+  subjects: (window.EVAL_DATA && window.EVAL_DATA.subjects) || [],
+  viewpoints: (window.EVAL_DATA && window.EVAL_DATA.viewpoints) || [],
+  units: (window.EVAL_DATA && window.EVAL_DATA.units) || [],
   ui: {
     currentTab: 'record',
     currentScene: 'break1',
     currentMode: 'simple',
-    recordMode: 'interaction',  // 'interaction' | 'praise'
+    recordMode: 'interaction',  // 'interaction' | 'praise' | 'evaluation'
     praiseMarkPeriod: 'all',    // 記録グリッドの■判定基準: 'today' | 'week' | 'all'
     praiseListPeriod: 'week',   // ほめたい一覧タブのフィルタ
     praiseTargetId: null,       // ほめたい入力中の対象児童ID
+    evalSubjectId: '',
+    evalUnitId: '',
+    evalViewpoint: 'knowledge',
+    evalScale: 3,               // 3 | 5
+    evalActiveGrade: null,      // 'A'|'B'|'C'|'1'..'5'
     subjectId: null,
     selectedMembers: [],
     specialState: null,
@@ -87,6 +96,13 @@ function loadState() {
     if (Array.isArray(data.praises)) {
       state.praises = data.praises.map(normalizePraise).filter(Boolean);
     }
+    if (Array.isArray(data.evaluations)) {
+      state.evaluations = data.evaluations.map(normalizeEvaluation).filter(Boolean);
+    }
+    if (data.lastEvalSubject) state.ui.evalSubjectId = data.lastEvalSubject;
+    if (data.lastEvalUnit) state.ui.evalUnitId = data.lastEvalUnit;
+    if (data.lastEvalViewpoint) state.ui.evalViewpoint = data.lastEvalViewpoint;
+    if (data.lastEvalScale === 3 || data.lastEvalScale === 5) state.ui.evalScale = data.lastEvalScale;
     state.settings = mergeSettings(data.settings);
     if (data.lastScene) state.ui.currentScene = data.lastScene;
     if (data.lastMode) state.ui.currentMode = data.lastMode;
@@ -106,11 +122,16 @@ function saveState() {
     version: APP_VERSION,
     records: state.records,
     praises: state.praises,
+    evaluations: state.evaluations,
     settings: state.settings,
     events: state.events,
     attributes: state.attributes,
     lastScene: state.ui.currentScene,
-    lastMode: state.ui.currentMode
+    lastMode: state.ui.currentMode,
+    lastEvalSubject: state.ui.evalSubjectId,
+    lastEvalUnit: state.ui.evalUnitId,
+    lastEvalViewpoint: state.ui.evalViewpoint,
+    lastEvalScale: state.ui.evalScale
   };
   const json = JSON.stringify(data);
   try {
@@ -159,6 +180,33 @@ function normalizeRecord(r) {
     activity: r.activity || null,
     note: typeof r.note === 'string' ? r.note.slice(0, 500) : '',
     center: (r.center && Number.isFinite(parseInt(r.center))) ? parseInt(r.center) : null
+  };
+}
+
+function normalizeEvaluation(ev) {
+  if (!ev || typeof ev !== 'object') return null;
+  const studentId = parseInt(ev.studentId);
+  if (!studentId || studentId < 1) return null;
+  if (!ev.subjectId || !ev.unitId || !ev.viewpoint) return null;
+  const grade = String(ev.grade || '').trim();
+  if (!grade) return null;
+  const scale = (ev.scale === 5 || String(ev.scale) === '5') ? 5 : 3;
+  const timestamp = ev.timestamp || new Date().toISOString();
+  let date = ev.date;
+  if (!date) {
+    try { date = new Date(timestamp).toISOString().slice(0, 10); }
+    catch { date = todayISO(); }
+  }
+  return {
+    id: ev.id || uuid(),
+    studentId,
+    subjectId: String(ev.subjectId),
+    unitId: String(ev.unitId),
+    viewpoint: String(ev.viewpoint),
+    grade,
+    scale,
+    date,
+    timestamp
   };
 }
 
@@ -268,6 +316,7 @@ function init() {
   initSettingsEvents();
   initPraiseEvents();
   renderPraiseStudentGrid();
+  initEvaluationEvents();
   initKeyboardShortcuts();
   initHelpModal();
   updateHealthBadge();
@@ -903,6 +952,7 @@ function switchTab(name) {
   else if (name === 'history') refreshHistory();
   else if (name === 'settings') refreshSettings();
   else if (name === 'praise-list') refreshPraiseList();
+  else if (name === 'eval-list') refreshEvalList();
 }
 
 // ========== Side Panel ==========
@@ -1854,16 +1904,20 @@ function initPraiseEvents() {
 }
 
 function switchRecordMode(mode) {
-  if (mode !== 'interaction' && mode !== 'praise') mode = 'interaction';
+  if (!['interaction', 'praise', 'evaluation'].includes(mode)) mode = 'interaction';
   state.ui.recordMode = mode;
   document.querySelectorAll('.record-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.recordMode === mode);
   });
   document.getElementById('interactionRecordView').classList.toggle('hidden', mode !== 'interaction');
   document.getElementById('praiseRecordView').classList.toggle('hidden', mode !== 'praise');
+  document.getElementById('evaluationRecordView').classList.toggle('hidden', mode !== 'evaluation');
   if (mode === 'praise') {
     refreshPraiseGridState();
     refreshPraiseSidePanel();
+  } else if (mode === 'evaluation') {
+    refreshEvalGridState();
+    refreshEvalSidePanel();
   }
 }
 
@@ -2136,12 +2190,482 @@ function exportPraiseCsv() {
   URL.revokeObjectURL(url);
 }
 
+// ========== 評価モード ==========
+
+function initEvaluationEvents() {
+  if (!state.subjects || state.subjects.length === 0) return;
+
+  // 教科プルダウン
+  const subjSel = document.getElementById('evalSubject');
+  if (subjSel) {
+    subjSel.innerHTML = '';
+    state.subjects.forEach(sub => {
+      const o = document.createElement('option');
+      o.value = sub.id;
+      o.textContent = sub.label;
+      subjSel.appendChild(o);
+    });
+    if (!state.ui.evalSubjectId) state.ui.evalSubjectId = state.subjects[0].id;
+    subjSel.value = state.ui.evalSubjectId;
+    subjSel.addEventListener('change', () => {
+      state.ui.evalSubjectId = subjSel.value;
+      state.ui.evalUnitId = ''; // 単元リセット
+      renderEvalUnitOptions();
+      refreshEvalUI();
+      saveState();
+    });
+  }
+
+  // 単元プルダウン
+  renderEvalUnitOptions();
+  const unitSel = document.getElementById('evalUnit');
+  if (unitSel) {
+    unitSel.addEventListener('change', () => {
+      state.ui.evalUnitId = unitSel.value;
+      refreshEvalUI();
+      saveState();
+    });
+  }
+
+  // 観点ボタン
+  const vpCont = document.getElementById('evalViewpoints');
+  if (vpCont) {
+    vpCont.innerHTML = '';
+    state.viewpoints.forEach(vp => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'mode-btn';
+      b.dataset.viewpoint = vp.id;
+      b.innerHTML = `${vp.short || vp.label[0]}<small>${vp.label}</small>`;
+      if (vp.id === state.ui.evalViewpoint) b.classList.add('active');
+      b.addEventListener('click', () => {
+        state.ui.evalViewpoint = vp.id;
+        vpCont.querySelectorAll('button').forEach(x => x.classList.toggle('active', x.dataset.viewpoint === vp.id));
+        refreshEvalUI();
+        saveState();
+      });
+      vpCont.appendChild(b);
+    });
+  }
+
+  // 尺度切替
+  document.querySelectorAll('[data-eval-scale]').forEach(b => {
+    if (parseInt(b.dataset.evalScale) === state.ui.evalScale) b.classList.add('active');
+    else b.classList.remove('active');
+    b.addEventListener('click', () => {
+      state.ui.evalScale = parseInt(b.dataset.evalScale);
+      document.querySelectorAll('[data-eval-scale]').forEach(x =>
+        x.classList.toggle('active', parseInt(x.dataset.evalScale) === state.ui.evalScale)
+      );
+      state.ui.evalActiveGrade = null;
+      renderEvalGradeButtons();
+      saveState();
+    });
+  });
+
+  renderEvalGradeButtons();
+  renderEvalStudentGrid();
+  refreshEvalUI();
+
+  // 評価一覧タブのフィルタ
+  const lsubj = document.getElementById('evalListSubject');
+  if (lsubj) {
+    state.subjects.forEach(s => {
+      const o = document.createElement('option');
+      o.value = s.id;
+      o.textContent = s.label;
+      lsubj.appendChild(o);
+    });
+    lsubj.addEventListener('change', () => { populateEvalListUnits(); refreshEvalList(); });
+  }
+  populateEvalListUnits();
+  const lunit = document.getElementById('evalListUnit');
+  if (lunit) lunit.addEventListener('change', refreshEvalList);
+  const lvp = document.getElementById('evalListViewpoint');
+  if (lvp) lvp.addEventListener('change', refreshEvalList);
+  const lp = document.getElementById('evalListPeriod');
+  if (lp) lp.addEventListener('change', refreshEvalList);
+  const matrixBtn = document.getElementById('evalMatrixBtn');
+  if (matrixBtn) matrixBtn.addEventListener('click', toggleEvalMatrix);
+  const exportBtn = document.getElementById('exportEvalCsvBtn');
+  if (exportBtn) exportBtn.addEventListener('click', exportEvalCsv);
+}
+
+function renderEvalUnitOptions() {
+  const sel = document.getElementById('evalUnit');
+  if (!sel) return;
+  sel.innerHTML = '';
+  const units = state.units.filter(u => u.subject === state.ui.evalSubjectId && !u.archived);
+  units.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  units.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = `${u.sequence ? u.sequence + '. ' : ''}${u.name}${u.period ? ' (' + u.period + ')' : ''}`;
+    sel.appendChild(o);
+  });
+  if (!state.ui.evalUnitId && units.length) state.ui.evalUnitId = units[0].id;
+  if (state.ui.evalUnitId) sel.value = state.ui.evalUnitId;
+}
+
+function populateEvalListUnits() {
+  const sel = document.getElementById('evalListUnit');
+  if (!sel) return;
+  const subj = (document.getElementById('evalListSubject') || {}).value || '';
+  sel.innerHTML = '<option value="">すべて</option>';
+  const units = state.units.filter(u => !subj || u.subject === subj);
+  units.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+  units.forEach(u => {
+    const o = document.createElement('option');
+    o.value = u.id;
+    o.textContent = `[${(state.subjects.find(s => s.id === u.subject) || {}).label || u.subject}] ${u.name}`;
+    sel.appendChild(o);
+  });
+}
+
+function getEvalGrades() {
+  return state.ui.evalScale === 5 ? ['5','4','3','2','1'] : ['A','B','C'];
+}
+
+function renderEvalGradeButtons() {
+  const cont = document.getElementById('evalGradeButtons');
+  if (!cont) return;
+  cont.innerHTML = '';
+  const grades = getEvalGrades();
+  grades.forEach(g => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'eval-grade-btn grade-' + g;
+    b.dataset.grade = g;
+    b.textContent = g;
+    if (state.ui.evalActiveGrade === g) b.classList.add('active');
+    b.addEventListener('click', () => {
+      state.ui.evalActiveGrade = (state.ui.evalActiveGrade === g) ? null : g;
+      cont.querySelectorAll('.eval-grade-btn').forEach(x => x.classList.toggle('active', x.dataset.grade === state.ui.evalActiveGrade));
+      updateEvalStatusLabel();
+    });
+    cont.appendChild(b);
+  });
+}
+
+function updateEvalStatusLabel() {
+  const lbl = document.getElementById('evalStatusLabel');
+  if (!lbl) return;
+  if (!state.ui.evalActiveGrade) {
+    lbl.textContent = '評価値を選んで児童をタップ';
+    lbl.style.color = '';
+  } else {
+    lbl.textContent = `評価値「${state.ui.evalActiveGrade}」を選択中 — 児童をタップで一括記録`;
+    lbl.style.color = '#2f6db5';
+  }
+}
+
+function renderEvalStudentGrid() {
+  const grid = document.getElementById('evalStudentGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const s of state.students) {
+    const btn = document.createElement('button');
+    btn.className = 'student-btn';
+    btn.dataset.studentId = s.id;
+    btn.title = `${s.kana} (出席番号 ${s.id})`;
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = s.id;
+    btn.appendChild(num);
+    btn.appendChild(document.createTextNode(s.name));
+    btn.addEventListener('click', () => onEvalStudentClick(s.id));
+    grid.appendChild(btn);
+  }
+}
+
+function findEvaluation(studentId, subjectId, unitId, viewpoint) {
+  return state.evaluations.find(e =>
+    e.studentId === studentId &&
+    e.subjectId === subjectId &&
+    e.unitId === unitId &&
+    e.viewpoint === viewpoint
+  );
+}
+
+function refreshEvalGridState() {
+  const subj = state.ui.evalSubjectId, unit = state.ui.evalUnitId, vp = state.ui.evalViewpoint;
+  document.querySelectorAll('#evalStudentGrid .student-btn').forEach(btn => {
+    const id = parseInt(btn.dataset.studentId);
+    btn.classList.remove('covered-today', 'watch', 'subject');
+    btn.querySelectorAll('.eval-grade-tag').forEach(t => t.remove());
+    const ev = findEvaluation(id, subj, unit, vp);
+    if (ev) {
+      btn.classList.add('covered-today');
+      const tag = document.createElement('span');
+      tag.className = 'eval-grade-tag';
+      tag.textContent = ev.grade;
+      btn.appendChild(tag);
+    } else {
+      btn.classList.add('watch');
+    }
+  });
+}
+
+function refreshEvalUI() {
+  refreshEvalGridState();
+  refreshEvalSidePanel();
+  refreshEvalCriteriaText();
+}
+
+function refreshEvalCriteriaText() {
+  const u = state.units.find(x => x.id === state.ui.evalUnitId);
+  const text = document.getElementById('evalCriteriaText');
+  const hint = document.getElementById('evalCriteriaHint');
+  if (!u || !u.criteria) {
+    if (text) text.textContent = '単元を選択すると評価基準を表示';
+    if (hint) hint.textContent = '';
+    return;
+  }
+  const vp = state.ui.evalViewpoint;
+  const c = u.criteria[vp] || '';
+  const vpLabel = (state.viewpoints.find(v => v.id === vp) || {}).label || vp;
+  if (text) text.textContent = `[${vpLabel}]\n${c}`;
+  if (hint) hint.textContent = `${u.name}（${u.period || ''}）`;
+}
+
+function refreshEvalSidePanel() {
+  const today = todayISO();
+  const todays = state.evaluations.filter(e => e.date === today);
+  const cnt = document.getElementById('todayEvalCount');
+  if (cnt) cnt.textContent = todays.length;
+
+  const subj = state.ui.evalSubjectId, unit = state.ui.evalUnitId;
+  const prog = document.getElementById('evalUnitProgress');
+  if (prog) {
+    const lines = state.viewpoints.map(vp => {
+      const done = state.students.filter(s => findEvaluation(s.id, subj, unit, vp.id)).length;
+      const pct = Math.round(done / state.students.length * 100);
+      return `<div style="display:flex;justify-content:space-between;font-size:12px;margin:2px 0;">
+        <span>${vp.short || vp.label}</span>
+        <span><b>${done}</b>/${state.students.length} (${pct}%)</span>
+      </div>`;
+    }).join('');
+    prog.innerHTML = lines;
+  }
+}
+
+function onEvalStudentClick(studentId) {
+  if (!state.ui.evalActiveGrade) {
+    showToast('まず評価値（A/B/C や 1〜5）を選択してください', 'error');
+    return;
+  }
+  if (!state.ui.evalSubjectId || !state.ui.evalUnitId || !state.ui.evalViewpoint) {
+    showToast('教科・単元・観点を選択してください', 'error');
+    return;
+  }
+  const existing = findEvaluation(studentId, state.ui.evalSubjectId, state.ui.evalUnitId, state.ui.evalViewpoint);
+  if (existing && existing.grade === state.ui.evalActiveGrade) {
+    // 同値再タップ → 取消
+    state.evaluations = state.evaluations.filter(e => e.id !== existing.id);
+    saveState();
+    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas({ id: existing.id }, 'delete').catch(() => {});
+    showToast(`${state.students.find(s => s.id === studentId).name} の評価を取消`);
+  } else if (existing) {
+    // 上書き
+    existing.grade = state.ui.evalActiveGrade;
+    existing.scale = state.ui.evalScale;
+    existing.timestamp = new Date().toISOString();
+    existing.date = todayISO();
+    saveState();
+    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(existing, 'edit').catch(() => {});
+    showToast(`${state.students.find(s => s.id === studentId).name}: ${state.ui.evalActiveGrade} に更新`);
+  } else {
+    const ev = normalizeEvaluation({
+      studentId,
+      subjectId: state.ui.evalSubjectId,
+      unitId: state.ui.evalUnitId,
+      viewpoint: state.ui.evalViewpoint,
+      grade: state.ui.evalActiveGrade,
+      scale: state.ui.evalScale,
+      date: todayISO()
+    });
+    if (!ev) { showToast('保存に失敗', 'error'); return; }
+    state.evaluations.push(ev);
+    saveState();
+    if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas(ev, 'add').catch(() => {});
+    showToast(`${state.students.find(s => s.id === studentId).name}: ${state.ui.evalActiveGrade}`);
+  }
+  refreshEvalUI();
+  if (state.ui.currentTab === 'eval-list') refreshEvalList();
+}
+
+// ========== 評価一覧タブ ==========
+
+function refreshEvalList() {
+  const subj = (document.getElementById('evalListSubject') || {}).value || '';
+  const unit = (document.getElementById('evalListUnit') || {}).value || '';
+  const vp = (document.getElementById('evalListViewpoint') || {}).value || '';
+  const period = (document.getElementById('evalListPeriod') || {}).value || 'all';
+
+  const filtered = state.evaluations.filter(e => {
+    if (subj && e.subjectId !== subj) return false;
+    if (unit && e.unitId !== unit) return false;
+    if (vp && e.viewpoint !== vp) return false;
+    if (!isInPraisePeriod(e, period)) return false;
+    return true;
+  }).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+
+  const info = document.getElementById('evalListInfo');
+  if (info) info.textContent = `${filtered.length}件`;
+
+  // サマリ: 教科×観点別件数
+  const summary = document.getElementById('evalListSummary');
+  if (summary) {
+    const counts = new Map();
+    for (const e of filtered) {
+      const k = `${e.subjectId}/${e.viewpoint}`;
+      counts.set(k, (counts.get(k) || 0) + 1);
+    }
+    const lines = [];
+    state.subjects.forEach(s => {
+      state.viewpoints.forEach(v => {
+        const k = `${s.id}/${v.id}`;
+        const c = counts.get(k) || 0;
+        if (c > 0) lines.push(`<li><b>${s.label}/${v.short}</b> ${c}件</li>`);
+      });
+    });
+    summary.innerHTML = `<h3>件数サマリ</h3><ul class="praise-rank-list">${lines.join('') || '<li class="muted">なし</li>'}</ul>`;
+  }
+
+  const ul = document.getElementById('evalList');
+  if (!ul) return;
+  if (!filtered.length) {
+    ul.innerHTML = '<li class="empty">該当する評価記録はありません</li>';
+    return;
+  }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const subjMap = new Map(state.subjects.map(s => [s.id, s]));
+  const unitMap = new Map(state.units.map(u => [u.id, u]));
+  const vpMap = new Map(state.viewpoints.map(v => [v.id, v]));
+  ul.innerHTML = filtered.slice(0, 500).map(e => {
+    const s = sMap.get(e.studentId);
+    const sub = subjMap.get(e.subjectId);
+    const u = unitMap.get(e.unitId);
+    const v = vpMap.get(e.viewpoint);
+    const name = s ? `${s.id}. ${s.name}` : `(ID:${e.studentId})`;
+    const time = e.timestamp ? new Date(e.timestamp).toLocaleString('ja-JP', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : e.date;
+    return `<li data-id="${e.id}">
+      <div class="praise-meta">
+        <div>${time}</div>
+        <div class="praise-name">${escapeHtml(name)}</div>
+      </div>
+      <div class="praise-content">
+        <b>${sub ? sub.label : e.subjectId}</b> / ${u ? u.name : e.unitId} / ${v ? v.short : e.viewpoint} →
+        <span class="eval-grade-inline grade-${e.grade}">${e.grade}</span>
+        <span class="muted small">(${e.scale}段階)</span>
+      </div>
+      <div class="praise-actions">
+        <button class="ghost danger" data-action="delete-eval" data-id="${e.id}">削除</button>
+      </div>
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('button[data-action="delete-eval"]').forEach(btn => {
+    btn.addEventListener('click', () => deleteEvaluation(btn.dataset.id));
+  });
+}
+
+function deleteEvaluation(id) {
+  if (!confirm('この評価記録を削除しますか？')) return;
+  const idx = state.evaluations.findIndex(e => e.id === id);
+  if (idx < 0) return;
+  state.evaluations.splice(idx, 1);
+  saveState();
+  if (typeof pushEvaluationToGas === 'function') pushEvaluationToGas({ id }, 'delete').catch(() => {});
+  refreshEvalList();
+  refreshEvalGridState();
+  showToast('削除しました');
+}
+
+function toggleEvalMatrix() {
+  const main = document.getElementById('evalListContent');
+  const mat = document.getElementById('evalMatrixContent');
+  if (mat.classList.contains('hidden')) {
+    mat.classList.remove('hidden');
+    main.classList.add('hidden');
+    renderEvalMatrix();
+    document.getElementById('evalMatrixBtn').textContent = '📋 一覧表示に戻す';
+  } else {
+    mat.classList.add('hidden');
+    main.classList.remove('hidden');
+    document.getElementById('evalMatrixBtn').textContent = '📋 マトリクス表示';
+  }
+}
+
+function renderEvalMatrix() {
+  const subj = (document.getElementById('evalListSubject') || {}).value || (state.subjects[0] && state.subjects[0].id) || '';
+  const table = document.getElementById('evalMatrixTable');
+  if (!table || !subj) { table.innerHTML = '<tr><td>教科を選んでください</td></tr>'; return; }
+  const subject = state.subjects.find(s => s.id === subj);
+  const units = state.units.filter(u => u.subject === subj && !u.archived).sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
+
+  // header rows
+  let header1 = '<tr><th rowspan="2">出席</th><th rowspan="2">児童名</th>';
+  units.forEach(u => {
+    header1 += `<th colspan="3" style="background:#fff8e0;border-left:2px solid #999;">${u.name}</th>`;
+  });
+  header1 += '</tr>';
+  let header2 = '<tr>';
+  units.forEach(() => {
+    header2 += '<th style="background:#eef;border-left:2px solid #999;">知</th><th style="background:#efe;">思</th><th style="background:#fed;">態</th>';
+  });
+  header2 += '</tr>';
+
+  let rows = '';
+  state.students.forEach(s => {
+    let r = `<tr><td style="text-align:right;">${s.id}</td><td style="white-space:nowrap;">${escapeHtml(s.name)}</td>`;
+    units.forEach(u => {
+      ['knowledge', 'thinking', 'attitude'].forEach((vp, i) => {
+        const ev = findEvaluation(s.id, subj, u.id, vp);
+        const border = i === 0 ? 'border-left:2px solid #999;' : '';
+        const bg = ev ? 'background:#e8f5e9;font-weight:600;' : 'background:#fff5f5;color:#bbb;';
+        r += `<td style="text-align:center;${border}${bg}">${ev ? escapeHtml(ev.grade) : '−'}</td>`;
+      });
+    });
+    r += '</tr>';
+    rows += r;
+  });
+  table.innerHTML = `<thead>${header1}${header2}</thead><tbody>${rows}</tbody>`;
+  table.style.borderCollapse = 'collapse';
+  table.querySelectorAll('th, td').forEach(c => c.style.border = '1px solid #ddd');
+  table.querySelectorAll('th').forEach(c => { c.style.padding = '4px 6px'; c.style.background = c.style.background || '#f0f0f5'; });
+  table.querySelectorAll('td').forEach(c => c.style.padding = '4px 6px');
+}
+
+function exportEvalCsv() {
+  if (!state.evaluations.length) { showToast('評価記録がありません', 'error'); return; }
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const subjMap = new Map(state.subjects.map(s => [s.id, s]));
+  const unitMap = new Map(state.units.map(u => [u.id, u]));
+  const rows = [['date', 'student_id', 'student_name', 'subject', 'unit', 'viewpoint', 'grade', 'scale']];
+  for (const e of state.evaluations) {
+    const s = sMap.get(e.studentId);
+    const sub = subjMap.get(e.subjectId);
+    const u = unitMap.get(e.unitId);
+    rows.push([e.date, e.studentId, s ? s.name : '', sub ? sub.label : e.subjectId, u ? u.name : e.unitId, e.viewpoint, e.grade, e.scale]);
+  }
+  const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `evaluations_${todayISO()}.csv`;
+  a.click();
+  URL.revokeObjectURL(url);
+}
+
 function refreshAll() {
   refreshSidePanel();
   refreshAfterSelectionChange();
   if (state.ui.recordMode === 'praise') {
     refreshPraiseGridState();
     refreshPraiseSidePanel();
+  } else if (state.ui.recordMode === 'evaluation') {
+    refreshEvalUI();
   }
   if (state.ui.currentTab === 'summary') refreshSummary();
   else if (state.ui.currentTab === 'compare') refreshCompare();
