@@ -4005,13 +4005,9 @@ function renderKetRatingButtons() {
         refreshKetebureUI();
         return;
       }
-      // 通常モード: 評価値をtoggle
+      // 通常モード: 評価値をtoggle（既選択児童の評価値はそのまま維持）
       state.ui.ketebureRating = (state.ui.ketebureRating === r) ? null : r;
       cont.querySelectorAll('.ket-rating-btn').forEach(x => x.classList.toggle('active', x.dataset.rating === state.ui.ketebureRating));
-      // 既存の保留児童があれば rating を最新値に再反映
-      if (state.ui.ketebureRating && state.ui.ketSelected.size > 0) {
-        state.ui.ketSelected.forEach(v => { v.rating = state.ui.ketebureRating; });
-      }
       refreshKetebureUI();
     });
     cont.appendChild(b);
@@ -4040,9 +4036,7 @@ function renderKetAspectButtons() {
         state.ui.ketebureAspects.add(a.id);
         b.classList.add('active');
       }
-      // 保留中の児童の aspects も最新化
-      const aspectsArr = [...state.ui.ketebureAspects];
-      state.ui.ketSelected.forEach(v => { v.aspects = aspectsArr.slice(); });
+      // 既選択児童の aspects は維持（タップ時点でのスナップショットを保持）
       updateKetStatusLabel();
     });
     cont.appendChild(b);
@@ -4283,13 +4277,28 @@ function refreshKetGridDecorations() {
       sb.title = `${streak}日連続◎`;
       btn.appendChild(sb);
     }
-    // 選択中ハイライト + 保留評価値
+    // 選択中ハイライト + 保留評価値 + 保留観点
     if (selected.has(id)) {
       btn.classList.add('ket-selected');
       const sel = selected.get(id);
       const pr = document.createElement('span');
       pr.className = 'ket-pending-rating';
-      pr.textContent = sel.rating;
+      // 評価値 (大)
+      const rEl = document.createElement('span');
+      rEl.className = 'pr-rating';
+      rEl.textContent = sel.rating;
+      pr.appendChild(rEl);
+      // 観点 (小・並列)
+      const aspectMap = {};
+      (KETEBURE_ASPECTS[type] || []).forEach(a => aspectMap[a.id] = a.label);
+      const labels = (sel.aspects || []).map(aid => aspectMap[aid] || aid);
+      if (labels.length > 0) {
+        const aEl = document.createElement('span');
+        aEl.className = 'pr-aspects';
+        aEl.textContent = labels.join('');
+        pr.appendChild(aEl);
+      }
+      pr.title = `${sel.rating}${labels.length ? ' / ' + labels.join('・') : ''}`;
       btn.appendChild(pr);
     }
     // 児童先行モードのハイライト

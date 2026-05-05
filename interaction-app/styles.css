@@ -1904,13 +1904,29 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   position: absolute;
   top: 1px;
   left: 1px;
-  font-size: 11px;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
   font-weight: 700;
   background: #f7c948;
   color: white;
   padding: 0 4px;
   border-radius: 3px;
   line-height: 1.2;
+  max-width: calc(100% - 4px);
+  z-index: 2;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected .ket-pending-rating .pr-rating {
+  font-size: 12px;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected .ket-pending-rating .pr-aspects {
+  font-size: 10px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.85);
+  color: #5a4500;
+  padding: 0 3px;
+  border-radius: 2px;
+  letter-spacing: -0.5px;
 }
 /* 児童先行モード（評価未選択でタップした児童のハイライト） */
 .student-grid.ket-student-grid .student-btn.ket-active-student {
