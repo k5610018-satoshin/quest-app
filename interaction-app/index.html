@@ -40,14 +40,13 @@ if ('serviceWorker' in navigator) {
   </div>
   <nav class="tabs">
     <button class="tab-btn active" data-tab="record" title="新規記録">📝 記録</button>
-    <button class="tab-btn" data-tab="overview" title="学級概況（今日の状況）">🏫 概況</button>
-    <button class="tab-btn" data-tab="summary" title="集計">📊 集計</button>
-    <button class="tab-btn" data-tab="compare" title="比較">⚖ 比較</button>
-    <button class="tab-btn" data-tab="socio" title="ソシオグラム">🕸 関係図</button>
-    <button class="tab-btn" data-tab="centrality" title="中心性 (SNA)">🌐 中心性</button>
-    <button class="tab-btn" data-tab="timeline" title="時系列">📈 時系列</button>
-    <button class="tab-btn" data-tab="heatmap" title="観察分布">🔥 分布</button>
-    <button class="tab-btn" data-tab="seating" title="席替え">🪑 席</button>
+    <button class="tab-btn" data-tab="overview" title="今日の学級の状況">🏫 今日</button>
+    <button class="tab-btn" data-tab="summary" title="児童ごとの関わり相手・回数">📊 児童別</button>
+    <button class="tab-btn" data-tab="compare" title="休み時間と授業時間の関わり方の違い">⚖ 場面差</button>
+    <button class="tab-btn" data-tab="socio" title="ソシオグラム + ランキング + コミュニティ">🕸 関係マップ</button>
+    <button class="tab-btn" data-tab="timeline" title="関係の変化が大きい児童・期間別推移">📈 関係の変化</button>
+    <button class="tab-btn" data-tab="heatmap" title="自分の観察記録の偏り点検">🔥 観察の偏り</button>
+    <button class="tab-btn" data-tab="seating" title="席替えアプリと同期">🪑 座席</button>
     <button class="tab-btn" data-tab="history" title="記録履歴">📜 履歴</button>
     <button class="tab-btn" data-tab="praise-list" title="ほめたい一覧">🌟 ほめ</button>
     <button class="tab-btn" data-tab="eval-list" title="評価一覧">✅ 評価</button>
@@ -97,7 +96,7 @@ if ('serviceWorker' in navigator) {
     <div class="grid-area">
       <div class="grid-header">
         <div class="status-line" id="statusLine">
-          <span class="status-label">主役を選んでください</span>
+          <span class="status-label">関わっていた児童をタップしてグループを作成</span>
         </div>
         <div class="selected-chips" id="selectedChips"></div>
       </div>
@@ -122,7 +121,7 @@ if ('serviceWorker' in navigator) {
         <input type="text" id="noteInput" placeholder="質的観察メモ (任意): 例「下釜が長田にボールを譲った」" maxlength="200">
       </div>
       <div class="action-row">
-        <span class="action-hint">児童ボタンを順に押してグループを作成 / チップの☆クリックで中心人物指定 / Enter=保存 / Esc=クリア / 右クリック=個別分析</span>
+        <span class="action-hint">関わっていた児童を順不同でタップ → 全員で1グループ / Enter=保存 / Esc=クリア / 右クリック=個別分析</span>
         <div style="display:flex; gap:8px;">
           <button class="ghost" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
           <button class="primary" id="saveBtn" disabled>💾 保存して次へ (Enter)</button>
@@ -512,58 +511,58 @@ if ('serviceWorker' in navigator) {
 <!-- =================== 集計タブ =================== -->
 <section class="tab-panel" id="tab-summary">
   <div class="filter-bar">
-    <label>表示:
-      <select id="summaryMode">
-        <option value="single">単一</option>
-        <option value="compare">並列比較 (A vs B)</option>
-      </select>
-    </label>
+    <span class="btn-grp-label">表示</span>
+    <div class="btn-grp" data-target="summaryMode">
+      <button type="button" data-value="single" class="active">単一</button>
+      <button type="button" data-value="compare">A vs B 比較</button>
+    </div>
+    <input type="hidden" id="summaryMode" value="single">
     <span id="summarySingleFilters">
-      <label>シーン:
-        <select id="summaryScene"><option value="">すべて</option></select>
-      </label>
-      <label>カテゴリ:
-        <select id="summaryCategory">
-          <option value="">すべて</option>
-          <option value="rest">休み時間</option>
-          <option value="class">授業時間</option>
-          <option value="other">その他</option>
-        </select>
+      <span class="btn-grp-label">カテゴリ</span>
+      <div class="btn-grp" data-target="summaryCategory">
+        <button type="button" data-value="" class="active">すべて</button>
+        <button type="button" data-value="rest">休み</button>
+        <button type="button" data-value="class">授業</button>
+        <button type="button" data-value="other">その他</button>
+      </div>
+      <input type="hidden" id="summaryCategory" value="">
+      <label class="muted small" style="margin-left:6px;">シーン:
+        <select id="summaryScene" style="max-width:120px;"><option value="">すべて</option></select>
       </label>
     </span>
     <span id="summaryCompareFilters" class="hidden">
       <label>A:
-        <select id="summaryA">
+        <select id="summaryA" style="max-width:160px;">
           <optgroup label="カテゴリ">
-            <option value="cat:rest" selected>休み時間 (全体)</option>
-            <option value="cat:class">授業時間 (全体)</option>
+            <option value="cat:rest" selected>休み (全体)</option>
+            <option value="cat:class">授業 (全体)</option>
             <option value="cat:other">その他</option>
           </optgroup>
           <optgroup label="シーン" id="summaryAScenes"></optgroup>
         </select>
       </label>
       <label>B:
-        <select id="summaryB">
+        <select id="summaryB" style="max-width:160px;">
           <optgroup label="カテゴリ">
-            <option value="cat:rest">休み時間 (全体)</option>
-            <option value="cat:class" selected>授業時間 (全体)</option>
+            <option value="cat:rest">休み (全体)</option>
+            <option value="cat:class" selected>授業 (全体)</option>
             <option value="cat:other">その他</option>
           </optgroup>
           <optgroup label="シーン" id="summaryBScenes"></optgroup>
         </select>
       </label>
     </span>
-    <label>期間:
-      <select id="summaryPeriod">
-        <option value="all">すべて</option>
-        <option value="today">今日</option>
-        <option value="7">直近7日</option>
-        <option value="30">直近30日</option>
-      </select>
-    </label>
+    <span class="btn-grp-label">期間</span>
+    <div class="btn-grp" data-target="summaryPeriod">
+      <button type="button" data-value="all" class="active">すべて</button>
+      <button type="button" data-value="today">今日</button>
+      <button type="button" data-value="7">7日</button>
+      <button type="button" data-value="30">30日</button>
+    </div>
+    <input type="hidden" id="summaryPeriod" value="all">
     <span class="filter-info" id="summaryInfo"></span>
-    <button class="ghost" id="printSummaryBtn" title="ブラウザの印刷ダイアログ。PDFとして保存も可">🖨 印刷/PDF</button>
-    <button class="ghost" id="printIndividualBtn" title="児童1人1ページの28ページPDF">📑 28枚一括PDF</button>
+    <button class="ghost" id="printSummaryBtn" title="ブラウザの印刷ダイアログ。PDFとして保存も可">🖨 PDF</button>
+    <button class="ghost" id="printIndividualBtn" title="児童1人1ページの28ページPDF">📑 28枚PDF</button>
   </div>
   <div class="card group-stats hidden" id="genderGroupStats"></div>
 
@@ -588,170 +587,162 @@ if ('serviceWorker' in navigator) {
 <!-- =================== ソシオグラムタブ =================== -->
 <section class="tab-panel" id="tab-socio">
   <div class="filter-bar">
-    <label>シーン:
-      <select id="socioScene"><option value="">すべて</option></select>
-    </label>
-    <label>カテゴリ:
-      <select id="socioCategory">
-        <option value="">すべて</option>
-        <option value="rest">休み時間</option>
-        <option value="class">授業時間</option>
-      </select>
-    </label>
-    <label>最低共起回数:
-      <input type="number" id="socioMin" value="2" min="1" max="50" style="width:60px">
-    </label>
-    <button class="ghost" id="socioRedraw">再描画</button>
-  </div>
-  <div class="socio-wrap">
-    <svg id="socioSvg" width="900" height="700"></svg>
-    <div class="socio-legend">
-      <div><span class="dot highlight"></span>配慮優先（既知の特性に配慮）</div>
-      <div><span class="dot watch"></span>観察優先（情報が少ない児童）</div>
-      <div>線の太さ = 一緒にいた回数</div>
+    <span class="btn-grp-label">カテゴリ</span>
+    <div class="btn-grp" data-target="centralityCategory">
+      <button type="button" data-value="" class="active">すべて</button>
+      <button type="button" data-value="rest">休み</button>
+      <button type="button" data-value="class">授業</button>
     </div>
-  </div>
-</section>
-
-<!-- =================== 中心性タブ =================== -->
-<section class="tab-panel" id="tab-centrality">
-  <div class="filter-bar">
-    <label>カテゴリ:
-      <select id="centralityCategory">
-        <option value="">すべて</option>
-        <option value="rest">休み時間</option>
-        <option value="class">授業時間</option>
-      </select>
-    </label>
-    <label>期間:
-      <select id="centralityPeriod">
-        <option value="all">すべて</option>
-        <option value="7">直近7日</option>
-        <option value="30">直近30日</option>
-      </select>
-    </label>
+    <input type="hidden" id="centralityCategory" value="">
+    <span class="btn-grp-label">期間</span>
+    <div class="btn-grp" data-target="centralityPeriod">
+      <button type="button" data-value="all" class="active">すべて</button>
+      <button type="button" data-value="7">7日</button>
+      <button type="button" data-value="30">30日</button>
+    </div>
+    <input type="hidden" id="centralityPeriod" value="all">
     <span class="filter-info" id="centralityInfo"></span>
+    <span style="margin-left:6px;">
+      <label style="font-size:11px; color:#777;">最低共起:
+        <input type="number" id="socioMin" value="2" min="1" max="50" style="width:50px; padding:2px 4px;">
+      </label>
+    </span>
+    <input type="hidden" id="socioScene" value="">
+    <input type="hidden" id="socioCategory" value="">
+    <button class="ghost" id="socioRedraw" style="padding:3px 8px; font-size:11px;">再描画</button>
   </div>
-  <div class="centrality-intro card">
-    <p style="margin:6px 0;"><b>📐 解説:</b> 本アプリの記録は <b>順不同の共起観察</b>（誰と誰が一緒にいたか）です。
-    そのため社会ネットワーク分析(SNA)の<b>無向ネットワーク指標</b>を使います。
-    <br>
-    <b>関わり人数</b>=ユニークな相手数 / <b>関わり強度</b>=累計接触回数 /
-    <b>クラスタ係数</b>=自分の友達同士がどれだけ繋がっているか (高=固定グループ, 低=橋渡し的) /
-    <b>媒介中心性</b>=異なるグループの繋ぎ役度 (Brandesアルゴリズム) /
-    <b>コミュニティ</b>=Louvain法による自然発生小グループ検出</p>
-  </div>
-  <div class="centrality-grid">
+
+  <!-- 上段3カラム: 個別支援に直結する重要指標 -->
+  <div class="centrality-grid-3col">
     <div class="card">
-      <h3>① 関わり人数 (Degree centrality)</h3>
-      <p class="muted small" style="margin:0 0 6px;">多様な相手と関わる子(TOP) / 関わりが少ない子(BOTTOM)</p>
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
-        <div><b>多い順 TOP10</b><table class="centrality-table" id="centralityDegreeTopTable"></table></div>
-        <div><b>少ない順 BOTTOM10</b><table class="centrality-table" id="centralityDegreeBottomTable"></table></div>
-      </div>
+      <h3>🚨 関わりが少ない子 BOTTOM10 <span class="muted small">— 孤立リスク</span></h3>
+      <table class="centrality-table" id="centralityDegreeBottomTable"></table>
     </div>
     <div class="card">
-      <h3>② 関わり強度 (Weighted strength)</h3>
-      <p class="muted small" style="margin:0 0 6px;">累計接触回数。<b>強度高×人数少</b>=限定友達と濃密(要注意の偏り)</p>
+      <h3>⚠ 関わりが偏っている子 <span class="muted small">— 限定友達と濃密</span></h3>
       <table class="centrality-table" id="centralityStrengthTable"></table>
     </div>
     <div class="card">
-      <h3>③ 橋渡し役 (Betweenness)</h3>
-      <p class="muted small" style="margin:0 0 6px;">異なるグループを繋ぐ子。クラスタ係数も併記</p>
+      <h3>🌉 グループの橋渡し役 <span class="muted small">— Betweenness</span></h3>
       <table class="centrality-table" id="centralityBetweennessTable"></table>
     </div>
+  </div>
+
+  <!-- 中段: 関係マップ + 自然発生グループ -->
+  <div class="socio-2col">
     <div class="card">
-      <h3>④ コミュニティ検出 (Louvain)</h3>
-      <p class="muted small" style="margin:0 0 6px;">自然発生する小グループ。色分けで表示</p>
+      <h3>🕸 関係マップ（ソシオグラム）</h3>
+      <div class="socio-wrap">
+        <svg id="socioSvg" width="100%" height="540" viewBox="0 0 900 540" preserveAspectRatio="xMidYMid meet"></svg>
+        <div class="socio-legend">
+          <div><span class="dot highlight"></span>配慮優先</div>
+          <div><span class="dot watch"></span>観察優先（情報少）</div>
+          <div>線の太さ = 一緒にいた回数</div>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h3>👥 自然発生のグループ <span class="muted small">— Louvain</span></h3>
       <div id="centralityCommunities"></div>
       <div style="margin-top:8px; font-size:11px; color:var(--muted);" id="centralityNetworkStats"></div>
+      <h3 style="margin-top:14px;">🌟 多様に関わる子 TOP10</h3>
+      <table class="centrality-table" id="centralityDegreeTopTable"></table>
     </div>
   </div>
+
+  <details class="centrality-intro card" style="margin-top:8px;">
+    <summary class="muted small" style="cursor:pointer;">📐 用語解説</summary>
+    <p style="margin:6px 0; font-size:12px;">本アプリの記録は <b>順不同の共起観察</b>です。<b>関わり人数</b>=ユニーク相手数 / <b>関わり強度</b>=累計接触回数 / <b>媒介中心性</b>=異なるグループの繋ぎ役度 (Brandes) / <b>自然発生グループ</b>=Louvain法によるコミュニティ検出</p>
+  </details>
 </section>
 
 <!-- =================== 時系列タブ =================== -->
 <section class="tab-panel" id="tab-timeline">
-  <div class="filter-bar">
-    <label>比較粒度:
-      <select id="timelineGranularity">
-        <option value="month">月別</option>
-        <option value="week">週別</option>
-      </select>
-    </label>
-    <label>カテゴリ:
-      <select id="timelineCategory">
-        <option value="">すべて</option>
-        <option value="rest">休み時間</option>
-        <option value="class">授業時間</option>
-      </select>
-    </label>
-    <span class="filter-info" id="timelineInfo"></span>
-  </div>
-  <div class="card">
-    <h3>期間別 記録数推移</h3>
-    <svg id="timelineChart" width="100%" height="200"></svg>
-  </div>
-  <div class="card">
-    <h3>関係性の変化（直近2期間の差分・ペア視点）</h3>
-    <div id="timelineDiff"></div>
-  </div>
-
+  <!-- 最重要: 関係性の変化が大きい児童（最上位に配置） -->
   <div class="card change-card">
-    <h3>🔄 交友関係の変化が大きい児童 TOP</h3>
+    <h3>🔄 交友関係の変化が大きい児童 TOP <span class="muted small">— 個別指導の手がかり</span></h3>
     <div class="filter-bar inner-filter">
-      <label>比較期間:
-        <select id="changePreset">
-          <option value="week">先週 vs 今週</option>
-          <option value="2week" selected>前2週 vs 直近2週</option>
-          <option value="month">先月 vs 今月</option>
-          <option value="30days">前30日 vs 直近30日</option>
-          <option value="custom">カスタム</option>
-        </select>
-      </label>
+      <span class="btn-grp-label">比較期間</span>
+      <div class="btn-grp" data-target="changePreset">
+        <button type="button" data-value="week">先週 vs 今週</button>
+        <button type="button" data-value="2week" class="active">前2週 vs 直近2週</button>
+        <button type="button" data-value="month">先月 vs 今月</button>
+        <button type="button" data-value="30days">前30日 vs 直近30日</button>
+        <button type="button" data-value="custom">カスタム</button>
+      </div>
+      <input type="hidden" id="changePreset" value="2week">
       <span id="changeCustomFields" class="hidden">
         <label>A: <input type="date" id="periodAStart"> 〜 <input type="date" id="periodAEnd"></label>
         <label>B: <input type="date" id="periodBStart"> 〜 <input type="date" id="periodBEnd"></label>
       </span>
-      <label>カテゴリ:
-        <select id="changeCategory">
-          <option value="">すべて</option>
-          <option value="rest">休み時間のみ</option>
-          <option value="class">授業時間のみ</option>
-        </select>
-      </label>
-      <label>表示数:
-        <select id="changeLimit">
-          <option value="5">TOP5</option>
-          <option value="10" selected>TOP10</option>
-          <option value="15">TOP15</option>
-          <option value="28">全員</option>
-        </select>
-      </label>
+      <span class="btn-grp-label">カテゴリ</span>
+      <div class="btn-grp" data-target="changeCategory">
+        <button type="button" data-value="" class="active">すべて</button>
+        <button type="button" data-value="rest">休み</button>
+        <button type="button" data-value="class">授業</button>
+      </div>
+      <input type="hidden" id="changeCategory" value="">
+      <span class="btn-grp-label">表示数</span>
+      <div class="btn-grp" data-target="changeLimit">
+        <button type="button" data-value="5">5</button>
+        <button type="button" data-value="10" class="active">10</button>
+        <button type="button" data-value="15">15</button>
+        <button type="button" data-value="28">全員</button>
+      </div>
+      <input type="hidden" id="changeLimit" value="10">
       <span class="filter-info" id="changeInfo"></span>
     </div>
     <div id="changeRanking"></div>
+  </div>
+
+  <!-- 中段2カラム: ペア視点差分 / 期間別推移 -->
+  <div class="timeline-2col">
+    <div class="card">
+      <h3>📊 ペア関係の変化（直近2期間の差分）</h3>
+      <div id="timelineDiff"></div>
+    </div>
+    <div class="card">
+      <h3>📈 期間別 記録数推移</h3>
+      <div class="filter-bar inner-filter">
+        <span class="btn-grp-label">粒度</span>
+        <div class="btn-grp" data-target="timelineGranularity">
+          <button type="button" data-value="month" class="active">月別</button>
+          <button type="button" data-value="week">週別</button>
+        </div>
+        <input type="hidden" id="timelineGranularity" value="month">
+        <span class="btn-grp-label">カテゴリ</span>
+        <div class="btn-grp" data-target="timelineCategory">
+          <button type="button" data-value="" class="active">すべて</button>
+          <button type="button" data-value="rest">休み</button>
+          <button type="button" data-value="class">授業</button>
+        </div>
+        <input type="hidden" id="timelineCategory" value="">
+        <span class="filter-info" id="timelineInfo"></span>
+      </div>
+      <svg id="timelineChart" width="100%" height="180"></svg>
+    </div>
   </div>
 </section>
 
 <!-- =================== 観察分布タブ =================== -->
 <section class="tab-panel" id="tab-heatmap">
   <div class="filter-bar">
-    <label>表示:
-      <select id="heatmapView">
-        <option value="density">観察密度（カレンダー）</option>
-        <option value="pair">ペア関係タイムライン</option>
-      </select>
-    </label>
-    <label class="pair-only hidden">児童A:
-      <select id="pairA"></select>
-    </label>
-    <label class="pair-only hidden">児童B:
-      <select id="pairB"></select>
-    </label>
+    <span class="btn-grp-label">表示</span>
+    <div class="btn-grp" data-target="heatmapView">
+      <button type="button" data-value="density" class="active">観察密度</button>
+      <button type="button" data-value="pair">ペア関係</button>
+    </div>
+    <input type="hidden" id="heatmapView" value="density">
+    <span class="pair-only hidden">
+      <span class="btn-grp-label">児童A</span>
+      <select id="pairA" style="max-width:120px;"></select>
+      <span class="btn-grp-label">児童B</span>
+      <select id="pairB" style="max-width:120px;"></select>
+    </span>
     <span class="filter-info" id="heatmapInfo"></span>
   </div>
   <div class="card" id="heatmapCard">
-    <h3 id="heatmapTitle">観察密度ヒートマップ</h3>
+    <h3 id="heatmapTitle">観察密度ヒートマップ <span class="muted small">— 観察バイアスの自己点検</span></h3>
     <div id="heatmapBody"></div>
   </div>
 </section>
@@ -759,29 +750,23 @@ if ('serviceWorker' in navigator) {
 <!-- =================== 席替えタブ =================== -->
 <section class="tab-panel" id="tab-seating">
   <div class="filter-bar">
-    <label>班数:
-      <input type="number" id="seatingGroupCount" value="7" min="2" max="14" style="width:60px">
-    </label>
-    <label>1班あたり:
-      <input type="number" id="seatingPerGroup" value="4" min="2" max="6" style="width:60px">
-    </label>
-    <label>方針:
-      <select id="seatingPolicy">
-        <option value="diverse">多様化（普段関わらない子と組ませる）</option>
-        <option value="similar">仲良し優先（普段関わる子で固める）</option>
-        <option value="mixed">バランス重視</option>
-      </select>
-    </label>
-    <button class="primary" id="generateSeatingBtn">🪑 班案を生成</button>
+    <button class="primary" id="syncSeatingFromAppBtn" title="席替えアプリ(GAS)から最新の座席履歴を取得">🔄 席替えアプリから同期</button>
+    <span class="muted small">席替えは席替えアプリで作成 → このボタンで履歴を取り込み</span>
+    <span class="filter-info" id="seatingSyncInfo" style="margin-left:auto;"></span>
+  </div>
+  <div class="seating-grid-2col">
+    <div class="card">
+      <h3>📅 過去の座席履歴 <span class="muted small" id="seatingHistoryCount"></span></h3>
+      <ul class="seating-history-list" id="seatingHistoryList"></ul>
+    </div>
+    <div class="card">
+      <h3>🪑 選択中の座席 <span class="muted small" id="seatingCurrentLabel"></span></h3>
+      <div id="seatingCurrentView"></div>
+    </div>
   </div>
   <div class="card">
-    <h3>提案された班分け</h3>
-    <p class="muted small">要配慮児童ペア・トラブル相手の同席は警告マーク付きで表示。「ロック」したい組合せは右上のピンで固定。</p>
-    <div id="seatingResult"></div>
-  </div>
-  <div class="card">
-    <h3>注意事項</h3>
-    <div id="seatingNotes"></div>
+    <h3>📊 座席×交友の相関分析</h3>
+    <div id="seatingCorrelation"></div>
   </div>
 </section>
 
@@ -946,7 +931,7 @@ if ('serviceWorker' in navigator) {
         <button class="ghost" id="rosterClearBtn" title="名簿を全削除（記録は残ります）">🗑 全クリア</button>
       </div>
       <div id="rosterImportArea" style="display:none;margin-top:8px;">
-        <p class="muted small">下のテキストエリアに「出席番号,名前,かな,性別」形式で貼付（性別は M/F、無くてもOK）</p>
+        <p class="muted small">下のテキストエリアに「出席番号,名前,かな,性別」形式で貼付</p>
         <textarea id="rosterCsvInput" rows="6" placeholder="1,佐藤太郎,さとうたろう,M&#10;2,鈴木花子,すずきはなこ,F&#10;..." style="width:100%;font-family:monospace;font-size:12px;"></textarea>
         <div class="btn-row" style="margin-top:6px;">
           <button class="primary" id="rosterCsvApplyBtn">取り込む</button>
@@ -1045,8 +1030,8 @@ if ('serviceWorker' in navigator) {
     <h2>👋 はじめての方へ — 30秒で覚える3つの操作</h2>
     <ol style="font-size:14px; line-height:1.8;">
       <li><b>シーン選択</b>（上部）: 「業間休み」「昼休み」など。1クリックで切替</li>
-      <li><b>主役の児童をクリック</b>: 名簿から観察した子をタップ</li>
-      <li><b>一緒にいた子をクリック</b>（複数可）→ <kbd>Enter</kbd>で保存</li>
+      <li><b>関わっていた児童をタップ</b>（順不同・複数可）: 名簿から該当する子を全員選ぶ</li>
+      <li>選択完了 → <kbd>Enter</kbd>で保存</li>
     </ol>
     <p style="font-size:13px; color:#666;">
       💡 数字キー(1〜28)で児童選択も可。<kbd>Shift</kbd>+<kbd>?</kbd>でショートカット一覧。<br>
@@ -1097,7 +1082,7 @@ if ('serviceWorker' in navigator) {
     </table>
     <h2 style="margin-top:18px;">運用のコツ</h2>
     <ul style="font-size:13px; line-height:1.7;">
-      <li><b>同じ集まりは1回だけ記録</b>。同じ場面を別の主役で再登録すると共起カウントが膨らむ</li>
+      <li><b>同じ集まりは1回だけ記録</b>。同じ場面を別視点で再登録すると共起カウントが膨らむ</li>
       <li>1児童ボタンの<b>左下緑●</b>＝今日記録済み、<b>赤い破線枠</b>＝5日以上未観察</li>
       <li>マーク<b>●</b>=要配慮児童、<b>■</b>=観察優先（4日間で名前出てない子）</li>
       <li>週1回は <b>設定タブ→JSONエクスポート</b>でバックアップ推奨</li>
@@ -1108,24 +1093,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506a"></script>
-<script src="students.js?v=20260506a"></script>
-<script src="eval-data.js?v=20260506a"></script>
-<script src="eval-data-extra.js?v=20260506a"></script>
-<script src="app.js?v=20260506a"></script>
-<script src="cloud-sync.js?v=20260506a"></script>
-<script src="analytics-plus.js?v=20260506a"></script>
-<script src="dashboard-overview.js?v=20260506a"></script>
-<script src="seating-planner.js?v=20260506a"></script>
-<script src="print-report.js?v=20260506a"></script>
-<script src="search-bar.js?v=20260506a"></script>
-<script src="centrality-extra.js?v=20260506a"></script>
-<script src="seating-correlation.js?v=20260506a"></script>
-<script src="templates.js?v=20260506a"></script>
-<script src="photo-library.js?v=20260506a"></script>
-<script src="voice-memo.js?v=20260506a"></script>
-<script src="ai-insights.js?v=20260506a"></script>
-<script src="extra-features.js?v=20260506a"></script>
-<script src="onboarding-wizard.js?v=20260506a"></script>
+<script src="config.js?v=20260506b"></script>
+<script src="students.js?v=20260506b"></script>
+<script src="eval-data.js?v=20260506b"></script>
+<script src="eval-data-extra.js?v=20260506b"></script>
+<script src="app.js?v=20260506b"></script>
+<script src="cloud-sync.js?v=20260506b"></script>
+<script src="analytics-plus.js?v=20260506b"></script>
+<script src="dashboard-overview.js?v=20260506b"></script>
+<script src="seating-planner.js?v=20260506b"></script>
+<script src="print-report.js?v=20260506b"></script>
+<script src="search-bar.js?v=20260506b"></script>
+<script src="centrality-extra.js?v=20260506b"></script>
+<script src="seating-correlation.js?v=20260506b"></script>
+<script src="templates.js?v=20260506b"></script>
+<script src="photo-library.js?v=20260506b"></script>
+<script src="voice-memo.js?v=20260506b"></script>
+<script src="ai-insights.js?v=20260506b"></script>
+<script src="extra-features.js?v=20260506b"></script>
+<script src="onboarding-wizard.js?v=20260506b"></script>
 </body>
 </html>

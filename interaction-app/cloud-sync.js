@@ -280,19 +280,82 @@ async function pullFromGas() {
     }
   }
 
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0) {
+  // ===== 座席履歴 =====
+  const pulledSeats = data.seatingSnapshots || data.seating || [];
+  let mergedSeats = 0;
+  if (Array.isArray(pulledSeats)) {
+    if (!Array.isArray(state.seatingSnapshots)) state.seatingSnapshots = [];
+    const existingSeatIds = new Set(state.seatingSnapshots.map(s => s.id));
+    for (const s of pulledSeats) {
+      if (String(s.deleted) === '1') continue;
+      if (existingSeatIds.has(s.id)) continue;
+      // groups は JSON 文字列の場合パース
+      if (typeof s.groups === 'string') {
+        try { s.groups = JSON.parse(s.groups); } catch (_) { s.groups = []; }
+      } else if (typeof s.groups_json === 'string') {
+        try { s.groups = JSON.parse(s.groups_json); } catch (_) { s.groups = []; }
+      }
+      if (!Array.isArray(s.groups)) continue;
+      state.seatingSnapshots.push({
+        id: s.id,
+        date: s.date || '',
+        label: s.label || '',
+        groups: s.groups,
+        deviceId: s.deviceId || ''
+      });
+      mergedSeats++;
+    }
+  }
+
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0 || mergedSeats > 0) {
     saveState();
     if (typeof refreshAll === 'function') refreshAll();
   }
   updateLastPullTime();
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0) {
+  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0 || mergedSeats > 0) {
     const parts = [];
     if (mergedRecs > 0) parts.push(`記録 ${mergedRecs}件`);
     if (mergedPraises > 0) parts.push(`ほめ ${mergedPraises}件`);
     if (mergedEvals > 0) parts.push(`評価 ${mergedEvals}件`);
     if (mergedAba > 0) parts.push(`ABA ${mergedAba}件`);
+    if (mergedSeats > 0) parts.push(`座席 ${mergedSeats}件`);
     showSyncStatus(`新規 ${parts.join(' / ')} を取得`);
   }
+  return { mergedSeats };
+}
+
+// 座席履歴のみ取得（席替えタブの「同期」ボタンから呼ぶ）
+async function pullSeatingFromGas() {
+  if (!checkSyncReady()) throw new Error('クラウド同期未設定');
+  // dataType=seating のみリクエスト（GAS側がseating endpoint対応済み前提）
+  const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&deviceId=${encodeURIComponent(_deviceId)}&dataType=seating&since=2000-01-01T00:00:00.000Z`;
+  const res = await fetch(url);
+  if (!res.ok) throw new Error('HTTP ' + res.status);
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'GAS error');
+  const pulledSeats = data.seatingSnapshots || data.seating || [];
+  if (!Array.isArray(state.seatingSnapshots)) state.seatingSnapshots = [];
+  const existingSeatIds = new Set(state.seatingSnapshots.map(s => s.id));
+  let count = 0;
+  let latestDate = '';
+  for (const s of pulledSeats) {
+    if (String(s.deleted) === '1') continue;
+    if (typeof s.groups === 'string') { try { s.groups = JSON.parse(s.groups); } catch (_) { s.groups = []; } }
+    else if (typeof s.groups_json === 'string') { try { s.groups = JSON.parse(s.groups_json); } catch (_) { s.groups = []; } }
+    if (!Array.isArray(s.groups)) continue;
+    if (s.date && s.date > latestDate) latestDate = s.date;
+    if (existingSeatIds.has(s.id)) continue;
+    state.seatingSnapshots.push({
+      id: s.id,
+      date: s.date || '',
+      label: s.label || '',
+      groups: s.groups,
+      deviceId: s.deviceId || ''
+    });
+    count++;
+  }
+  if (count > 0) saveState();
+  return { count, latestDate };
 }
 
 // ===== ほめたい push =====

@@ -858,7 +858,7 @@ function refreshStatusLine() {
   // 起点チップ
   const wrap = document.createElement('span');
   wrap.className = 'subject-name-wrap' + (isCenter ? ' is-center' : '');
-  wrap.title = '最初に選択した子（便宜上の起点。中心人物とは限りません）';
+  wrap.title = '最初に選択した子（便宜上の起点。順序に意味はありません）';
   wrap.appendChild(document.createTextNode(s ? s.name : `(ID:${state.ui.subjectId})`));
   // 起点にも中心指定ボタン
   const star = document.createElement('button');
@@ -906,7 +906,7 @@ function initRecordEvents() {
   document.querySelectorAll('.special-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       if (state.ui.subjectId === null) {
-        showToast('まず主役の児童を選んでください', 'error');
+        showToast('まず児童を1人以上選んでください', 'error');
         return;
       }
       const sp = btn.dataset.special;
@@ -1145,7 +1145,7 @@ function quickRepeat() {
   refreshAfterSelectionChange();
   refreshSpecialButtons();
   refreshActivityButtons();
-  showToast(`↻ ${state.ui.selectedMembers.length}人保持中。次の主役を選択`, 'success');
+  showToast(`↻ ${state.ui.selectedMembers.length}人保持中。次の児童を選択`, 'success');
 }
 
 // ========== Tabs ==========
@@ -1160,7 +1160,11 @@ function switchTab(name) {
   // タブごとの再描画
   if (name === 'summary') refreshSummary();
   else if (name === 'compare') refreshCompare();
-  else if (name === 'socio') refreshSocio();
+  else if (name === 'socio') {
+    refreshSocio();
+    // 中心性タブを統合したので、関係マップタブを開いた時に中心性も更新
+    if (typeof refreshCentrality === 'function') refreshCentrality();
+  }
   else if (name === 'history') refreshHistory();
   else if (name === 'settings') refreshSettings();
   else if (name === 'praise-list') refreshPraiseList();
@@ -1324,13 +1328,18 @@ function initSummaryFilters() {
       grp.appendChild(opt);
     }
   });
-  ['summaryScene', 'summaryCategory', 'summaryPeriod', 'summaryMode', 'summaryA', 'summaryB']
-    .forEach(id => document.getElementById(id)?.addEventListener('change', refreshSummary));
-  document.getElementById('summaryMode')?.addEventListener('change', () => {
+  // ボタングループ
+  initBtnGrp('summaryMode', () => {
     const mode = document.getElementById('summaryMode').value;
     document.getElementById('summarySingleFilters').classList.toggle('hidden', mode !== 'single');
     document.getElementById('summaryCompareFilters').classList.toggle('hidden', mode !== 'compare');
+    refreshSummary();
   });
+  initBtnGrp('summaryCategory', refreshSummary);
+  initBtnGrp('summaryPeriod', refreshSummary);
+  // selectは残したものに対して
+  ['summaryScene', 'summaryA', 'summaryB']
+    .forEach(id => document.getElementById(id)?.addEventListener('change', refreshSummary));
   document.getElementById('printSummaryBtn')?.addEventListener('click', () => window.print());
 }
 
@@ -1876,7 +1885,7 @@ function refreshHistory() {
         <th><input type="checkbox" id="histAll"></th>
         <th>日時</th>
         <th>シーン</th>
-        <th>主役</th>
+        <th>記録した子</th>
         <th>一緒にいた子</th>
         <th>活動</th>
       </tr>
@@ -4425,9 +4434,9 @@ function renderAbaTargetGrid() {
     btn.appendChild(num);
     btn.appendChild(document.createTextNode(s.name));
     btn.addEventListener('click', () => {
-      // 主役児童と同じは選べない
+      // 対象児童と同じは選べない
       if (state.ui.abaTargetId && state.ui.abaTargetId === s.id) {
-        showToast('主役と同じ児童は相手にできません', 'error');
+        showToast('対象児童と同じ児童は相手にできません', 'error');
         return;
       }
       // トグル選択（単数）
@@ -4941,7 +4950,7 @@ function openEditModal(recId) {
   body.appendChild(meta);
   // 主役選択
   const subjLbl = document.createElement('label');
-  subjLbl.textContent = '主役: ';
+  subjLbl.textContent = '記録: ';
   const subjSel = document.createElement('select');
   subjSel.id = 'editSubject';
   for (const s of state.students) {
@@ -5093,9 +5102,8 @@ function computePairs(records) {
 }
 
 function initCentralityFilters() {
-  ['centralityCategory', 'centralityPeriod'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', refreshCentrality);
-  });
+  initBtnGrp('centralityCategory', refreshCentrality);
+  initBtnGrp('centralityPeriod', refreshCentrality);
 }
 
 function refreshCentrality() {
@@ -5389,17 +5397,40 @@ function louvainCommunities(network) {
 
 // ========== Timeline ==========
 function initTimelineFilters() {
-  ['timelineGranularity', 'timelineCategory'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', refreshTimeline);
-  });
-  // 変化TOP用フィルタ
-  ['changePreset', 'changeCategory', 'changeLimit',
-   'periodAStart', 'periodAEnd', 'periodBStart', 'periodBEnd'].forEach(id => {
-    document.getElementById(id)?.addEventListener('change', refreshChangeRanking);
-  });
-  document.getElementById('changePreset')?.addEventListener('change', () => {
+  // ボタングループをhidden inputと連動初期化
+  initBtnGrp('timelineGranularity', refreshTimeline);
+  initBtnGrp('timelineCategory', refreshTimeline);
+  initBtnGrp('changePreset', () => {
     const v = document.getElementById('changePreset').value;
     document.getElementById('changeCustomFields').classList.toggle('hidden', v !== 'custom');
+    refreshChangeRanking();
+  });
+  initBtnGrp('changeCategory', refreshChangeRanking);
+  initBtnGrp('changeLimit', refreshChangeRanking);
+  // カスタム期間用 date input
+  ['periodAStart', 'periodAEnd', 'periodBStart', 'periodBEnd'].forEach(id => {
+    document.getElementById(id)?.addEventListener('change', refreshChangeRanking);
+  });
+}
+
+// 汎用: btn-grp と hidden input を連動させる初期化関数
+function initBtnGrp(targetId, onChange) {
+  const inp = document.getElementById(targetId);
+  if (!inp) return;
+  const grp = document.querySelector(`.btn-grp[data-target="${targetId}"]`);
+  if (!grp) return;
+  // 初期値 = activeボタン or hidden inputの値
+  const activeBtn = grp.querySelector('button.active');
+  if (activeBtn && !inp.value) inp.value = activeBtn.dataset.value;
+  else if (inp.value) {
+    grp.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.value === inp.value));
+  }
+  grp.querySelectorAll('button').forEach(b => {
+    b.addEventListener('click', () => {
+      grp.querySelectorAll('button').forEach(x => x.classList.toggle('active', x === b));
+      inp.value = b.dataset.value;
+      if (typeof onChange === 'function') onChange();
+    });
   });
 }
 
@@ -5775,14 +5806,16 @@ function exportForAIFukutannin() {
 const _origRefreshAll = refreshAll;
 refreshAll = function() {
   _origRefreshAll();
-  if (state.ui.currentTab === 'centrality') refreshCentrality();
+  // 中心性は関係マップ(socio)に統合済み。socio表示時は中心性も計算
+  if (state.ui.currentTab === 'socio') refreshCentrality();
   else if (state.ui.currentTab === 'timeline') refreshTimeline();
 };
 
 const _origSwitchTab = switchTab;
 switchTab = function(name) {
   _origSwitchTab(name);
-  if (name === 'centrality') refreshCentrality();
+  // 中心性タブは関係マップ(socio)に統合済み。socio切替時に中心性も refresh
+  if (name === 'socio') refreshCentrality();
   else if (name === 'timeline') { refreshTimeline(); refreshChangeRanking(); }
 };
 
@@ -5978,7 +6011,7 @@ function initHeatmapTab() {
       sel.appendChild(opt);
     }
   });
-  document.getElementById('heatmapView')?.addEventListener('change', refreshHeatmap);
+  initBtnGrp('heatmapView', refreshHeatmap);
   document.getElementById('pairA')?.addEventListener('change', refreshHeatmap);
   document.getElementById('pairB')?.addEventListener('change', refreshHeatmap);
 }
@@ -6090,9 +6123,109 @@ function drawPairTimeline() {
   document.getElementById('heatmapInfo').textContent = `合計 ${total}回 / 月別`;
 }
 
-// ========== 席替え提案 ==========
+// ========== 席替え（同期＋表示専用） ==========
+// 自前の班案作成は廃止。席替えアプリ(gas-sekigae-v2)から座席履歴を取り込んで表示するのみ
 function initSeating() {
-  document.getElementById('generateSeatingBtn')?.addEventListener('click', generateSeating);
+  document.getElementById('syncSeatingFromAppBtn')?.addEventListener('click', syncSeatingFromGas);
+  refreshSeatingTab();
+}
+
+async function syncSeatingFromGas() {
+  const info = document.getElementById('seatingSyncInfo');
+  if (info) info.textContent = '同期中…';
+  if (typeof pullSeatingFromGas === 'function') {
+    try {
+      const result = await pullSeatingFromGas();
+      if (info) info.textContent = result && result.count != null
+        ? `✓ ${result.count}件取込（最新: ${result.latestDate || '—'}）`
+        : '✓ 同期完了';
+      refreshSeatingTab();
+    } catch (e) {
+      if (info) info.textContent = '✗ 同期失敗: ' + (e.message || e);
+    }
+  } else {
+    if (info) info.textContent = '✗ クラウド同期未設定';
+  }
+}
+
+function refreshSeatingTab() {
+  renderSeatingHistoryList();
+  // デフォルトで最新を選択表示
+  const snaps = (state.seatingSnapshots || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (snaps.length) {
+    state.ui.selectedSeatingId = state.ui.selectedSeatingId || snaps[0].id;
+    renderSeatingCurrentView(state.ui.selectedSeatingId);
+  } else {
+    const v = document.getElementById('seatingCurrentView');
+    if (v) v.innerHTML = '<p class="muted">座席履歴がありません。「席替えアプリから同期」ボタンを押してください。</p>';
+  }
+  // 既存の相関分析関数を呼び出して結果を移動
+  if (typeof refreshSeatingCorrelation === 'function') {
+    const recs = state.records || [];
+    const restRecs = recs.filter(r => (r.scene || '').includes('break') || (r.scene || '').includes('rest') || r.scene === 'lunch');
+    const classRecs = recs.filter(r => r.scene === 'lesson');
+    try { refreshSeatingCorrelation(restRecs, classRecs); } catch (_) {}
+  }
+}
+
+function renderSeatingHistoryList() {
+  const ul = document.getElementById('seatingHistoryList');
+  const cnt = document.getElementById('seatingHistoryCount');
+  if (!ul) return;
+  const snaps = (state.seatingSnapshots || []).slice().sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+  if (cnt) cnt.textContent = `(${snaps.length}件)`;
+  if (!snaps.length) {
+    ul.innerHTML = '<li class="muted">履歴なし</li>';
+    return;
+  }
+  ul.innerHTML = snaps.map(s => {
+    const groups = s.groups || [];
+    const memberCount = groups.reduce((a, g) => a + (Array.isArray(g) ? g.length : 0), 0);
+    const active = state.ui.selectedSeatingId === s.id ? ' active' : '';
+    return `<li class="${active.trim()}" data-sid="${s.id}">
+      <div class="seat-date">${escapeHtml(s.date || '日付なし')}</div>
+      <div class="seat-meta">${escapeHtml(s.label || '')} ・ ${groups.length}班 / ${memberCount}名</div>
+    </li>`;
+  }).join('');
+  ul.querySelectorAll('li[data-sid]').forEach(li => {
+    li.addEventListener('click', () => {
+      state.ui.selectedSeatingId = li.dataset.sid;
+      renderSeatingHistoryList();
+      renderSeatingCurrentView(li.dataset.sid);
+    });
+  });
+}
+
+function renderSeatingCurrentView(snapId) {
+  const v = document.getElementById('seatingCurrentView');
+  const lblEl = document.getElementById('seatingCurrentLabel');
+  if (!v) return;
+  const snap = (state.seatingSnapshots || []).find(s => s.id === snapId);
+  if (!snap) {
+    v.innerHTML = '<p class="muted">座席が選ばれていません</p>';
+    if (lblEl) lblEl.textContent = '';
+    return;
+  }
+  if (lblEl) lblEl.textContent = `${snap.date || ''} ${snap.label ? '(' + snap.label + ')' : ''}`;
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  // groups は配列の配列。各班 = 児童IDの配列
+  const groups = snap.groups || [];
+  let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+  groups.forEach((g, gi) => {
+    if (!Array.isArray(g) || g.length === 0) return;
+    html += `<div><b style="font-size:12px; color:#555;">班${gi + 1}</b><div class="seating-current-grid" style="grid-template-columns:repeat(${Math.min(g.length, 6)}, 1fr); margin-top:3px;">`;
+    g.forEach((id, i) => {
+      const s = sMap.get(id);
+      if (s) {
+        html += `<div class="seating-current-cell"><span class="seat-num">#${i + 1}</span><b>${escapeHtml(s.name)}</b></div>`;
+      } else {
+        html += `<div class="seating-current-cell empty">空席</div>`;
+      }
+    });
+    html += '</div></div>';
+  });
+  html += '</div>';
+  v.innerHTML = html;
 }
 
 function generateSeating() {
@@ -6406,6 +6539,10 @@ function refreshAttributesEditor() {
   const t = document.getElementById('attrSettings');
   if (!t) return;
   t.innerHTML = '';
+  // カラム幅固定（性別/班がはみ出さないように）
+  const cg = document.createElement('colgroup');
+  cg.innerHTML = '<col class="col-name"><col class="col-gender"><col class="col-group">';
+  t.appendChild(cg);
   const headerRow = document.createElement('tr');
   headerRow.innerHTML = '<th>児童</th><th>性別</th><th>班</th>';
   t.appendChild(headerRow);
@@ -6415,8 +6552,8 @@ function refreshAttributesEditor() {
     tr.innerHTML = `<td style="font-size:12px;">${escapeHtml(s.name)}</td>`;
     const gtd = document.createElement('td');
     const gsel = document.createElement('select');
-    gsel.style.cssText = 'padding:2px;font-size:12px;';
-    [['?','?'],['M','男'],['F','女']].forEach(([v, lbl]) => {
+    gsel.style.cssText = 'width:60px;padding:2px;font-size:12px;box-sizing:border-box;';
+    [['?','—'],['M','男'],['F','女']].forEach(([v, lbl]) => {
       const opt = document.createElement('option');
       opt.value = v; opt.textContent = lbl;
       if ((attr.gender || '?') === v) opt.selected = true;
@@ -6511,7 +6648,7 @@ const _origSwitchTab2 = switchTab;
 switchTab = function(name) {
   _origSwitchTab2(name);
   if (name === 'heatmap') refreshHeatmap();
-  else if (name === 'seating') { /* no auto refresh, click button */ }
+  else if (name === 'seating') refreshSeatingTab();
 };
 
 // init拡張
