@@ -258,33 +258,32 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <div class="record-main">
+    <div class="record-main eval-main">
       <div class="grid-area">
-        <div class="grid-header">
-          <div class="status-line">
-            <span class="status-label" id="evalStatusLabel">評価値を選んで児童をタップ</span>
+        <!-- 評価値ボタン + 評価材料を横並び（スクロール不要構成） -->
+        <div class="eval-control-bar">
+          <div class="eval-control-grade">
+            <span class="ket-control-label">評価値</span>
+            <div class="eval-grade-buttons" id="evalGradeButtons"></div>
           </div>
-          <div class="eval-grade-buttons" id="evalGradeButtons"></div>
+          <div class="eval-control-evidences">
+            <span class="ket-control-label">📋 評価材料 <span class="muted small">(任意・複数可)</span></span>
+            <div class="eval-evidence-list" id="evalEvidenceList"></div>
+          </div>
         </div>
+        <input type="hidden" id="evalStatusLabel" value="">
         <div class="grid-legend" title="ボタン上のマークの意味（評価モード）">
           <span><span class="lg-mark dn">●</span>この単元×観点で評価済</span>
           <span><span class="lg-mark wt">■</span>未評価</span>
+          <span class="muted small">児童をタップで一括記録 / 同じ児童を再タップで取消</span>
         </div>
         <div class="student-grid" id="evalStudentGrid"></div>
-        <div class="action-row">
-          <span class="action-hint">尺度・観点・単元を選び、評価値ボタンを選択 → 児童をタップで一括記録 / 同じ児童を再タップで取消</span>
-        </div>
       </div>
 
-      <aside class="side-panel">
+      <aside class="side-panel eval-side-panel">
         <div class="card today-stats">
           <h3>今日の評価</h3>
           <div><span class="big-number" id="todayEvalCount">0</span> 件</div>
-        </div>
-        <div class="card" id="evalEvidenceCard">
-          <h3>📋 評価材料 <span class="muted small">(任意・複数可)</span></h3>
-          <div class="eval-evidence-list" id="evalEvidenceList"></div>
-          <div class="muted small" style="margin-top:4px;">選択した材料は次に保存する評価に付与されます</div>
         </div>
         <div class="card">
           <h3>この単元×観点の進捗</h3>
@@ -298,73 +297,86 @@ if ('serviceWorker' in navigator) {
     </div>
   </div><!-- /evaluationRecordView -->
 
-    <!-- けテぶれモード（観点別評価ベース） -->
+    <!-- けテぶれモード（観点別評価ベース・1カラム） -->
   <div id="ketebureRecordView" class="hidden">
-    <div class="record-toolbar">
+    <!-- 1段目: 日付 + 種別 + 全員◎ -->
+    <div class="record-toolbar ket-toolbar-row">
       <div class="toolbar-group">
-        <label>記録日</label>
-        <input type="date" id="ketebureDate" title="記録する日">
+        <label>日</label>
+        <input type="date" id="ketebureDate" title="記録する日" style="font-size:12px;">
         <button class="ghost" id="ketebureDateTodayBtn" title="今日に戻す" style="padding:3px 8px;font-size:11px;">今日</button>
       </div>
       <div class="toolbar-group">
         <label>種別</label>
         <div class="mode-switch">
-          <button class="mode-btn active" data-ket-type="shukudai" type="button">📕 宿題けテぶれ<small>計画/テスト/分析/練習</small></button>
-          <button class="mode-btn" data-ket-type="seikatsu" type="button">🌱 生活けテぶれ<small>心/計画/分析/次</small></button>
+          <button class="mode-btn active" data-ket-type="shukudai" type="button">📕 宿題</button>
+          <button class="mode-btn" data-ket-type="seikatsu" type="button">🌱 生活</button>
         </div>
       </div>
       <div class="toolbar-group">
-        <label>評価</label>
-        <div class="ket-rating-buttons" id="ketRatingButtons"></div>
-      </div>
-      <div class="toolbar-group">
-        <label>観点 <span class="muted small">(任意・複数可)</span></label>
-        <div class="ket-aspect-buttons" id="ketAspectButtons"></div>
+        <label>今日</label>
+        <span class="ket-today-mini">
+          <b id="ketTodayCount">0</b>件/<b id="ketTodayCovered">0</b>人
+          <span class="muted small">◎<b id="ketTodayMaru">0</b>/○<b id="ketTodayMaruOne">0</b>/△<b id="ketTodayDelta">0</b></span>
+        </span>
       </div>
       <div class="toolbar-group right">
-        <button class="primary" id="ketSaveBtn" disabled style="padding:5px 14px; font-size:13px; font-weight:700;">💾 記録 <span id="ketPendingCount">(0)</span></button>
-        <button class="ghost" id="ketClearSelectionBtn" title="選択をクリア" style="padding:4px 8px; font-size:11px;">↺ クリア</button>
-        <button class="ghost" id="ketAllMaruBtn" title="今日この種別で全員に◎を一括記録（観点なし）" style="padding:4px 10px; font-size:11.5px;">⭐ 全員◎</button>
+        <button class="ghost" id="ketAllMaruBtn" title="全員に◎を一括記録（観点なし）" style="padding:4px 10px; font-size:11.5px;">⭐ 全員◎</button>
       </div>
     </div>
 
-    <div class="record-main ket-main">
-      <div class="grid-area">
-        <div class="grid-header">
-          <div class="status-line">
-            <span class="status-label" id="ketStatusLabel">児童をタップで選択 → 評価・観点を選び「💾 記録」で一括保存（順序自由）</span>
-          </div>
-        </div>
-        <div id="ketUnrecordedBanner" class="ket-unrecorded-banner"></div>
-        <div id="ketStuckBanner" class="ket-stuck-banner"></div>
-        <div class="student-grid ket-student-grid" id="ketStudentGrid"></div>
-        <div class="note-row">
-          <input type="text" id="ketebureNote" placeholder="メモ (任意・選択児童全員に同じメモが付きます)" maxlength="200">
-        </div>
-        <div class="grid-legend" style="margin-top:4px;">
-          <span><span class="lg-mark dn">●</span>本日記録済</span>
-          <span><span class="lg-mark wt">🔥</span>連続◎</span>
-          <span><span class="lg-mark wt">📌</span>未記録</span>
-          <span><b style="color:#4a90e2;">枠</b>=選択中</span>
-        </div>
+    <!-- 2段目: 評価ボタン (大) + 観点ボタン + 記録ボタン -->
+    <div class="ket-control-bar">
+      <div class="ket-control-group">
+        <span class="ket-control-label">評価</span>
+        <div class="ket-rating-buttons" id="ketRatingButtons"></div>
       </div>
+      <div class="ket-control-group">
+        <span class="ket-control-label">観点 <span class="muted small">(任意/複数可)</span></span>
+        <div class="ket-aspect-buttons" id="ketAspectButtons"></div>
+      </div>
+      <div class="ket-control-group ket-control-actions">
+        <button class="primary" id="ketSaveBtn" disabled>💾 記録 <span id="ketPendingCount">(0)</span></button>
+        <button class="ghost" id="ketClearSelectionBtn" title="選択をクリア" style="padding:5px 10px;">↺ クリア</button>
+      </div>
+    </div>
 
-      <aside class="side-panel ket-side-panel">
-        <div class="card today-stats">
-          <h3>今日 <span class="muted small" id="ketTypeBadge"></span></h3>
-          <div><span class="big-number" id="ketTodayCount">0</span>件 / <b id="ketTodayCovered">0</b>人</div>
-          <div class="muted small">◎<b id="ketTodayMaru">0</b> ○<b id="ketTodayMaruOne">0</b> △<b id="ketTodayDelta">0</b></div>
-        </div>
-        <div class="card">
-          <h3>連続◎ TOP5</h3>
+    <!-- ステータス行 -->
+    <div class="ket-status-line">
+      <span id="ketStatusLabel">児童をタップで選択（複数可・もう一度タップで解除）→ 評価・観点を選び「💾 記録」で一括保存</span>
+    </div>
+
+    <!-- バナー（未記録 / 観点別躓き） -->
+    <div id="ketUnrecordedBanner" class="ket-unrecorded-banner"></div>
+    <div id="ketStuckBanner" class="ket-stuck-banner"></div>
+
+    <!-- 児童グリッド (1カラム配置で画面幅いっぱい使う) -->
+    <div class="student-grid ket-student-grid" id="ketStudentGrid"></div>
+
+    <!-- メモ + 凡例 -->
+    <div class="ket-bottom-row">
+      <input type="text" id="ketebureNote" class="ket-note-input" placeholder="メモ（任意・選択児童全員に同じメモが付きます）" maxlength="200">
+      <span class="ket-legend">
+        <b style="color:#2e7d32;">●</b>記録済
+        <b style="color:#f39c12;">🔥N</b>連続◎
+        <b style="color:#f7c948;">枠</b>選択中
+      </span>
+    </div>
+
+    <!-- 折りたたみ: 連続◎TOP + 今日の記録 -->
+    <details class="ket-side-collapsible">
+      <summary>📋 連続◎TOP / 今日の記録一覧（クリックで開く・編集削除可）</summary>
+      <div class="ket-collapse-grid">
+        <div>
+          <h4 style="margin:6px 0 3px; font-size:12px;">🔥 連続◎ TOP5</h4>
           <ol class="watch-list" id="ketStreakList" style="font-size:11.5px;"></ol>
         </div>
-        <div class="card">
-          <h3>今日の記録</h3>
+        <div>
+          <h4 style="margin:6px 0 3px; font-size:12px;">📜 今日の記録</h4>
           <ul class="recent-list" id="ketTodayList" style="font-size:11.5px; max-height:180px; overflow-y:auto;"></ul>
         </div>
-      </aside>
-    </div>
+      </div>
+    </details>
   </div><!-- /ketebureRecordView -->
 
   <!-- ABAアセスメントモード（フラット一覧式：すべて常時表示） -->
@@ -1104,24 +1116,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506e"></script>
-<script src="students.js?v=20260506e"></script>
-<script src="eval-data.js?v=20260506e"></script>
-<script src="eval-data-extra.js?v=20260506e"></script>
-<script src="app.js?v=20260506e"></script>
-<script src="cloud-sync.js?v=20260506e"></script>
-<script src="analytics-plus.js?v=20260506e"></script>
-<script src="dashboard-overview.js?v=20260506e"></script>
-<script src="seating-planner.js?v=20260506e"></script>
-<script src="print-report.js?v=20260506e"></script>
-<script src="search-bar.js?v=20260506e"></script>
-<script src="centrality-extra.js?v=20260506e"></script>
-<script src="seating-correlation.js?v=20260506e"></script>
-<script src="templates.js?v=20260506e"></script>
-<script src="photo-library.js?v=20260506e"></script>
-<script src="voice-memo.js?v=20260506e"></script>
-<script src="ai-insights.js?v=20260506e"></script>
-<script src="extra-features.js?v=20260506e"></script>
-<script src="onboarding-wizard.js?v=20260506e"></script>
+<script src="config.js?v=20260506f"></script>
+<script src="students.js?v=20260506f"></script>
+<script src="eval-data.js?v=20260506f"></script>
+<script src="eval-data-extra.js?v=20260506f"></script>
+<script src="app.js?v=20260506f"></script>
+<script src="cloud-sync.js?v=20260506f"></script>
+<script src="analytics-plus.js?v=20260506f"></script>
+<script src="dashboard-overview.js?v=20260506f"></script>
+<script src="seating-planner.js?v=20260506f"></script>
+<script src="print-report.js?v=20260506f"></script>
+<script src="search-bar.js?v=20260506f"></script>
+<script src="centrality-extra.js?v=20260506f"></script>
+<script src="seating-correlation.js?v=20260506f"></script>
+<script src="templates.js?v=20260506f"></script>
+<script src="photo-library.js?v=20260506f"></script>
+<script src="voice-memo.js?v=20260506f"></script>
+<script src="ai-insights.js?v=20260506f"></script>
+<script src="extra-features.js?v=20260506f"></script>
+<script src="onboarding-wizard.js?v=20260506f"></script>
 </body>
 </html>

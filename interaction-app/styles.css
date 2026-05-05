@@ -1614,38 +1614,132 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   line-height: 1;
 }
 
-/* けテぶれ専用UI（コンパクト化＋選択ハイライト） */
-.record-main.ket-main {
-  grid-template-columns: 1fr 220px;
-  gap: 8px;
+/* ========== けテぶれ専用UI 1カラム化（評価ボタン目立たせ・スクロール不要） ========== */
+.ket-toolbar-row {
+  padding: 4px 10px;
+  gap: 12px;
+  margin-bottom: 4px;
 }
-.ket-side-panel {
+.ket-today-mini {
   font-size: 12px;
+  color: #555;
 }
-.ket-side-panel .card {
-  padding: 6px 10px;
+.ket-today-mini b { color: var(--primary); font-weight: 700; }
+
+/* 評価・観点・記録ボタンを横一列のコントロールバーに */
+.ket-control-bar {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  padding: 6px 12px;
+  background: linear-gradient(180deg, #fffbe6 0%, #fff8d3 100%);
+  border: 1px solid #f7c948;
+  border-radius: 8px;
+  margin: 4px 0 6px;
+  align-items: center;
+}
+.ket-control-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ket-control-label {
+  font-size: 11.5px;
+  font-weight: 700;
+  color: #555;
+  white-space: nowrap;
+}
+.ket-control-actions {
+  justify-content: flex-end;
+}
+#ketSaveBtn {
+  padding: 6px 18px;
+  font-size: 14px;
+  font-weight: 700;
+}
+#ketSaveBtn:not(:disabled) {
+  background: #27ae60;
+  border-color: #1e8449;
+  animation: ketPulse 1.5s ease-in-out infinite;
+}
+
+.ket-status-line {
+  font-size: 11.5px;
+  color: #777;
+  padding: 2px 4px;
+  margin-bottom: 4px;
+}
+
+/* 児童グリッド: 画面幅にフィットさせて横スクロール解消 */
+.student-grid.ket-student-grid {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 3px;
+  width: 100%;
   margin-bottom: 6px;
 }
-.ket-side-panel .card h3 {
-  font-size: 12px;
-  margin: 0 0 4px;
-}
-.ket-side-panel .today-stats .big-number {
-  font-size: 22px;
-}
-.student-grid.ket-student-grid {
-  grid-template-columns: repeat(7, 1fr);
-  gap: 3px;
-}
 .student-grid.ket-student-grid .student-btn {
-  padding: 5px 4px;
-  font-size: 11.5px;
-  min-height: 36px;
+  padding: 4px 2px;
+  font-size: 11px;
+  min-height: 34px;
+  min-width: 0;
   position: relative;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 .student-grid.ket-student-grid .student-btn .num {
-  font-size: 9px;
+  font-size: 8.5px;
   color: #aaa;
+  top: 0px;
+  left: 2px;
+}
+
+/* メモ + 凡例 */
+.ket-bottom-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+  align-items: center;
+  margin: 4px 0;
+}
+.ket-note-input {
+  width: 100%;
+  padding: 5px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  box-sizing: border-box;
+}
+.ket-legend {
+  font-size: 10.5px;
+  color: #777;
+  white-space: nowrap;
+}
+.ket-legend b { font-weight: 700; }
+
+/* 折りたたみ */
+.ket-side-collapsible {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.ket-side-collapsible summary {
+  cursor: pointer;
+  padding: 4px 8px;
+  background: #f7f7fa;
+  border-radius: 4px;
+  font-weight: 600;
+  font-size: 11.5px;
+  color: #555;
+  user-select: none;
+}
+.ket-side-collapsible summary:hover { background: #eef0f5; }
+.ket-collapse-grid {
+  display: grid;
+  grid-template-columns: 1fr 2fr;
+  gap: 12px;
+  padding: 6px 8px;
 }
 /* 選択中ハイライト（保留リスト入り） */
 .student-grid.ket-student-grid .student-btn.ket-selected {
@@ -1682,7 +1776,55 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   50% { box-shadow: 0 0 0 4px rgba(39,174,96,0); }
 }
 
-/* ========== 評価材料セレクタ ========== */
+/* ========== 評価モード レイアウト（評価材料をメインに移動） ========== */
+.record-main.eval-main {
+  grid-template-columns: 1fr 220px;  /* サイドパネル細く */
+  gap: 8px;
+}
+.eval-control-bar {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 16px;
+  padding: 6px 12px;
+  background: linear-gradient(180deg, #f0f8ff 0%, #e3f0ff 100%);
+  border: 1px solid #b3d4f5;
+  border-radius: 8px;
+  margin: 4px 0 6px;
+  align-items: start;
+}
+.eval-control-grade {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 220px;
+}
+.eval-control-grade .eval-grade-buttons {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+.eval-control-evidences {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.eval-control-evidences .eval-evidence-list {
+  margin-top: 0;
+}
+/* 評価材料：横並びコンパクト化 */
+.eval-control-evidences .eval-evidence-row {
+  grid-template-columns: 80px 1fr;
+  gap: 4px;
+}
+.eval-control-evidences .eval-evidence-detail {
+  font-size: 11.5px;
+  padding: 3px 6px;
+}
+.eval-side-panel .card { padding: 6px 10px; margin-bottom: 6px; }
+.eval-side-panel .card h3 { font-size: 12px; margin: 0 0 4px; }
+
+/* ========== 評価材料セレクタ（汎用） ========== */
 .eval-evidence-list {
   display: flex;
   flex-direction: column;
@@ -2629,36 +2771,55 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== ほめモードUI（6カラム + 拡大タグ + サイドパネル360px） ========== */
+/* ========== ほめモードUI（児童7カラムに縮小・タグ枠内収納・記述拡大） ========== */
 #praiseRecordView .record-main {
   display: grid;
-  grid-template-columns: 1fr 360px;
+  grid-template-columns: 1fr 400px;  /* サイドパネル拡大 */
   gap: 10px;
 }
 #praiseRecordView .student-grid {
-  grid-template-columns: repeat(6, 1fr);
-  gap: 5px;
+  grid-template-columns: repeat(7, minmax(0, 1fr));  /* 6→7に縮小 */
+  gap: 4px;
 }
 #praiseRecordView .student-btn {
-  padding: 8px 4px;
-  font-size: 13px;
-  min-height: 48px;
+  padding: 6px 3px;
+  font-size: 12px;
+  min-height: 42px;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+/* タグエリア: グリッドで枠内に確実に収める（min-width:0 + word-break） */
 #praiseRecordView .praise-quick-tags {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(3, minmax(0, 1fr));  /* 4→3列で1ボタン幅広く */
   gap: 4px;
   margin-bottom: 8px;
+  width: 100%;
 }
 #praiseRecordView .praise-tag-btn {
-  padding: 7px 8px;
-  font-size: 12px;
+  padding: 7px 4px;
+  font-size: 11.5px;
   white-space: nowrap;
   text-align: center;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
+/* 自由記述textareaを大きく */
 #praiseRecordView #praiseInput {
-  min-height: 90px;
+  min-height: 130px;
   font-size: 14px;
+  width: 100%;
+  box-sizing: border-box;
+}
+/* praise sidepanelカード本体 */
+#praiseRecordView .side-panel .card {
+  padding: 8px 10px;
+  margin-bottom: 8px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 /* ========== 交友関係UI 1カラム化（サイドパネル廃止） ========== */
