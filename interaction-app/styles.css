@@ -91,14 +91,23 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 }
 .health-badge.warn { background: #fff3c4; color: #8a6800; }
 .health-badge.danger { background: #fde2dd; color: #b53d2e; }
-.tabs { display: flex; gap: 2px; align-items: center; }
+.tabs {
+  display: flex;
+  gap: 1px;
+  align-items: center;
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  white-space: nowrap;
+}
 .tab-btn {
   background: transparent;
   border: none;
-  padding: 6px 12px;
-  font-size: 13px;
+  padding: 5px 8px;
+  font-size: 11.5px;
   border-radius: var(--radius) var(--radius) 0 0;
   color: var(--muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tab-btn:hover { background: #eef3f9; color: var(--text); }
 .tab-btn.active {

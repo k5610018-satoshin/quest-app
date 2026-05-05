@@ -2555,8 +2555,55 @@ function initEvaluationEvents() {
   if (lp) lp.addEventListener('change', refreshEvalList);
   const matrixBtn = document.getElementById('evalMatrixBtn');
   if (matrixBtn) matrixBtn.addEventListener('click', toggleEvalMatrix);
+  const copyBtn = document.getElementById('evalCopyMatrixBtn');
+  if (copyBtn) copyBtn.addEventListener('click', copyEvalMatrixToClipboard);
   const exportBtn = document.getElementById('exportEvalCsvBtn');
   if (exportBtn) exportBtn.addEventListener('click', exportEvalCsv);
+}
+
+// 表をTSV形式でクリップボードへ
+function copyEvalMatrixToClipboard() {
+  const tableId = document.getElementById('evalMatrixContent').classList.contains('hidden')
+    ? 'evalList' : 'evalMatrixTable';
+  const table = document.getElementById(tableId === 'evalList' ? 'evalList' : 'evalMatrixTable');
+  if (!table || tableId === 'evalList') {
+    showToast('まず「📋 教科別一覧」ボタンで教科別表示にしてください', 'error');
+    return;
+  }
+  // table → TSV
+  const rows = [];
+  table.querySelectorAll('tr').forEach(tr => {
+    const cells = [];
+    tr.querySelectorAll('th,td').forEach(td => {
+      cells.push((td.textContent || '').replace(/[\t\r\n]+/g, ' ').trim());
+    });
+    rows.push(cells.join('\t'));
+  });
+  const tsv = rows.join('\n');
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(tsv).then(
+      () => showToast(`${rows.length}行をクリップボードへコピーしました`),
+      () => fallbackCopy(tsv)
+    );
+  } else {
+    fallbackCopy(tsv);
+  }
+}
+
+function fallbackCopy(text) {
+  const ta = document.createElement('textarea');
+  ta.value = text;
+  ta.style.position = 'fixed';
+  ta.style.opacity = '0';
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand('copy');
+    showToast('コピーしました');
+  } catch (e) {
+    showToast('コピー失敗: ' + e.message, 'error');
+  }
+  document.body.removeChild(ta);
 }
 
 function renderEvalUnitOptions() {

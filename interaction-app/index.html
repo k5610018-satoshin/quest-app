@@ -3,31 +3,31 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505m">
+<title>5年4組 担任記録アプリ</title>
+<link rel="stylesheet" href="styles.css?v=20260505n">
 </head>
 <body>
 
 <header class="app-header">
   <div class="header-left">
-    <h1>5年4組 交友関係記録</h1>
+    <h1>5年4組 担任記録</h1>
     <span class="today" id="todayLabel"></span>
     <span class="health-badge" id="healthBadge" title="累計件数 / 最終バックアップからの日数"></span>
   </div>
   <nav class="tabs">
-    <button class="tab-btn active" data-tab="record">記録</button>
-    <button class="tab-btn" data-tab="summary">集計</button>
-    <button class="tab-btn" data-tab="compare">比較</button>
-    <button class="tab-btn" data-tab="socio">ソシオグラム</button>
-    <button class="tab-btn" data-tab="centrality">中心性</button>
-    <button class="tab-btn" data-tab="timeline">時系列</button>
-    <button class="tab-btn" data-tab="heatmap">観察分布</button>
-    <button class="tab-btn" data-tab="seating">席替え</button>
-    <button class="tab-btn" data-tab="history">履歴</button>
-    <button class="tab-btn" data-tab="praise-list">🌟 ほめたい</button>
-    <button class="tab-btn" data-tab="eval-list">📊 評価</button>
-    <button class="tab-btn" data-tab="aba-list">🚨 ABA</button>
-    <button class="tab-btn" data-tab="settings">設定</button>
+    <button class="tab-btn active" data-tab="record" title="新規記録">📝 記録</button>
+    <button class="tab-btn" data-tab="summary" title="集計">📊 集計</button>
+    <button class="tab-btn" data-tab="compare" title="比較">⚖ 比較</button>
+    <button class="tab-btn" data-tab="socio" title="ソシオグラム">🕸 関係図</button>
+    <button class="tab-btn" data-tab="centrality" title="中心性 (SNA)">🌐 中心性</button>
+    <button class="tab-btn" data-tab="timeline" title="時系列">📈 時系列</button>
+    <button class="tab-btn" data-tab="heatmap" title="観察分布">🔥 分布</button>
+    <button class="tab-btn" data-tab="seating" title="席替え">🪑 席</button>
+    <button class="tab-btn" data-tab="history" title="記録履歴">📜 履歴</button>
+    <button class="tab-btn" data-tab="praise-list" title="ほめたい一覧">🌟 ほめ</button>
+    <button class="tab-btn" data-tab="eval-list" title="評価一覧">✅ 評価</button>
+    <button class="tab-btn" data-tab="aba-list" title="ABA記録一覧">🚨 ABA</button>
+    <button class="tab-btn" data-tab="settings" title="設定">⚙ 設定</button>
     <button class="help-btn" id="helpBtn" title="ショートカット一覧 (Shift+?)">?</button>
   </nav>
 </header>
@@ -728,7 +728,8 @@
       </select>
     </label>
     <span class="filter-info" id="evalListInfo"></span>
-    <button class="ghost" id="evalMatrixBtn" title="教科×単元の評価マトリクスを表示（児童 × 単元・観点）">📋 マトリクス表示</button>
+    <button class="ghost" id="evalMatrixBtn" title="教科別の児童一覧表示（児童×単元観点）">📋 教科別一覧</button>
+    <button class="ghost" id="evalCopyMatrixBtn" title="現在表示中の表をクリップボードにTSV形式でコピー">📋 表をコピー</button>
     <button class="ghost" id="exportEvalCsvBtn" title="評価記録のCSV出力">📥 CSV</button>
   </div>
   <div id="evalListContent">
@@ -736,8 +737,8 @@
     <ul class="praise-list" id="evalList"></ul>
   </div>
   <div id="evalMatrixContent" class="hidden" style="margin:8px 12px;">
-    <h3 style="margin:6px 0;">📋 評価マトリクス（児童×単元観点）</h3>
-    <p class="muted small">成績入力ソフトへのコピー用。Ctrl+A → Ctrl+C で全コピーできます。</p>
+    <h3 style="margin:6px 0;">📋 教科別評価一覧（児童 × 単元・観点）</h3>
+    <p class="muted small">成績入力ソフトへのコピー用 → <b>「📋 表をコピー」ボタンを押すと TSV形式でクリップボードにコピーされます</b>（Excel/Googleスプレッドシートに貼付可）</p>
     <div style="overflow:auto; max-height:calc(100vh - 220px);">
       <table id="evalMatrixTable" class="history-table" style="font-size:12px; white-space:nowrap;"></table>
     </div>
@@ -926,9 +927,9 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505m"></script>
-<script src="eval-data.js?v=20260505m"></script>
-<script src="app.js?v=20260505m"></script>
-<script src="cloud-sync.js?v=20260505m"></script>
+<script src="students.js?v=20260505n"></script>
+<script src="eval-data.js?v=20260505n"></script>
+<script src="app.js?v=20260505n"></script>
+<script src="cloud-sync.js?v=20260505n"></script>
 </body>
 </html>
