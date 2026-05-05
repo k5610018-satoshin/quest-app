@@ -3582,6 +3582,10 @@ function initKetebureEvents() {
   state.ui.ketebureRating = state.ui.ketebureRating || null;
   state.ui.ketebureAspects = state.ui.ketebureAspects || new Set();
   state.ui.ketebureDate = state.ui.ketebureDate || todayISO();
+  // 選択保留リスト: studentId → {rating, aspects[]}
+  state.ui.ketSelected = state.ui.ketSelected || new Map();
+  // 児童先行モード: 評価未選択時にタップされた児童ID
+  state.ui.ketActiveStudent = state.ui.ketActiveStudent || null;
 
   // 日付
   const dateInp = document.getElementById('ketebureDate');
@@ -3603,6 +3607,8 @@ function initKetebureEvents() {
     b.addEventListener('click', () => {
       state.ui.ketebureType = b.dataset.ketType;
       state.ui.ketebureAspects = new Set();  // 観点はリセット
+      state.ui.ketSelected = new Map();      // 種別変更で保留もリセット
+      state.ui.ketActiveStudent = null;
       document.querySelectorAll('[data-ket-type]').forEach(x => x.classList.toggle('active', x === b));
       renderKetAspectButtons();
       refreshKetebureUI();
@@ -3616,6 +3622,14 @@ function initKetebureEvents() {
   // 児童グリッド
   renderKetStudentGrid();
 
+  // 一括保存ボタン
+  document.getElementById('ketSaveBtn')?.addEventListener('click', saveKetebureBatch);
+  // 選択クリアボタン
+  document.getElementById('ketClearSelectionBtn')?.addEventListener('click', () => {
+    state.ui.ketSelected = new Map();
+    state.ui.ketActiveStudent = null;
+    refreshKetebureUI();
+  });
   // 全員◎一括ボタン
   document.getElementById('ketAllMaruBtn')?.addEventListener('click', ketAllMaruRecord);
 
@@ -3634,11 +3648,22 @@ function renderKetRatingButtons() {
     b.textContent = r;
     if (state.ui.ketebureRating === r) b.classList.add('active');
     b.addEventListener('click', () => {
+      // 児童先行モード: ハイライト中の児童があればその子を保留リストに直接追加
+      if (state.ui.ketActiveStudent) {
+        applyKetSelection(state.ui.ketActiveStudent, r);
+        state.ui.ketActiveStudent = null;
+        refreshKetebureUI();
+        return;
+      }
+      // 通常モード: 評価値をtoggle
       state.ui.ketebureRating = (state.ui.ketebureRating === r) ? null : r;
       cont.querySelectorAll('.ket-rating-btn').forEach(x => x.classList.toggle('active', x.dataset.rating === state.ui.ketebureRating));
-      updateKetStatusLabel();
+      // 既存の保留児童があれば rating を最新値に再反映
+      if (state.ui.ketebureRating && state.ui.ketSelected.size > 0) {
+        state.ui.ketSelected.forEach(v => { v.rating = state.ui.ketebureRating; });
+      }
+      refreshKetebureUI();
     });
-    cont.appendChild(b);
   });
 }
 
@@ -3664,6 +3689,9 @@ function renderKetAspectButtons() {
         state.ui.ketebureAspects.add(a.id);
         b.classList.add('active');
       }
+      // 保留中の児童の aspects も最新化
+      const aspectsArr = [...state.ui.ketebureAspects];
+      state.ui.ketSelected.forEach(v => { v.aspects = aspectsArr.slice(); });
       updateKetStatusLabel();
     });
     cont.appendChild(b);
@@ -3701,35 +3729,77 @@ function updateKetStatusLabel() {
     const a = list.find(x => x.id === id);
     return a ? a.full : id;
   }).join('・');
-  if (!r) {
-    lbl.textContent = '評価値（◎○△）を選んでから児童をタップ';
+  const pending = state.ui.ketSelected ? state.ui.ketSelected.size : 0;
+  if (state.ui.ketActiveStudent) {
+    const s = state.students.find(x => x.id === state.ui.ketActiveStudent);
+    lbl.textContent = `${s ? s.name : ''} を選択中 → 評価値（◎○△）をタップで記録に追加`;
+  } else if (pending > 0) {
+    lbl.textContent = `${pending}人選択中${r ? '（' + r + (aspects ? '・' + aspects : '') + '）' : ''} → 「💾 記録」で一括保存`;
+  } else if (r) {
+    lbl.textContent = `${r}${aspects ? '（' + aspects + '）' : ''} → 児童をタップで選択（複数可）`;
   } else {
-    lbl.textContent = `${r}${aspects ? '（' + aspects + '）' : ''} → 児童をタップで記録`;
+    lbl.textContent = '児童をタップで選択 → 評価・観点を選び「💾 記録」で一括保存（順序自由）';
   }
 }
 
+// 児童ボタンクリック: 選択トグル + 児童先行モード対応
 function onKetStudentClick(studentId) {
+  // 既に保留に入っていれば解除（誤タップリカバリ）
+  if (state.ui.ketSelected.has(studentId)) {
+    state.ui.ketSelected.delete(studentId);
+    refreshKetebureUI();
+    return;
+  }
   const r = state.ui.ketebureRating;
-  if (!r) {
-    showToast('評価値（◎○△）を先に選んでください', 'error');
+  if (r) {
+    // 評価値あり → 保留リストに追加
+    applyKetSelection(studentId, r);
+    state.ui.ketActiveStudent = null;
+  } else {
+    // 評価値なし → 児童先行モード（評価値ボタンタップで保存）
+    state.ui.ketActiveStudent = (state.ui.ketActiveStudent === studentId) ? null : studentId;
+  }
+  refreshKetebureUI();
+}
+
+// 児童を保留リストに追加 (rating + aspects スナップショット)
+function applyKetSelection(studentId, rating) {
+  state.ui.ketSelected.set(studentId, {
+    rating,
+    aspects: [...state.ui.ketebureAspects]
+  });
+}
+
+// 一括保存（記録ボタン押下時）
+function saveKetebureBatch() {
+  if (!state.ui.ketSelected || state.ui.ketSelected.size === 0) {
+    showToast('保存する児童を選んでください', 'error');
     return;
   }
   const note = (document.getElementById('ketebureNote') || {}).value || '';
-  const rec = normalizeKetebure({
-    studentId,
-    date: state.ui.ketebureDate || todayISO(),
-    type: state.ui.ketebureType,
-    rating: r,
-    aspects: [...state.ui.ketebureAspects],
-    notes: note
+  const date = state.ui.ketebureDate || todayISO();
+  const type = state.ui.ketebureType;
+  let saved = 0;
+  state.ui.ketSelected.forEach((v, sid) => {
+    const rec = normalizeKetebure({
+      studentId: sid,
+      date,
+      type,
+      rating: v.rating,
+      aspects: v.aspects || [],
+      notes: note
+    });
+    if (rec) {
+      state.ketebureRecords.push(rec);
+      if (typeof pushKetebureToGas === 'function') pushKetebureToGas(rec, 'add').catch(() => {});
+      saved++;
+    }
   });
-  if (!rec) { showToast('保存に失敗', 'error'); return; }
-  state.ketebureRecords.push(rec);
   saveState();
-  if (typeof pushKetebureToGas === 'function') pushKetebureToGas(rec, 'add').catch(() => {});
-  const s = state.students.find(x => x.id === studentId);
-  showToast(`${s ? s.name : ''}: ${r}${note ? '（メモ付）' : ''} を記録`);
-  // メモはクリア（連続記録のため評価値・観点は維持）
+  showToast(`${saved}件のけテぶれ記録を保存`);
+  // 保留 + メモのみクリア。評価値・観点は維持して連続記録
+  state.ui.ketSelected = new Map();
+  state.ui.ketActiveStudent = null;
   const noteEl = document.getElementById('ketebureNote');
   if (noteEl) noteEl.value = '';
   refreshKetebureUI();
@@ -3813,10 +3883,21 @@ function refreshKetebureUI() {
   refreshKetSidePanel();
   refreshKetUnrecordedBanner();
   refreshKetStuckBanner();
+  refreshKetSaveBtn();
   updateKetStatusLabel();
   // タイプバッジ
   const badge = document.getElementById('ketTypeBadge');
   if (badge) badge.textContent = state.ui.ketebureType === 'shukudai' ? '(宿題)' : '(生活)';
+}
+
+// 記録ボタンの活性/件数表示更新
+function refreshKetSaveBtn() {
+  const btn = document.getElementById('ketSaveBtn');
+  if (!btn) return;
+  const cnt = state.ui.ketSelected ? state.ui.ketSelected.size : 0;
+  btn.disabled = cnt === 0;
+  const cntEl = document.getElementById('ketPendingCount');
+  if (cntEl) cntEl.textContent = `(${cnt})`;
 }
 
 function refreshKetGridDecorations() {
@@ -3825,10 +3906,11 @@ function refreshKetGridDecorations() {
   const date = state.ui.ketebureDate || todayISO();
   const type = state.ui.ketebureType;
   const streaks = computeKetebureStreaks(type);
+  const selected = state.ui.ketSelected || new Map();
   grid.querySelectorAll('.student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('covered-today', 'watch');
-    btn.querySelectorAll('.ket-streak-badge, .ket-rating-tag').forEach(t => t.remove());
+    btn.classList.remove('covered-today', 'watch', 'ket-selected', 'ket-active-student');
+    btn.querySelectorAll('.ket-streak-badge, .ket-rating-tag, .ket-pending-rating').forEach(t => t.remove());
     // 本日記録あり?
     const todayRec = state.ketebureRecords.find(k => k.studentId === id && k.date === date && k.type === type);
     if (todayRec) {
@@ -3849,6 +3931,19 @@ function refreshKetGridDecorations() {
       sb.textContent = '🔥' + streak;
       sb.title = `${streak}日連続◎`;
       btn.appendChild(sb);
+    }
+    // 選択中ハイライト + 保留評価値
+    if (selected.has(id)) {
+      btn.classList.add('ket-selected');
+      const sel = selected.get(id);
+      const pr = document.createElement('span');
+      pr.className = 'ket-pending-rating';
+      pr.textContent = sel.rating;
+      btn.appendChild(pr);
+    }
+    // 児童先行モードのハイライト
+    if (state.ui.ketActiveStudent === id) {
+      btn.classList.add('ket-active-student');
     }
   });
 }

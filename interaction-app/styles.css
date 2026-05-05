@@ -1600,6 +1600,74 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   line-height: 1;
 }
 
+/* けテぶれ専用UI（コンパクト化＋選択ハイライト） */
+.record-main.ket-main {
+  grid-template-columns: 1fr 220px;
+  gap: 8px;
+}
+.ket-side-panel {
+  font-size: 12px;
+}
+.ket-side-panel .card {
+  padding: 6px 10px;
+  margin-bottom: 6px;
+}
+.ket-side-panel .card h3 {
+  font-size: 12px;
+  margin: 0 0 4px;
+}
+.ket-side-panel .today-stats .big-number {
+  font-size: 22px;
+}
+.student-grid.ket-student-grid {
+  grid-template-columns: repeat(7, 1fr);
+  gap: 3px;
+}
+.student-grid.ket-student-grid .student-btn {
+  padding: 5px 4px;
+  font-size: 11.5px;
+  min-height: 36px;
+  position: relative;
+}
+.student-grid.ket-student-grid .student-btn .num {
+  font-size: 9px;
+  color: #aaa;
+}
+/* 選択中ハイライト（保留リスト入り） */
+.student-grid.ket-student-grid .student-btn.ket-selected {
+  background: #fff8e0;
+  border-color: #f7c948;
+  box-shadow: 0 0 0 2px rgba(247,201,72,0.45);
+}
+.student-grid.ket-student-grid .student-btn.ket-selected .ket-pending-rating {
+  position: absolute;
+  top: 1px;
+  left: 1px;
+  font-size: 11px;
+  font-weight: 700;
+  background: #f7c948;
+  color: white;
+  padding: 0 4px;
+  border-radius: 3px;
+  line-height: 1.2;
+}
+/* 児童先行モード（評価未選択でタップした児童のハイライト） */
+.student-grid.ket-student-grid .student-btn.ket-active-student {
+  background: #e8f4ff;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74,144,226,0.45);
+}
+/* 記録ボタン強調 */
+#ketSaveBtn:not(:disabled) {
+  background: #27ae60;
+  border-color: #1e8449;
+  animation: ketPulse 1.5s ease-in-out infinite;
+}
+@keyframes ketPulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(39,174,96,0.5); }
+  50% { box-shadow: 0 0 0 4px rgba(39,174,96,0); }
+}
+
 /* 一覧表示用のタグチップ */
 .praise-tag-chip {
   display: inline-block;
