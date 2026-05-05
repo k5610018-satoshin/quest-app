@@ -242,7 +242,7 @@ async function pushRecordToGas(record, action) {
   try {
     const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({
         action: action || 'add', dataType: 'record',
         records: [record], deviceId: _deviceId
@@ -268,7 +268,7 @@ async function pushUnitToGas(unit) {
   try {
     const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'add', dataType: 'unit', units: [unit], deviceId: _deviceId })
     });
     const data = await res.json();
@@ -289,7 +289,7 @@ async function pushAllData() {
     // 評価レコード
     const recRes = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'sync', dataType: 'record', records: state.records, deviceId: _deviceId })
     });
     const recData = await recRes.json();
@@ -298,7 +298,7 @@ async function pushAllData() {
     // 単元
     const unitRes = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
       body: JSON.stringify({ action: 'sync', dataType: 'unit', units: state.units, deviceId: _deviceId })
     });
     const unitData = await unitRes.json();
@@ -337,7 +337,7 @@ async function flushPendingQueue() {
     try {
       const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify({ ...op, deviceId: _deviceId })
       });
       const data = await res.json();
