@@ -58,16 +58,19 @@ function getOrCreateDeviceId() {
 // ===== 設定の読み書き =====
 
 function loadSyncConfig() {
+  // 単一ユーザー運用: endpoint/apiKey は常にデフォルト値を強制使用。
+  // 過去の手動入力ミスが残っていても DEFAULT_SYNC が勝つ。
+  syncConfig.endpoint = DEFAULT_SYNC.endpoint;
+  syncConfig.apiKey   = DEFAULT_SYNC.apiKey;
   try {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
     if (raw) {
       const data = JSON.parse(raw);
-      if (data.endpoint) syncConfig.endpoint = data.endpoint;
-      if (data.apiKey)   syncConfig.apiKey   = data.apiKey;
       if (typeof data.enabled  === 'boolean') syncConfig.enabled  = data.enabled;
       if (typeof data.autoSync === 'boolean') syncConfig.autoSync = data.autoSync;
     }
   } catch (_) {}
+  saveSyncConfig();
 }
 
 function saveSyncConfig() {
