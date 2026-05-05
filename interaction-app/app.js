@@ -65,7 +65,8 @@ const state = {
   records: [],
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
   evaluations: [],     // [{id, studentId, subjectId, unitId, viewpoint, grade, scale, date, timestamp, deviceId?}]
-  abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], antecedent, consequence, response}]
+  abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], targetStudentId, antecedent, consequence, response}]
+  ketebureRecords: [], // [{id, studentId, date, timestamp, type:'shukudai'|'seikatsu', rating:'◎'|'○'|'△', aspects:[], notes}]
   seatingSnapshots: [],// [{id, date, label, groups: [[ids],...]}]
   subjects: (window.EVAL_DATA && window.EVAL_DATA.subjects) || [],
   viewpoints: (window.EVAL_DATA && window.EVAL_DATA.viewpoints) || [],
@@ -143,6 +144,9 @@ function loadState() {
     }
     if (Array.isArray(data.abaRecords)) {
       state.abaRecords = data.abaRecords.map(normalizeAba).filter(Boolean);
+    }
+    if (Array.isArray(data.ketebureRecords)) {
+      state.ketebureRecords = data.ketebureRecords.map(normalizeKetebure).filter(Boolean);
     }
     if (Array.isArray(data.seatingSnapshots)) {
       state.seatingSnapshots = data.seatingSnapshots.filter(s => s && Array.isArray(s.groups));
@@ -251,6 +255,7 @@ function normalizeAba(a) {
     try { date = new Date(timestamp).toISOString().slice(0, 10); }
     catch { date = todayISO(); }
   }
+  const targetStudentId = parseInt(a.targetStudentId);
   return {
     id: a.id || uuid(),
     studentId,
@@ -260,6 +265,7 @@ function normalizeAba(a) {
     subject: a.subject || '',
     weather: typeof a.weather === 'string' ? a.weather : '',
     behaviors,
+    targetStudentId: (targetStudentId && targetStudentId > 0) ? targetStudentId : null,
     antecedent: typeof a.antecedent === 'string' ? a.antecedent.slice(0, 500) : '',
     consequence: typeof a.consequence === 'string' ? a.consequence.slice(0, 500) : '',
     response: typeof a.response === 'string' ? a.response.slice(0, 500) : ''
@@ -293,12 +299,45 @@ function normalizeEvaluation(ev) {
   };
 }
 
+function normalizeKetebure(k) {
+  if (!k || typeof k !== 'object') return null;
+  const studentId = parseInt(k.studentId);
+  if (!studentId || studentId < 1) return null;
+  const type = (k.type === 'seikatsu') ? 'seikatsu' : 'shukudai';
+  const rating = (k.rating === '◎' || k.rating === '○' || k.rating === '△') ? k.rating : null;
+  if (!rating) return null;
+  const aspects = Array.isArray(k.aspects)
+    ? k.aspects.map(a => String(a).trim()).filter(Boolean).slice(0, 8)
+    : [];
+  const notes = typeof k.notes === 'string' ? k.notes.trim().slice(0, 300) : '';
+  const timestamp = k.timestamp || new Date().toISOString();
+  let date = k.date;
+  if (!date) {
+    try { date = new Date(timestamp).toISOString().slice(0, 10); }
+    catch { date = todayISO(); }
+  }
+  return {
+    id: k.id || uuid(),
+    studentId,
+    date,
+    timestamp,
+    type,
+    rating,
+    aspects,
+    notes
+  };
+}
+
 function normalizePraise(p) {
   if (!p || typeof p !== 'object') return null;
   const studentId = parseInt(p.studentId);
   if (!studentId || studentId < 1) return null;
   const content = typeof p.content === 'string' ? p.content.trim().slice(0, 500) : '';
-  if (!content) return null;
+  // tags は配列で保存。空配列OK。content と tags の少なくとも一方が必須
+  const tags = Array.isArray(p.tags)
+    ? p.tags.map(t => String(t).trim()).filter(Boolean).slice(0, 20)
+    : [];
+  if (!content && tags.length === 0) return null;
   const timestamp = p.timestamp || new Date().toISOString();
   let date = p.date;
   if (!date) {
@@ -309,6 +348,7 @@ function normalizePraise(p) {
     id: p.id || uuid(),
     studentId,
     content,
+    tags,
     date,
     timestamp,
     scene: p.scene || null
@@ -430,6 +470,7 @@ function init() {
   renderPraiseStudentGrid();
   initEvaluationEvents();
   initAbaEvents();
+  initKetebureEvents();
   initSeatingSnapshotEvents();
   initKeyboardShortcuts();
   initHelpModal();
@@ -583,34 +624,36 @@ function renderSceneButtons() {
 function renderLessonSubjectButtons() {
   const row = document.getElementById('lessonSubjectRow');
   if (!row) return;
-  if (state.ui.currentScene !== 'lesson') {
-    row.style.display = 'none';
-    return;
-  }
+  // 常時表示（授業中シーン以外でも教科を選べるように）
   row.style.display = '';
   const cont = document.getElementById('lessonSubjectButtons');
   if (!cont) return;
   cont.innerHTML = '';
-  // 「指定なし」ボタン
+  // 「指定なし」ボタン: 授業中シーンでデフォルト選択
   const noneBtn = document.createElement('button');
-  noneBtn.className = 'scene-btn' + (!state.ui.lessonSubjectId ? ' active' : '');
+  const isLesson = state.ui.currentScene === 'lesson';
+  const noneActive = isLesson && !state.ui.lessonSubjectId;
+  noneBtn.className = 'scene-btn' + (noneActive ? ' active' : '');
   noneBtn.textContent = '指定なし';
   noneBtn.style.fontSize = '11px';
   noneBtn.addEventListener('click', () => {
+    // 「指定なし」を押したら授業中シーンに切替（教科は未指定）
+    state.ui.currentScene = 'lesson';
     state.ui.lessonSubjectId = null;
-    renderLessonSubjectButtons();
+    renderSceneButtons();
     saveState();
   });
   cont.appendChild(noneBtn);
-  // 学年に応じた教科リスト
-  const subjects = state.subjects || [];
+  // ABA_SUBJECTS を採用（音楽・家庭・外国語・総合・特活・行事を含む拡張版）
+  const subjects = (typeof ABA_SUBJECTS !== 'undefined' ? ABA_SUBJECTS : (state.subjects || [])).filter(s => s.id !== 'other');
   for (const sub of subjects) {
     const btn = document.createElement('button');
-    btn.className = 'scene-btn' + (state.ui.lessonSubjectId === sub.id ? ' active' : '');
+    const active = isLesson && state.ui.lessonSubjectId === sub.id;
+    btn.className = 'scene-btn' + (active ? ' active' : '');
     btn.dataset.subjectId = sub.id;
     btn.textContent = sub.label;
     btn.style.fontSize = '11px';
-    if (state.ui.lessonSubjectId === sub.id) {
+    if (active) {
       btn.style.background = sub.color;
       btn.style.color = 'white';
       btn.style.borderColor = sub.color;
@@ -619,8 +662,10 @@ function renderLessonSubjectButtons() {
       btn.style.borderColor = sub.color;
     }
     btn.addEventListener('click', () => {
-      state.ui.lessonSubjectId = (state.ui.lessonSubjectId === sub.id) ? null : sub.id;
-      renderLessonSubjectButtons();
+      // 教科を押す = 授業中シーン + その教科を選択
+      state.ui.currentScene = 'lesson';
+      state.ui.lessonSubjectId = (state.ui.lessonSubjectId === sub.id && isLesson) ? null : sub.id;
+      renderSceneButtons();
       saveState();
     });
     cont.appendChild(btn);
@@ -894,11 +939,9 @@ function initRecordEvents() {
   // 保存
   document.getElementById('saveBtn').addEventListener('click', saveRecord);
 
-  // Undo
-  document.getElementById('undoBtn').addEventListener('click', undoLastRecord);
-
-  // 同じ組合せで続ける
-  document.getElementById('quickRepeatBtn').addEventListener('click', quickRepeat);
+  // Undo (Ctrl+Z) / 同じ組合せで続ける はUI削除済（キーボードショートカットのみ）
+  // document.getElementById('undoBtn')?.addEventListener('click', undoLastRecord);
+  // document.getElementById('quickRepeatBtn')?.addEventListener('click', quickRepeat);
 
   // タブ切替
   document.querySelectorAll('.tab-btn').forEach(btn => {
@@ -2243,6 +2286,7 @@ function exportJSON() {
     praises: state.praises,
     evaluations: state.evaluations,
     abaRecords: state.abaRecords,
+    ketebureRecords: state.ketebureRecords,
     seatingSnapshots: state.seatingSnapshots,
     events: state.events,
     attributes: state.attributes
@@ -2263,6 +2307,7 @@ function exportJSON() {
     `ほめ ${state.praises.length}`,
     `評価 ${state.evaluations.length}`,
     `ABA ${state.abaRecords.length}`,
+    `けテぶれ ${state.ketebureRecords.length}`,
     `席 ${state.seatingSnapshots.length}`
   ].join(' / ');
   showToast(`バックアップ完了: ${counts}`);
@@ -2453,16 +2498,26 @@ function initPraiseEvents() {
     refreshPraiseGridState();
   });
 
-  // クイックタグ
+  // クイックタグ: タグは別フィールド (state.ui.praiseSelectedTags) に蓄積。textareaは記述専用
+  state.ui.praiseSelectedTags = state.ui.praiseSelectedTags || new Set();
   document.querySelectorAll('#praiseQuickTags .praise-tag-btn').forEach(b => {
     b.addEventListener('click', () => {
       const tag = b.dataset.tag;
-      const ta = document.getElementById('praiseInput');
-      if (!tag) { ta.focus(); return; }
-      ta.value = ta.value ? (ta.value + ' / ' + tag) : tag;
-      // フラッシュ
-      b.classList.add('active');
-      setTimeout(() => b.classList.remove('active'), 350);
+      if (!tag) {
+        // 「自由入力」ボタンは textarea にフォーカス
+        const ta = document.getElementById('praiseInput');
+        if (ta) ta.focus();
+        return;
+      }
+      // toggle
+      if (state.ui.praiseSelectedTags.has(tag)) {
+        state.ui.praiseSelectedTags.delete(tag);
+        b.classList.remove('active');
+      } else {
+        state.ui.praiseSelectedTags.add(tag);
+        b.classList.add('active');
+      }
+      refreshPraiseSaveButton();
     });
   });
 
@@ -2485,7 +2540,7 @@ function initPraiseEvents() {
     refreshPraiseList();
   });
 
-  // テキスト入力: Ctrl+Enterで保存
+  // テキスト入力: Ctrl+Enterで保存。入力時に保存ボタン状態更新
   const inp = document.getElementById('praiseInput');
   if (inp) {
     inp.addEventListener('keydown', e => {
@@ -2494,6 +2549,7 @@ function initPraiseEvents() {
         savePraise();
       }
     });
+    inp.addEventListener('input', refreshPraiseSaveBtn);
   }
 
   // ほめたい一覧タブの期間ボタン
@@ -2534,7 +2590,7 @@ function initPeriodBtnGroup(groupId, initValue, onChange) {
 }
 
 function switchRecordMode(mode) {
-  if (!['interaction', 'praise', 'evaluation', 'aba'].includes(mode)) mode = 'interaction';
+  if (!['interaction', 'praise', 'evaluation', 'aba', 'ketebure'].includes(mode)) mode = 'interaction';
   state.ui.recordMode = mode;
   document.querySelectorAll('.record-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.recordMode === mode);
@@ -2543,6 +2599,8 @@ function switchRecordMode(mode) {
   document.getElementById('praiseRecordView').classList.toggle('hidden', mode !== 'praise');
   document.getElementById('evaluationRecordView').classList.toggle('hidden', mode !== 'evaluation');
   document.getElementById('abaRecordView').classList.toggle('hidden', mode !== 'aba');
+  const ketView = document.getElementById('ketebureRecordView');
+  if (ketView) ketView.classList.toggle('hidden', mode !== 'ketebure');
   if (mode === 'praise') {
     refreshPraiseGridState();
     refreshPraiseSidePanel();
@@ -2551,6 +2609,8 @@ function switchRecordMode(mode) {
     refreshEvalSidePanel();
   } else if (mode === 'aba') {
     refreshAbaSidePanel();
+  } else if (mode === 'ketebure') {
+    refreshKetebureUI();
   }
 }
 
@@ -2654,7 +2714,15 @@ function refreshPraiseChips() {
 function refreshPraiseSaveBtn() {
   const btn = document.getElementById('savePraiseBtn');
   if (!btn) return;
-  btn.disabled = state.ui.praiseTargetIds.size === 0;
+  const tags = state.ui.praiseSelectedTags || new Set();
+  const inp = document.getElementById('praiseInput');
+  const text = (inp && inp.value || '').trim();
+  const hasContent = (text || tags.size > 0);
+  if (state.ui.editingPraiseId) {
+    btn.disabled = !hasContent;
+  } else {
+    btn.disabled = state.ui.praiseTargetIds.size === 0 || !hasContent;
+  }
   btn.textContent = state.ui.editingPraiseId
     ? '💾 編集を保存'
     : `💾 ${state.ui.praiseTargetIds.size > 0 ? state.ui.praiseTargetIds.size + '人に' : ''}保存`;
@@ -2677,16 +2745,40 @@ function onPraiseStudentClick(id) {
 function cancelPraiseInput() {
   state.ui.praiseTargetIds = new Set();
   state.ui.editingPraiseId = null;
+  state.ui.praiseSelectedTags = new Set();
   const inp = document.getElementById('praiseInput');
   inp.value = '';
+  document.querySelectorAll('#praiseQuickTags .praise-tag-btn.active').forEach(b => b.classList.remove('active'));
   refreshPraiseGridState();
   refreshTodayPraiseEditList();
+  refreshPraiseSaveButton();
+}
+
+// 保存ボタンの活性化判定: 児童選択あり + (タグ or 記述) あり
+function refreshPraiseSaveButton() {
+  const btn = document.getElementById('savePraiseBtn');
+  if (!btn) return;
+  const ids = state.ui.praiseTargetIds || new Set();
+  const tags = state.ui.praiseSelectedTags || new Set();
+  const inp = document.getElementById('praiseInput');
+  const text = (inp && inp.value || '').trim();
+  // 編集モードでは児童選択不要
+  if (state.ui.editingPraiseId) {
+    btn.disabled = !(text || tags.size > 0);
+  } else {
+    btn.disabled = !(ids.size > 0 && (text || tags.size > 0));
+  }
 }
 
 function savePraise() {
   const inp = document.getElementById('praiseInput');
   const content = (inp.value || '').trim();
-  if (!content) { showToast('タグまたは詳細を入力してください', 'error'); inp.focus(); return; }
+  const tags = [...(state.ui.praiseSelectedTags || new Set())];
+  if (!content && tags.length === 0) {
+    showToast('タグまたは詳細を入力してください', 'error');
+    inp.focus();
+    return;
+  }
   const dateInp = document.getElementById('praiseDate');
   const date = (dateInp && dateInp.value) ? dateInp.value : todayISO();
 
@@ -2695,15 +2787,20 @@ function savePraise() {
     const ex = state.praises.find(p => p.id === state.ui.editingPraiseId);
     if (ex) {
       ex.content = content;
+      ex.tags = tags;
       saveState();
       if (typeof pushPraiseToGas === 'function') pushPraiseToGas(ex, 'edit').catch(() => {});
-      showToast(`「${ex.content.slice(0, 20)}」を更新`);
+      const summary = content || tags.join('+');
+      showToast(`「${summary.slice(0, 20)}」を更新`);
     }
     state.ui.editingPraiseId = null;
+    state.ui.praiseSelectedTags = new Set();
     inp.value = '';
+    document.querySelectorAll('#praiseQuickTags .praise-tag-btn.active').forEach(b => b.classList.remove('active'));
     refreshPraiseGridState();
     refreshPraiseSidePanel();
     refreshTodayPraiseEditList();
+    refreshPraiseSaveButton();
     if (state.ui.currentTab === 'praise-list') refreshPraiseList();
     return;
   }
@@ -2712,7 +2809,7 @@ function savePraise() {
   if (!ids.length) { showToast('児童を1人以上選んでください', 'error'); return; }
   let saved = 0;
   for (const id of ids) {
-    const p = normalizePraise({ studentId: id, content, date });
+    const p = normalizePraise({ studentId: id, content, tags, date });
     if (!p) continue;
     state.praises.push(p);
     if (typeof pushPraiseToGas === 'function') pushPraiseToGas(p, 'add').catch(() => {});
@@ -2720,12 +2817,15 @@ function savePraise() {
   }
   saveState();
   showToast(`${saved}人 にほめを記録しました`);
-  // 児童選択は解除、テキストはクリアして次の連続記録へ
+  // 児童選択・タグ・テキストをクリアして次の連続記録へ
   state.ui.praiseTargetIds = new Set();
+  state.ui.praiseSelectedTags = new Set();
   inp.value = '';
+  document.querySelectorAll('#praiseQuickTags .praise-tag-btn.active').forEach(b => b.classList.remove('active'));
   refreshPraiseGridState();
   refreshPraiseSidePanel();
   refreshTodayPraiseEditList();
+  refreshPraiseSaveButton();
   if (state.ui.currentTab === 'praise-list') refreshPraiseList();
 }
 
@@ -2752,8 +2852,12 @@ function refreshTodayPraiseEditList() {
   const sMap = new Map(state.students.map(s => [s.id, s]));
   ul.innerHTML = todays.map(p => {
     const s = sMap.get(p.studentId);
+    const tagHtml = (Array.isArray(p.tags) && p.tags.length)
+      ? p.tags.map(t => `<span class="praise-tag-chip">${escapeHtml(t)}</span>`).join('')
+      : '';
+    const contentHtml = p.content ? ` ${escapeHtml(p.content)}` : '';
     return `<li style="padding:4px 6px; border-bottom:1px solid #eee; cursor:pointer;" data-pid="${p.id}" title="クリックで詳細追加・編集">
-      <b>${s ? s.name : '?'}:</b> ${escapeHtml(p.content)}
+      <b>${s ? s.name : '?'}:</b> ${tagHtml}${contentHtml}
     </li>`;
   }).join('');
   ul.querySelectorAll('li[data-pid]').forEach(li => {
@@ -2766,14 +2870,20 @@ function beginEditPraise(praiseId) {
   if (!p) return;
   state.ui.editingPraiseId = praiseId;
   state.ui.praiseTargetIds = new Set();
+  // 既存タグを復元してタグボタンも視覚反映
+  state.ui.praiseSelectedTags = new Set(Array.isArray(p.tags) ? p.tags : []);
+  document.querySelectorAll('#praiseQuickTags .praise-tag-btn').forEach(b => {
+    b.classList.toggle('active', state.ui.praiseSelectedTags.has(b.dataset.tag));
+  });
   const s = state.students.find(x => x.id === p.studentId);
   document.getElementById('praiseTargetName').textContent = `編集中: ${s ? s.name : ''}`;
   const inp = document.getElementById('praiseInput');
-  inp.value = p.content;
+  inp.value = p.content || '';
   inp.focus();
   refreshPraiseGridState();
   refreshPraiseSaveBtn();
-  showToast(`「${(p.content || '').slice(0, 20)}」を編集中。保存ボタンで確定`);
+  const summary = (p.content || (p.tags || []).join('+'));
+  showToast(`「${summary.slice(0, 20)}」を編集中。保存ボタンで確定`);
 }
 
 // ========== ほめたい一覧タブ ==========
@@ -2787,7 +2897,11 @@ function refreshPraiseList() {
   const filtered = state.praises.filter(p => {
     if (!isInPraisePeriod(p, period)) return false;
     if (studentId && p.studentId !== studentId) return false;
-    if (kw && !p.content.toLowerCase().includes(kw)) return false;
+    if (kw) {
+      const inContent = (p.content || '').toLowerCase().includes(kw);
+      const inTags = Array.isArray(p.tags) && p.tags.some(t => t.toLowerCase().includes(kw));
+      if (!inContent && !inTags) return false;
+    }
     return true;
   }).sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
 
@@ -2808,12 +2922,16 @@ function refreshPraiseList() {
     const s = sMap.get(p.studentId);
     const name = s ? `${s.id}. ${s.name}` : `(ID:${p.studentId})`;
     const time = p.timestamp ? new Date(p.timestamp).toLocaleString('ja-JP', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }) : p.date;
+    const tagHtml = (Array.isArray(p.tags) && p.tags.length)
+      ? `<div class="praise-tags-line">${p.tags.map(t => `<span class="praise-tag-chip">${escapeHtml(t)}</span>`).join('')}</div>`
+      : '';
     return `<li data-id="${p.id}">
       <div class="praise-meta">
         <div>${time}</div>
         <div class="praise-name">${escapeHtml(name)}</div>
       </div>
-      <div class="praise-content">${escapeHtml(p.content)}</div>
+      ${tagHtml}
+      ${p.content ? `<div class="praise-content">${escapeHtml(p.content)}</div>` : ''}
       <div class="praise-actions">
         <button class="ghost danger" data-action="delete" data-id="${p.id}">削除</button>
       </div>
@@ -2872,11 +2990,12 @@ function deletePraise(id) {
 function exportPraiseCsv() {
   if (!state.praises.length) { showToast('ほめ記録がありません', 'error'); return; }
   const sMap = new Map(state.students.map(s => [s.id, s]));
-  const rows = [['date', 'time', 'student_id', 'student_name', 'content']];
+  const rows = [['date', 'time', 'student_id', 'student_name', 'tags', 'content']];
   for (const p of state.praises) {
     const s = sMap.get(p.studentId);
     const time = p.timestamp ? new Date(p.timestamp).toLocaleTimeString('ja-JP') : '';
-    rows.push([p.date, time, p.studentId, s ? s.name : '', p.content.replace(/[\r\n]+/g, ' ')]);
+    const tagsStr = Array.isArray(p.tags) ? p.tags.join('|') : '';
+    rows.push([p.date, time, p.studentId, s ? s.name : '', tagsStr, (p.content || '').replace(/[\r\n]+/g, ' ')]);
   }
   const csv = '﻿' + rows.map(r => r.map(v => `"${String(v).replace(/"/g, '""')}"`).join(',')).join('\n');
   const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -3430,23 +3549,428 @@ function exportEvalCsv() {
   URL.revokeObjectURL(url);
 }
 
+// ========== けテぶれモード（観点別評価ベース） ==========
+
+const KETEBURE_ASPECTS = {
+  shukudai: [
+    { id: 'ke', label: 'け', full: '計画' },
+    { id: 'te', label: 'テ', full: 'テスト' },
+    { id: 'bu', label: 'ぶ', full: '分析' },
+    { id: 're', label: 'れ', full: '練習' }
+  ],
+  seikatsu: [
+    { id: 'kokoro', label: '心', full: '心マトリクス' },
+    { id: 'ke',     label: 'け', full: '計画' },
+    { id: 'bu',     label: 'ぶ', full: '分析' },
+    { id: 'tsugi',  label: '→', full: '次' }
+  ]
+};
+
+const KETEBURE_RATINGS = ['◎', '○', '△'];
+
+function initKetebureEvents() {
+  state.ui.ketebureType = state.ui.ketebureType || 'shukudai';
+  state.ui.ketebureRating = state.ui.ketebureRating || null;
+  state.ui.ketebureAspects = state.ui.ketebureAspects || new Set();
+  state.ui.ketebureDate = state.ui.ketebureDate || todayISO();
+
+  // 日付
+  const dateInp = document.getElementById('ketebureDate');
+  if (dateInp) {
+    dateInp.value = state.ui.ketebureDate;
+    dateInp.addEventListener('change', () => {
+      state.ui.ketebureDate = dateInp.value || todayISO();
+      refreshKetebureUI();
+    });
+  }
+  document.getElementById('ketebureDateTodayBtn')?.addEventListener('click', () => {
+    state.ui.ketebureDate = todayISO();
+    if (dateInp) dateInp.value = state.ui.ketebureDate;
+    refreshKetebureUI();
+  });
+
+  // 種別切替
+  document.querySelectorAll('[data-ket-type]').forEach(b => {
+    b.addEventListener('click', () => {
+      state.ui.ketebureType = b.dataset.ketType;
+      state.ui.ketebureAspects = new Set();  // 観点はリセット
+      document.querySelectorAll('[data-ket-type]').forEach(x => x.classList.toggle('active', x === b));
+      renderKetAspectButtons();
+      refreshKetebureUI();
+    });
+  });
+
+  // 評価ボタン
+  renderKetRatingButtons();
+  // 観点ボタン
+  renderKetAspectButtons();
+  // 児童グリッド
+  renderKetStudentGrid();
+
+  // 全員◎一括ボタン
+  document.getElementById('ketAllMaruBtn')?.addEventListener('click', ketAllMaruRecord);
+
+  refreshKetebureUI();
+}
+
+function renderKetRatingButtons() {
+  const cont = document.getElementById('ketRatingButtons');
+  if (!cont) return;
+  cont.innerHTML = '';
+  KETEBURE_RATINGS.forEach(r => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ket-rating-btn';
+    b.dataset.rating = r;
+    b.textContent = r;
+    if (state.ui.ketebureRating === r) b.classList.add('active');
+    b.addEventListener('click', () => {
+      state.ui.ketebureRating = (state.ui.ketebureRating === r) ? null : r;
+      cont.querySelectorAll('.ket-rating-btn').forEach(x => x.classList.toggle('active', x.dataset.rating === state.ui.ketebureRating));
+      updateKetStatusLabel();
+    });
+    cont.appendChild(b);
+  });
+}
+
+function renderKetAspectButtons() {
+  const cont = document.getElementById('ketAspectButtons');
+  if (!cont) return;
+  cont.innerHTML = '';
+  const list = KETEBURE_ASPECTS[state.ui.ketebureType] || KETEBURE_ASPECTS.shukudai;
+  list.forEach(a => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ket-aspect-btn';
+    b.dataset.aspect = a.id;
+    b.dataset.ketType = state.ui.ketebureType;
+    b.textContent = a.label;
+    b.title = a.full;
+    if (state.ui.ketebureAspects.has(a.id)) b.classList.add('active');
+    b.addEventListener('click', () => {
+      if (state.ui.ketebureAspects.has(a.id)) {
+        state.ui.ketebureAspects.delete(a.id);
+        b.classList.remove('active');
+      } else {
+        state.ui.ketebureAspects.add(a.id);
+        b.classList.add('active');
+      }
+      updateKetStatusLabel();
+    });
+    cont.appendChild(b);
+  });
+}
+
+function renderKetStudentGrid() {
+  const grid = document.getElementById('ketStudentGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const s of state.students) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'student-btn';
+    btn.style.position = 'relative';
+    btn.dataset.studentId = s.id;
+    btn.title = `${s.kana} (出席番号 ${s.id})`;
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = s.id;
+    btn.appendChild(num);
+    btn.appendChild(document.createTextNode(s.name));
+    btn.addEventListener('click', () => onKetStudentClick(s.id));
+    grid.appendChild(btn);
+  }
+  refreshKetGridDecorations();
+}
+
+function updateKetStatusLabel() {
+  const lbl = document.getElementById('ketStatusLabel');
+  if (!lbl) return;
+  const r = state.ui.ketebureRating;
+  const list = KETEBURE_ASPECTS[state.ui.ketebureType] || [];
+  const aspects = [...state.ui.ketebureAspects].map(id => {
+    const a = list.find(x => x.id === id);
+    return a ? a.full : id;
+  }).join('・');
+  if (!r) {
+    lbl.textContent = '評価値（◎○△）を選んでから児童をタップ';
+  } else {
+    lbl.textContent = `${r}${aspects ? '（' + aspects + '）' : ''} → 児童をタップで記録`;
+  }
+}
+
+function onKetStudentClick(studentId) {
+  const r = state.ui.ketebureRating;
+  if (!r) {
+    showToast('評価値（◎○△）を先に選んでください', 'error');
+    return;
+  }
+  const note = (document.getElementById('ketebureNote') || {}).value || '';
+  const rec = normalizeKetebure({
+    studentId,
+    date: state.ui.ketebureDate || todayISO(),
+    type: state.ui.ketebureType,
+    rating: r,
+    aspects: [...state.ui.ketebureAspects],
+    notes: note
+  });
+  if (!rec) { showToast('保存に失敗', 'error'); return; }
+  state.ketebureRecords.push(rec);
+  saveState();
+  if (typeof pushKetebureToGas === 'function') pushKetebureToGas(rec, 'add').catch(() => {});
+  const s = state.students.find(x => x.id === studentId);
+  showToast(`${s ? s.name : ''}: ${r}${note ? '（メモ付）' : ''} を記録`);
+  // メモはクリア（連続記録のため評価値・観点は維持）
+  const noteEl = document.getElementById('ketebureNote');
+  if (noteEl) noteEl.value = '';
+  refreshKetebureUI();
+}
+
+function ketAllMaruRecord() {
+  if (!confirm(`${state.ui.ketebureType === 'shukudai' ? '宿題' : '生活'}けテぶれで全員に◎を記録します。よろしいですか？`)) return;
+  const date = state.ui.ketebureDate || todayISO();
+  const type = state.ui.ketebureType;
+  let saved = 0;
+  for (const s of state.students) {
+    // 同日同種別で既に記録あればスキップ
+    const exists = state.ketebureRecords.some(k =>
+      k.studentId === s.id && k.date === date && k.type === type);
+    if (exists) continue;
+    const rec = normalizeKetebure({
+      studentId: s.id, date, type, rating: '◎', aspects: [], notes: ''
+    });
+    if (rec) {
+      state.ketebureRecords.push(rec);
+      if (typeof pushKetebureToGas === 'function') pushKetebureToGas(rec, 'add').catch(() => {});
+      saved++;
+    }
+  }
+  saveState();
+  showToast(`${saved}人に◎を記録しました（既記録はスキップ）`);
+  refreshKetebureUI();
+}
+
+// 連続◎ストリーク計算: studentId → 日数
+function computeKetebureStreaks(type) {
+  const recs = state.ketebureRecords.filter(k => k.type === type);
+  const byStudent = new Map();
+  for (const r of recs) {
+    if (!byStudent.has(r.studentId)) byStudent.set(r.studentId, []);
+    byStudent.get(r.studentId).push(r);
+  }
+  const result = new Map();
+  for (const [sid, list] of byStudent) {
+    // 各児童について「日付ごとに最良の評価」を取り、最新日から連続◎を数える
+    const byDate = new Map();
+    for (const r of list) {
+      const cur = byDate.get(r.date);
+      // 優先順位: ◎ > ○ > △
+      const order = { '◎': 3, '○': 2, '△': 1 };
+      if (!cur || (order[r.rating] || 0) > (order[cur] || 0)) byDate.set(r.date, r.rating);
+    }
+    const dates = [...byDate.keys()].sort().reverse();  // 新しい順
+    let streak = 0;
+    for (const d of dates) {
+      if (byDate.get(d) === '◎') streak++;
+      else break;
+    }
+    if (streak > 0) result.set(sid, streak);
+  }
+  return result;
+}
+
+// 観点別躓き検出: 直近5回の同観点で△が3回以上
+function detectKetStuckAspects(type) {
+  const recs = state.ketebureRecords.filter(k => k.type === type)
+    .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
+  const list = KETEBURE_ASPECTS[type] || [];
+  const stuck = [];
+  for (const s of state.students) {
+    for (const a of list) {
+      // 児童x観点 で aspects に a.id を含む直近5記録
+      const recent = recs.filter(r => r.studentId === s.id && Array.isArray(r.aspects) && r.aspects.includes(a.id)).slice(0, 5);
+      if (recent.length < 3) continue;
+      const deltaCount = recent.filter(r => r.rating === '△').length;
+      if (deltaCount >= 3) {
+        stuck.push({ studentId: s.id, name: s.name, aspectFull: a.full, deltaCount, total: recent.length });
+      }
+    }
+  }
+  return stuck;
+}
+
+function refreshKetebureUI() {
+  refreshKetGridDecorations();
+  refreshKetSidePanel();
+  refreshKetUnrecordedBanner();
+  refreshKetStuckBanner();
+  updateKetStatusLabel();
+  // タイプバッジ
+  const badge = document.getElementById('ketTypeBadge');
+  if (badge) badge.textContent = state.ui.ketebureType === 'shukudai' ? '(宿題)' : '(生活)';
+}
+
+function refreshKetGridDecorations() {
+  const grid = document.getElementById('ketStudentGrid');
+  if (!grid) return;
+  const date = state.ui.ketebureDate || todayISO();
+  const type = state.ui.ketebureType;
+  const streaks = computeKetebureStreaks(type);
+  grid.querySelectorAll('.student-btn').forEach(btn => {
+    const id = parseInt(btn.dataset.studentId);
+    btn.classList.remove('covered-today', 'watch');
+    btn.querySelectorAll('.ket-streak-badge, .ket-rating-tag').forEach(t => t.remove());
+    // 本日記録あり?
+    const todayRec = state.ketebureRecords.find(k => k.studentId === id && k.date === date && k.type === type);
+    if (todayRec) {
+      btn.classList.add('covered-today');
+      const tag = document.createElement('span');
+      tag.className = 'ket-rating-tag';
+      tag.textContent = todayRec.rating;
+      tag.style.color = todayRec.rating === '◎' ? '#d4a017' : (todayRec.rating === '△' ? '#c0392b' : '#7f8c8d');
+      btn.appendChild(tag);
+    } else {
+      btn.classList.add('watch');
+    }
+    // 連続◎バッジ
+    const streak = streaks.get(id);
+    if (streak && streak >= 2) {
+      const sb = document.createElement('span');
+      sb.className = 'ket-streak-badge';
+      sb.textContent = '🔥' + streak;
+      sb.title = `${streak}日連続◎`;
+      btn.appendChild(sb);
+    }
+  });
+}
+
+function refreshKetUnrecordedBanner() {
+  const el = document.getElementById('ketUnrecordedBanner');
+  if (!el) return;
+  const date = state.ui.ketebureDate || todayISO();
+  const type = state.ui.ketebureType;
+  const recordedIds = new Set(state.ketebureRecords
+    .filter(k => k.date === date && k.type === type)
+    .map(k => k.studentId));
+  const unrecorded = state.students.filter(s => !recordedIds.has(s.id));
+  if (date !== todayISO() || unrecorded.length === 0) {
+    el.classList.remove('show');
+    el.innerHTML = '';
+    return;
+  }
+  el.classList.add('show');
+  el.innerHTML = `📌 本日まだ未記録 (${unrecorded.length}人): ` +
+    unrecorded.map(s => `<span class="ket-unrec-name" data-sid="${s.id}">${escapeHtml(s.name)}</span>`).join('');
+  el.querySelectorAll('.ket-unrec-name').forEach(span => {
+    span.addEventListener('click', () => onKetStudentClick(parseInt(span.dataset.sid)));
+  });
+}
+
+function refreshKetStuckBanner() {
+  const el = document.getElementById('ketStuckBanner');
+  if (!el) return;
+  const stuck = detectKetStuckAspects(state.ui.ketebureType);
+  if (stuck.length === 0) {
+    el.classList.remove('show');
+    el.innerHTML = '';
+    return;
+  }
+  el.classList.add('show');
+  el.innerHTML = '⚠ 観点別躓き(直近5回中△3回以上): ' +
+    stuck.map(x => `<span class="ket-stuck-item"><b>${escapeHtml(x.name)}</b>: ${escapeHtml(x.aspectFull)}△${x.deltaCount}/${x.total}</span>`).join('');
+}
+
+function refreshKetSidePanel() {
+  const date = state.ui.ketebureDate || todayISO();
+  const type = state.ui.ketebureType;
+  const today = state.ketebureRecords.filter(k => k.date === date && k.type === type);
+  const cnt = document.getElementById('ketTodayCount'); if (cnt) cnt.textContent = today.length;
+  const cov = document.getElementById('ketTodayCovered'); if (cov) cov.textContent = new Set(today.map(t => t.studentId)).size;
+  const m = document.getElementById('ketTodayMaru'); if (m) m.textContent = today.filter(t => t.rating === '◎').length;
+  const m1 = document.getElementById('ketTodayMaruOne'); if (m1) m1.textContent = today.filter(t => t.rating === '○').length;
+  const d = document.getElementById('ketTodayDelta'); if (d) d.textContent = today.filter(t => t.rating === '△').length;
+
+  // 連続◎ TOP5
+  const streakList = document.getElementById('ketStreakList');
+  if (streakList) {
+    const streaks = computeKetebureStreaks(type);
+    const top = [...streaks.entries()]
+      .map(([sid, n]) => ({ s: state.students.find(x => x.id === sid), n }))
+      .filter(x => x.s)
+      .sort((a, b) => b.n - a.n)
+      .slice(0, 5);
+    streakList.innerHTML = top.length
+      ? top.map(x => `<li><b>${escapeHtml(x.s.name)}</b> 🔥${x.n}日</li>`).join('')
+      : '<li class="muted">記録なし</li>';
+  }
+
+  // 今日の記録一覧
+  const ul = document.getElementById('ketTodayList');
+  if (ul) {
+    if (!today.length) {
+      ul.innerHTML = '<li class="muted">本日の記録はまだありません</li>';
+    } else {
+      const sMap = new Map(state.students.map(x => [x.id, x]));
+      const list = KETEBURE_ASPECTS[type] || [];
+      ul.innerHTML = today.sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''))
+        .map(r => {
+          const s = sMap.get(r.studentId);
+          const aspects = (r.aspects || []).map(id => (list.find(x => x.id === id) || {}).label || id).join('');
+          const notes = r.notes ? ` <span class="muted small">${escapeHtml(r.notes)}</span>` : '';
+          return `<li style="padding:3px 6px; border-bottom:1px solid #eee;" data-rid="${r.id}">
+            <b>${s ? escapeHtml(s.name) : '?'}:</b> ${r.rating}${aspects ? '['+aspects+']' : ''}${notes}
+            <button class="ghost danger" data-del="${r.id}" style="float:right; padding:1px 6px; font-size:10px;">削除</button>
+          </li>`;
+        }).join('');
+      ul.querySelectorAll('button[data-del]').forEach(b => {
+        b.addEventListener('click', e => {
+          e.stopPropagation();
+          deleteKetebureRecord(b.dataset.del);
+        });
+      });
+    }
+  }
+}
+
+function deleteKetebureRecord(id) {
+  if (!confirm('このけテぶれ記録を削除しますか？')) return;
+  const idx = state.ketebureRecords.findIndex(k => k.id === id);
+  if (idx < 0) return;
+  state.ketebureRecords.splice(idx, 1);
+  saveState();
+  if (typeof pushKetebureToGas === 'function') pushKetebureToGas({ id }, 'delete').catch(() => {});
+  refreshKetebureUI();
+  showToast('削除しました');
+}
+
 // ========== ABAアセスメントモード ==========
 
 const ABA_BEHAVIORS = [
-  { id: 'leave',    label: '離席',     color: '#e74c3c' },
-  { id: 'runaway',  label: '飛び出し', color: '#cd1818' },
-  { id: 'verbal',   label: '暴言',     color: '#c0392b' },
-  { id: 'physical', label: '暴力',     color: '#922b21' },
-  { id: 'destroy',  label: '破壊',     color: '#7b241c' },
-  { id: 'hitobj',   label: '物に当たる', color: '#a93226' },
-  { id: 'sleep',    label: '寝る',     color: '#7f8c8d' },
-  { id: 'reading',  label: '読書',     color: '#16a085' },
-  { id: 'refuse',   label: '課題放棄', color: '#d35400' },
-  { id: 'shout',    label: '叫ぶ',     color: '#e67e22' },
-  { id: 'cry',      label: '泣く',     color: '#9b59b6' },
-  { id: 'sulk',     label: 'すねる',   color: '#8e44ad' },
-  { id: 'other',    label: 'その他',   color: '#34495e' }
+  { id: 'leave',    label: '離席',     color: '#e74c3c', interpersonal: false },
+  { id: 'runaway',  label: '飛び出し', color: '#cd1818', interpersonal: false },
+  { id: 'verbal',   label: '暴言',     color: '#c0392b', interpersonal: true },
+  { id: 'physical', label: '暴力',     color: '#922b21', interpersonal: true },
+  { id: 'complain', label: '文句',     color: '#b03a2e', interpersonal: true },
+  { id: 'destroy',  label: '破壊',     color: '#7b241c', interpersonal: false },
+  { id: 'hitobj',   label: '物に当たる', color: '#a93226', interpersonal: false },
+  { id: 'sleep',    label: '寝る',     color: '#7f8c8d', interpersonal: false },
+  { id: 'reading',  label: '読書',     color: '#16a085', interpersonal: false },
+  { id: 'refuse',   label: '課題放棄', color: '#d35400', interpersonal: false },
+  { id: 'shout',    label: '叫ぶ',     color: '#e67e22', interpersonal: false },
+  { id: 'cry',      label: '泣く',     color: '#9b59b6', interpersonal: false },
+  { id: 'sulk',     label: 'すねる',   color: '#8e44ad', interpersonal: false },
+  { id: 'other',    label: 'その他',   color: '#34495e', interpersonal: false }
 ];
+
+// 対人系行動（相手選択UIを表示する判定）
+function abaIsInterpersonal(behaviors) {
+  if (!behaviors) return false;
+  const arr = behaviors instanceof Set ? [...behaviors] : behaviors;
+  return arr.some(id => {
+    const b = ABA_BEHAVIORS.find(x => x.id === id);
+    return b && b.interpersonal;
+  });
+}
 
 // ABA専用の場面リスト（評価教科より広い：場面・行事を含む）
 const ABA_SUBJECTS = [
@@ -3662,12 +4186,17 @@ function initAbaEvents() {
           btn.style.color = 'white';
         }
         renderAbaOtherInput();
+        renderAbaTargetRow();
         updateAbaStatusBar();
         // 自動保存は廃止: A/C/対応を入力する時間を確保。明示的に保存ボタンクリックで保存。
       });
       behGrid.appendChild(btn);
     });
   }
+
+  // 相手選択グリッド (対人系行動の時のみ表示)
+  renderAbaTargetGrid();
+  renderAbaTargetRow();
 
   // 「その他」記述欄エリア (動的に出現)
   // → renderAbaOtherInput() で挿入
@@ -3850,6 +4379,7 @@ function resetAbaAll() {
   state.ui.abaSlot = '';
   state.ui.abaSubjectId = '';
   state.ui.abaTargetId = null;
+  state.ui.abaPartnerId = null;
   state.ui.abaBehaviors = new Set();
   state.ui.abaOtherText = '';
   document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(b => {
@@ -3858,14 +4388,61 @@ function resetAbaAll() {
     const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
     if (beh) b.style.color = beh.color;
   });
+  document.querySelectorAll('#abaTargetGrid .student-btn').forEach(b => b.classList.remove('active'));
   ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
   // クイックボタンのactive選択もクリア
   document.querySelectorAll('.aba-quick.active').forEach(b => b.classList.remove('active'));
   renderAbaOtherInput();
+  renderAbaTargetRow();
   updateAbaStatusBar();
   setAbaStep('date');
+}
+
+// 相手選択行: 対人系行動の時のみ表示
+function renderAbaTargetRow() {
+  const row = document.getElementById('abaTargetRow');
+  if (!row) return;
+  const show = abaIsInterpersonal(state.ui.abaBehaviors);
+  row.style.display = show ? '' : 'none';
+  if (!show) state.ui.abaPartnerId = null;
+}
+
+function renderAbaTargetGrid() {
+  const grid = document.getElementById('abaTargetGrid');
+  if (!grid) return;
+  grid.innerHTML = '';
+  for (const s of state.students) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'student-btn';
+    btn.dataset.studentId = s.id;
+    btn.title = `${s.kana} (出席番号 ${s.id})`;
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = s.id;
+    btn.appendChild(num);
+    btn.appendChild(document.createTextNode(s.name));
+    btn.addEventListener('click', () => {
+      // 主役児童と同じは選べない
+      if (state.ui.abaTargetId && state.ui.abaTargetId === s.id) {
+        showToast('主役と同じ児童は相手にできません', 'error');
+        return;
+      }
+      // トグル選択（単数）
+      if (state.ui.abaPartnerId === s.id) {
+        state.ui.abaPartnerId = null;
+        btn.classList.remove('active');
+      } else {
+        state.ui.abaPartnerId = s.id;
+        grid.querySelectorAll('.student-btn').forEach(x => x.classList.remove('active'));
+        btn.classList.add('active');
+      }
+      updateAbaStatusBar();
+    });
+    grid.appendChild(btn);
+  }
 }
 
 function saveAbaRecord(opts) {
@@ -3905,6 +4482,7 @@ function saveAbaRecord(opts) {
       ? [...state.ui.abaWeathers].join(',')
       : '',
     behaviors: [...state.ui.abaBehaviors],
+    targetStudentId: state.ui.abaPartnerId || null,
     antecedent: antWithOther,
     consequence: cons,
     response: resp
@@ -3916,10 +4494,11 @@ function saveAbaRecord(opts) {
   const s = state.students.find(x => x.id === rec.studentId);
   const prefix = opts.autoSaved ? '⚡ 自動保存: ' : '';
   showToast(`${prefix}${s ? s.name : ''} のABA記録を保存`);
-  // 行動・テキスト・児童をクリア。日付/時間帯/教科/天気は維持で連続記録
+  // 行動・テキスト・児童・相手をクリア。日付/時間帯/教科/天気は維持で連続記録
   state.ui.abaBehaviors = new Set();
   state.ui.abaOtherText = '';
   state.ui.abaTargetId = null;
+  state.ui.abaPartnerId = null;
   document.querySelectorAll('.aba-behavior-btn').forEach(b => {
     b.classList.remove('active');
     const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);
@@ -3929,12 +4508,14 @@ function saveAbaRecord(opts) {
   document.querySelectorAll('#abaStudentGrid .student-btn').forEach(b => {
     b.classList.remove('active', 'subject');
   });
+  document.querySelectorAll('#abaTargetGrid .student-btn').forEach(b => b.classList.remove('active'));
   ['abaAntecedent','abaConsequence','abaResponse'].forEach(id => {
     const e = document.getElementById(id); if (e) e.value = '';
   });
   // クイックボタンのactive選択もクリア
   document.querySelectorAll('.aba-quick.active').forEach(b => b.classList.remove('active'));
   renderAbaOtherInput();
+  renderAbaTargetRow();
   updateAbaStatusBar();
   setAbaStep('student'); // 次は児童選択へフォーカス
   if (state.ui.currentTab === 'aba-list') refreshAbaList();

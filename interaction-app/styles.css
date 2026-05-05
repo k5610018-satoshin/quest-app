@@ -1317,6 +1317,140 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 .praise-tag-btn.active {
   background: #f7c948;
   color: white;
+  border-color: #c19400;
+  box-shadow: 0 0 0 2px rgba(247,201,72,0.35);
+}
+/* ========== けテぶれモード ========== */
+.ket-rating-buttons {
+  display: flex;
+  gap: 4px;
+}
+.ket-rating-btn {
+  padding: 5px 12px;
+  font-size: 18px;
+  font-weight: 700;
+  border: 2px solid #ccc;
+  background: #fff;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 42px;
+  line-height: 1;
+  transition: all 0.12s;
+}
+.ket-rating-btn[data-rating="◎"] { color: #d4a017; border-color: #d4a017; }
+.ket-rating-btn[data-rating="○"] { color: #7f8c8d; border-color: #7f8c8d; }
+.ket-rating-btn[data-rating="△"] { color: #c0392b; border-color: #c0392b; }
+.ket-rating-btn.active[data-rating="◎"] { background: #f1c40f; color: white; }
+.ket-rating-btn.active[data-rating="○"] { background: #95a5a6; color: white; }
+.ket-rating-btn.active[data-rating="△"] { background: #e74c3c; color: white; }
+.ket-aspect-buttons {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+.ket-aspect-btn {
+  padding: 5px 10px;
+  font-size: 13px;
+  font-weight: 700;
+  border: 2px solid #4a90e2;
+  background: #fff;
+  color: #4a90e2;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 38px;
+  transition: all 0.12s;
+}
+.ket-aspect-btn:hover {
+  background: #eaf4fd;
+}
+.ket-aspect-btn.active {
+  background: #4a90e2;
+  color: white;
+}
+.ket-aspect-btn[data-ket-type="seikatsu"] {
+  border-color: #27ae60;
+  color: #27ae60;
+}
+.ket-aspect-btn[data-ket-type="seikatsu"]:hover {
+  background: #e8f5e9;
+}
+.ket-aspect-btn[data-ket-type="seikatsu"].active {
+  background: #27ae60;
+  color: white;
+}
+.ket-unrecorded-banner {
+  display: none;
+  background: #fff8e0;
+  border: 1px dashed #f7c948;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  margin: 3px 0;
+  white-space: nowrap;
+  overflow-x: auto;
+  color: #8a6d00;
+}
+.ket-unrecorded-banner.show { display: block; }
+.ket-unrecorded-banner .ket-unrec-name {
+  display: inline-block;
+  margin: 0 4px;
+  padding: 1px 6px;
+  background: #fff;
+  border: 1px solid #f7c948;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.ket-unrecorded-banner .ket-unrec-name:hover {
+  background: #f7c948;
+  color: white;
+}
+.ket-stuck-banner {
+  display: none;
+  background: #fdedec;
+  border: 1px solid #f5b7b1;
+  border-radius: 6px;
+  padding: 4px 8px;
+  font-size: 11.5px;
+  margin: 3px 0;
+  color: #922b21;
+}
+.ket-stuck-banner.show { display: block; }
+.ket-stuck-banner .ket-stuck-item {
+  display: inline-block;
+  margin-right: 8px;
+}
+/* 児童ボタン上の連続◎バッジ */
+.student-btn .ket-streak-badge {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  background: #f39c12;
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  padding: 1px 3px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.student-btn .ket-rating-tag {
+  position: absolute;
+  bottom: 1px;
+  right: 1px;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* 一覧表示用のタグチップ */
+.praise-tag-chip {
+  display: inline-block;
+  padding: 1px 6px;
+  margin-right: 3px;
+  font-size: 10.5px;
+  background: #fff8e0;
+  color: #8a6d00;
+  border: 1px solid #f7c948;
+  border-radius: 8px;
 }
 
 /* praise textarea */
@@ -2025,60 +2159,145 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== ABA 2カラム式レイアウト ========== */
+/* ========== ABA 上下2段式レイアウト ========== */
 .aba-flat .aba-flat-grid {
   display: grid;
-  grid-template-columns: 2fr 1fr;
-  gap: 8px;
+  grid-template-rows: minmax(0, 1fr) auto;
+  gap: 6px;
   flex: 1;
   overflow: hidden;
-  padding: 6px;
+  padding: 4px;
 }
-.aba-flat .aba-flat-left,
-.aba-flat .aba-flat-right {
+.aba-flat .aba-flat-top {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 3px;
   overflow-y: auto;
   min-height: 0;
 }
-.aba-flat .aba-flat-right {
+.aba-flat .aba-flat-bottom {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 6px;
   background: #fef9f9;
   border: 1px solid #f5d0d0;
   border-radius: 6px;
-  padding: 6px 8px;
+  padding: 4px 6px;
+  overflow-y: auto;
+  max-height: 36vh;
 }
 .aba-flat .aba-flat-row-vertical {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  border-bottom: 1px dashed #f5d0d0;
-  padding: 6px 4px;
+  gap: 3px;
+  padding: 4px 4px;
 }
-.aba-flat .aba-flat-row-vertical:last-child { border-bottom: none; }
 .aba-flat .aba-flat-row-vertical .aba-flat-label {
   padding-top: 0;
   font-size: 11.5px;
 }
 .aba-flat .aba-flat-row-vertical .aba-flat-text textarea {
-  min-height: 24px;
+  min-height: 22px;
   font-size: 11.5px;
 }
 .aba-flat .aba-flat-row-vertical .aba-quick-row {
   margin-top: 0;
-  margin-bottom: 4px;
+  margin-bottom: 3px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 3px;
 }
 .aba-flat .aba-flat-row-vertical .aba-quick {
   font-size: 10.5px;
-  padding: 3px 7px;
+  padding: 3px 6px;
 }
 
-/* 教科グリッドを2カラム左側でも表示できるように調整 */
-.aba-flat .aba-flat-left .aba-subject-grid {
-  grid-template-columns: repeat(8, 1fr);
-}
-.aba-flat .aba-flat-left .aba-weather-grid {
+/* 行動グリッドを14個ボタン1行に詰める */
+.aba-flat .aba-behavior-grid {
   display: grid;
-  grid-template-columns: repeat(8, 1fr);
+  grid-template-columns: repeat(14, 1fr);
+  gap: 2px;
+}
+.aba-flat .aba-behavior-btn {
+  padding: 4px 1px;
+  font-size: 11px;
+  border-width: 1px;
+  white-space: nowrap;
+}
+
+/* 相手選択グリッドは児童グリッドと同じスタイル */
+.aba-flat .aba-target-grid .student-btn {
+  border-color: #c0392b;
+}
+.aba-flat .aba-target-grid .student-btn.active {
+  background: #c0392b;
+  color: white;
+  border-color: #c0392b;
+}
+
+/* ========== 交友関係UI コンパクト化（スクロール削減） ========== */
+#interactionRecordView .record-toolbar {
+  gap: 10px;
+  padding: 4px 10px;
+  margin-bottom: 5px;
+}
+#interactionRecordView .record-toolbar .scene-btn {
+  padding: 3px 7px;
+  font-size: 11.5px;
+}
+#interactionRecordView .record-toolbar .scene-btn::before {
+  width: 6px;
+  height: 6px;
+  margin-right: 3px;
+}
+#interactionRecordView .record-toolbar .mode-btn {
+  padding: 3px 8px;
+  font-size: 11.5px;
+}
+#interactionRecordView .record-toolbar .mode-btn small { font-size: 9px; }
+#interactionRecordView #lessonSubjectButtons .scene-btn {
+  padding: 2px 6px;
+  font-size: 10.5px;
+}
+#interactionRecordView .record-main {
+  grid-template-columns: 1fr 240px;
+  gap: 8px;
+}
+#interactionRecordView .grid-area {
+  padding: 6px 10px 8px;
+}
+#interactionRecordView .grid-header {
+  margin-bottom: 4px;
+}
+#interactionRecordView .grid-legend {
+  font-size: 10.5px;
+  margin: 2px 0 4px;
+}
+#interactionRecordView .student-grid {
   gap: 3px;
+}
+#interactionRecordView .student-grid .student-btn {
+  padding: 4px 4px;
+  font-size: 12px;
+}
+#interactionRecordView .special-row {
+  margin-top: 4px;
+  gap: 4px;
+}
+#interactionRecordView .special-btn {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+#interactionRecordView .note-row {
+  margin-top: 4px;
+}
+#interactionRecordView .note-row input {
+  padding: 4px 8px;
+  font-size: 12px;
+}
+#interactionRecordView .action-row {
+  margin-top: 5px;
+}
+#interactionRecordView .action-hint {
+  font-size: 10.5px;
 }

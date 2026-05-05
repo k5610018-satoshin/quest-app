@@ -325,6 +325,36 @@ async function pushPraiseToGas(praise, action) {
   }
 }
 
+// ===== けテぶれ push (GAS未対応の場合は安全にキュー) =====
+
+async function pushKetebureToGas(rec, action) {
+  if (!checkSyncReady()) return false;
+  if (!navigator.onLine) {
+    addToPendingQueue({ action: action || 'add', ketebure: rec, dataType: 'ketebure' });
+    return false;
+  }
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: action || 'add',
+        dataType: 'ketebure',
+        ketebure: rec,
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return true;
+  } catch (err) {
+    // GAS側がketebure未対応でもアプリ側はローカル保存できているのでwarnのみ
+    console.warn('[sync] ketebure push失敗（GAS未対応の可能性、ローカル保存はOK）:', err.message);
+    return false;
+  }
+}
+
 // ===== ABA push/pull =====
 
 async function pushAbaToGas(rec, action) {

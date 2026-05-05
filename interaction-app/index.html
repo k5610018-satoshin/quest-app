@@ -64,6 +64,7 @@ if ('serviceWorker' in navigator) {
     <button class="record-mode-btn active" data-record-mode="interaction" type="button">📝 交友関係</button>
     <button class="record-mode-btn" data-record-mode="praise" type="button">🌟 ほめたい</button>
     <button class="record-mode-btn" data-record-mode="evaluation" type="button">📊 観点別評価</button>
+    <button class="record-mode-btn" data-record-mode="ketebure" type="button">📚 けテぶれ</button>
     <button class="record-mode-btn" data-record-mode="aba" type="button">🚨 ABAアセスメント</button>
   </div>
 
@@ -78,8 +79,8 @@ if ('serviceWorker' in navigator) {
       <label>シーン</label>
       <div class="scene-buttons" id="sceneButtons"></div>
     </div>
-    <div class="toolbar-group" id="lessonSubjectRow" style="display:none;">
-      <label>教科 <span class="muted small">(任意)</span></label>
+    <div class="toolbar-group" id="lessonSubjectRow">
+      <label>教科 <span class="muted small">(押すと授業中に)</span></label>
       <div class="scene-buttons" id="lessonSubjectButtons"></div>
     </div>
     <div class="toolbar-group">
@@ -88,10 +89,6 @@ if ('serviceWorker' in navigator) {
         <button class="mode-btn active" data-mode="simple">シンプル<small>相手のみ</small></button>
         <button class="mode-btn" data-mode="activity">相手×活動</button>
       </div>
-    </div>
-    <div class="toolbar-group right">
-      <button class="ghost" id="undoBtn" title="直前の記録を取り消す (Ctrl+Z)">↶ 取り消し</button>
-      <button class="ghost" id="quickRepeatBtn" title="直前メンバーを保ったまま、別の児童を主役にして連続記録">↻ 同じメンバーで再記録</button>
     </div>
   </div>
 
@@ -291,7 +288,76 @@ if ('serviceWorker' in navigator) {
     </div>
   </div><!-- /evaluationRecordView -->
 
-    <!-- ABAアセスメントモード（フラット一覧式：すべて常時表示） -->
+    <!-- けテぶれモード（観点別評価ベース） -->
+  <div id="ketebureRecordView" class="hidden">
+    <div class="record-toolbar">
+      <div class="toolbar-group">
+        <label>記録日</label>
+        <input type="date" id="ketebureDate" title="記録する日">
+        <button class="ghost" id="ketebureDateTodayBtn" title="今日に戻す" style="padding:3px 8px;font-size:11px;">今日</button>
+      </div>
+      <div class="toolbar-group">
+        <label>種別</label>
+        <div class="mode-switch">
+          <button class="mode-btn active" data-ket-type="shukudai" type="button">📕 宿題けテぶれ<small>計画/テスト/分析/練習</small></button>
+          <button class="mode-btn" data-ket-type="seikatsu" type="button">🌱 生活けテぶれ<small>心/計画/分析/次</small></button>
+        </div>
+      </div>
+      <div class="toolbar-group">
+        <label>評価</label>
+        <div class="ket-rating-buttons" id="ketRatingButtons"></div>
+      </div>
+      <div class="toolbar-group">
+        <label>観点 <span class="muted small">(任意・複数可)</span></label>
+        <div class="ket-aspect-buttons" id="ketAspectButtons"></div>
+      </div>
+      <div class="toolbar-group right">
+        <button class="ghost" id="ketAllMaruBtn" title="今日この種別で全員に◎を一括記録（観点なし）" style="padding:4px 10px; font-size:11.5px;">⭐ 全員◎</button>
+      </div>
+    </div>
+
+    <div class="record-main">
+      <div class="grid-area">
+        <div class="grid-header">
+          <div class="status-line">
+            <span class="status-label" id="ketStatusLabel">評価値（◎○△）と観点を選び、児童をタップで記録</span>
+          </div>
+        </div>
+        <div class="grid-legend" title="ボタン上のマーク">
+          <span><span class="lg-mark dn">●</span>本日記録済</span>
+          <span><span class="lg-mark wt">🔥</span>連続◎日数</span>
+          <span><span class="lg-mark wt">📌</span>本日まだ未記録</span>
+        </div>
+        <div id="ketUnrecordedBanner" class="ket-unrecorded-banner"></div>
+        <div id="ketStuckBanner" class="ket-stuck-banner"></div>
+        <div class="student-grid" id="ketStudentGrid"></div>
+        <div class="note-row">
+          <input type="text" id="ketebureNote" placeholder="メモ (任意): 例「計画の立て方を工夫していた」" maxlength="200">
+        </div>
+        <div class="action-row">
+          <span class="action-hint">評価値・観点を選んでから児童をタップ → 即座に記録 / メモがあれば一緒に保存</span>
+        </div>
+      </div>
+
+      <aside class="side-panel">
+        <div class="card today-stats">
+          <h3>今日のけテぶれ <span class="muted small" id="ketTypeBadge"></span></h3>
+          <div><span class="big-number" id="ketTodayCount">0</span> 件 ・ <b id="ketTodayCovered">0</b>/28人</div>
+          <div class="muted small">◎: <b id="ketTodayMaru">0</b> / ○: <b id="ketTodayMaruOne">0</b> / △: <b id="ketTodayDelta">0</b></div>
+        </div>
+        <div class="card">
+          <h3>連続◎ TOP5</h3>
+          <ol class="watch-list" id="ketStreakList"></ol>
+        </div>
+        <div class="card">
+          <h3>今日の記録一覧</h3>
+          <ul class="recent-list" id="ketTodayList" style="font-size:12px; max-height:240px; overflow-y:auto;"></ul>
+        </div>
+      </aside>
+    </div>
+  </div><!-- /ketebureRecordView -->
+
+  <!-- ABAアセスメントモード（フラット一覧式：すべて常時表示） -->
   <div id="abaRecordView" class="hidden">
     <div class="aba-flat">
       <!-- 上部: 選択中ステータス + 保存ボタン -->
@@ -324,9 +390,9 @@ if ('serviceWorker' in navigator) {
         <button class="ghost" id="abaResetBtn" style="padding:4px 10px;font-size:11px;">↺ リセット</button>
       </div>
 
-      <!-- 全項目を最初から一覧表示（2カラム式） -->
+      <!-- 全項目を最初から一覧表示（上下2段：上=選択項目、下=A/C/対応） -->
       <div class="aba-flat-grid">
-       <div class="aba-flat-left">
+       <div class="aba-flat-top">
         <!-- 日付 -->
         <div class="aba-flat-row">
           <div class="aba-flat-label">📅 日付</div>
@@ -336,6 +402,24 @@ if ('serviceWorker' in navigator) {
             <button class="aba-date-btn" data-date-offset="-2">一昨日</button>
             <input type="date" id="abaDateInput" style="padding:4px 6px; font-size:12px; border:1px solid #ccc; border-radius:4px;">
           </div>
+        </div>
+
+        <!-- 行動 -->
+        <div class="aba-flat-row">
+          <div class="aba-flat-label">🚨 行動 <span class="muted small">(複数可)</span></div>
+          <div class="aba-flat-content aba-behavior-grid" id="abaBehaviorGrid"></div>
+        </div>
+
+        <!-- 児童 -->
+        <div class="aba-flat-row">
+          <div class="aba-flat-label">👤 児童</div>
+          <div class="aba-flat-content student-grid aba-student-grid" id="abaStudentGrid"></div>
+        </div>
+
+        <!-- 相手（対人系行動の時のみ） -->
+        <div class="aba-flat-row" id="abaTargetRow" style="display:none;">
+          <div class="aba-flat-label">🎯 相手 <span class="muted small">(任意)</span></div>
+          <div class="aba-flat-content student-grid aba-target-grid" id="abaTargetGrid"></div>
         </div>
 
         <!-- 時間帯 -->
@@ -355,33 +439,25 @@ if ('serviceWorker' in navigator) {
           <div class="aba-flat-label">☀ 天気 <span class="muted small">(複数可)</span></div>
           <div class="aba-flat-content aba-weather-grid" id="abaWeatherGrid"></div>
         </div>
-
-        <!-- 児童 -->
-        <div class="aba-flat-row">
-          <div class="aba-flat-label">👤 児童</div>
-          <div class="aba-flat-content student-grid aba-student-grid" id="abaStudentGrid"></div>
-        </div>
-
-        <!-- 行動 -->
-        <div class="aba-flat-row">
-          <div class="aba-flat-label">🚨 行動 <span class="muted small">(複数可)</span></div>
-          <div class="aba-flat-content aba-behavior-grid" id="abaBehaviorGrid"></div>
-        </div>
        </div>
 
-       <div class="aba-flat-right">
+       <div class="aba-flat-bottom">
         <!-- A 先行事象 -->
         <div class="aba-flat-row aba-flat-row-vertical">
           <div class="aba-flat-label">A 先行 <span class="muted small">(任意・複数可)</span></div>
           <div class="aba-flat-content aba-flat-text">
             <div class="aba-quick-row">
-              <button class="aba-quick" data-fill="abaAntecedent" data-text="授業の指示・課題提示">授業指示</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="課題提示・難課題">課題提示</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="集団指示・全体指導">集団指示</button>
               <button class="aba-quick" data-fill="abaAntecedent" data-text="グループ活動・話し合い">グループ</button>
-              <button class="aba-quick" data-fill="abaAntecedent" data-text="課題が難しい・解けない">難課題</button>
-              <button class="aba-quick" data-fill="abaAntecedent" data-text="移動・場面切替">切替</button>
-              <button class="aba-quick" data-fill="abaAntecedent" data-text="他児童との接触・トラブル">児童間</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="場面切替・移動">切替</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="他児童との接触・接近">児童接触</button>
               <button class="aba-quick" data-fill="abaAntecedent" data-text="教師の注意・叱責">教師注意</button>
-              <button class="aba-quick" data-fill="abaAntecedent" data-text="休み時間・自由時間">休み</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="自由時間・休み時間">自由時間</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="待機・暇な時間">待機</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="失敗・挫折体験">失敗</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="予定変更・想定外">予定変更</button>
+              <button class="aba-quick" data-fill="abaAntecedent" data-text="大きな音・刺激">刺激</button>
               <button class="aba-quick" data-fill="abaAntecedent" data-text="特になし／突然">突然</button>
             </div>
             <textarea id="abaAntecedent" placeholder="ボタンに無い内容を自由記述（任意）" rows="1" maxlength="500"></textarea>
@@ -393,12 +469,15 @@ if ('serviceWorker' in navigator) {
           <div class="aba-flat-label">C 結果 <span class="muted small">(任意・複数可)</span></div>
           <div class="aba-flat-content aba-flat-text">
             <div class="aba-quick-row">
-              <button class="aba-quick" data-fill="abaConsequence" data-text="授業が中断した">授業中断</button>
-              <button class="aba-quick" data-fill="abaConsequence" data-text="周囲の注目を集めた">注目</button>
-              <button class="aba-quick" data-fill="abaConsequence" data-text="課題から逃れられた">課題回避</button>
-              <button class="aba-quick" data-fill="abaConsequence" data-text="他児童とトラブルになった">トラブル</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="周囲の注目を獲得">注目獲得</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="教師の対応を獲得">教師対応</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="課題から逃れた（回避）">課題回避</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="物・場所を獲得（要求達成）">要求達成</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="他児童とトラブル">トラブル</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="授業・活動が中断">活動中断</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="別室移動・退室">別室退室</button>
               <button class="aba-quick" data-fill="abaConsequence" data-text="自然に収まった">自然収束</button>
-              <button class="aba-quick" data-fill="abaConsequence" data-text="本人がクールダウンできた">CD</button>
+              <button class="aba-quick" data-fill="abaConsequence" data-text="本人がクールダウンできた">CD成功</button>
             </div>
             <textarea id="abaConsequence" placeholder="ボタンに無い内容を自由記述（任意）" rows="1" maxlength="500"></textarea>
           </div>
@@ -411,9 +490,13 @@ if ('serviceWorker' in navigator) {
             <div class="aba-quick-row">
               <button class="aba-quick" data-fill="abaResponse" data-text="個別に声かけ・傾聴">個別声かけ</button>
               <button class="aba-quick" data-fill="abaResponse" data-text="別室でクールダウン">別室CD</button>
-              <button class="aba-quick" data-fill="abaResponse" data-text="課題の修正・選択肢提示">課題修正</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="課題調整・選択肢提示">課題調整</button>
               <button class="aba-quick" data-fill="abaResponse" data-text="座席・班の配置調整">座席調整</button>
-              <button class="aba-quick" data-fill="abaResponse" data-text="意図的に注目しない（消去）">無視</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="視覚的支援（タイマー・絵カード）">視覚支援</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="環境調整・刺激除去">環境調整</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="強化（褒める・トークン）">強化</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="代替行動の提案・指導">代替行動</button>
+              <button class="aba-quick" data-fill="abaResponse" data-text="意図的に注目しない（消去）">消去</button>
               <button class="aba-quick" data-fill="abaResponse" data-text="保護者連絡">保護者</button>
               <button class="aba-quick" data-fill="abaResponse" data-text="管理職・SC連絡">管理職</button>
             </div>
@@ -1025,24 +1108,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260505z"></script>
-<script src="students.js?v=20260505z"></script>
-<script src="eval-data.js?v=20260505z"></script>
-<script src="eval-data-extra.js?v=20260505z"></script>
-<script src="app.js?v=20260505z"></script>
-<script src="cloud-sync.js?v=20260505z"></script>
-<script src="analytics-plus.js?v=20260505z"></script>
-<script src="dashboard-overview.js?v=20260505z"></script>
-<script src="seating-planner.js?v=20260505z"></script>
-<script src="print-report.js?v=20260505z"></script>
-<script src="search-bar.js?v=20260505z"></script>
-<script src="centrality-extra.js?v=20260505z"></script>
-<script src="seating-correlation.js?v=20260505z"></script>
-<script src="templates.js?v=20260505z"></script>
-<script src="photo-library.js?v=20260505z"></script>
-<script src="voice-memo.js?v=20260505z"></script>
-<script src="ai-insights.js?v=20260505z"></script>
-<script src="extra-features.js?v=20260505z"></script>
-<script src="onboarding-wizard.js?v=20260505z"></script>
+<script src="config.js?v=20260506a"></script>
+<script src="students.js?v=20260506a"></script>
+<script src="eval-data.js?v=20260506a"></script>
+<script src="eval-data-extra.js?v=20260506a"></script>
+<script src="app.js?v=20260506a"></script>
+<script src="cloud-sync.js?v=20260506a"></script>
+<script src="analytics-plus.js?v=20260506a"></script>
+<script src="dashboard-overview.js?v=20260506a"></script>
+<script src="seating-planner.js?v=20260506a"></script>
+<script src="print-report.js?v=20260506a"></script>
+<script src="search-bar.js?v=20260506a"></script>
+<script src="centrality-extra.js?v=20260506a"></script>
+<script src="seating-correlation.js?v=20260506a"></script>
+<script src="templates.js?v=20260506a"></script>
+<script src="photo-library.js?v=20260506a"></script>
+<script src="voice-memo.js?v=20260506a"></script>
+<script src="ai-insights.js?v=20260506a"></script>
+<script src="extra-features.js?v=20260506a"></script>
+<script src="onboarding-wizard.js?v=20260506a"></script>
 </body>
 </html>
