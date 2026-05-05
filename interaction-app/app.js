@@ -1338,6 +1338,7 @@ function refreshSummaryCompare() {
 function refreshCompare() {
   const restRecs = filterRecords({ category: 'rest' });
   const classRecs = filterRecords({ category: 'class' });
+  refreshSeatingCorrelation(restRecs, classRecs);
   const table = document.getElementById('compareTable');
 
   let html = `
@@ -1403,6 +1404,98 @@ function refreshCompare() {
   }
   html += '</tbody>';
   table.innerHTML = html;
+}
+
+// 席替え経験と交友関係の相関分析
+function refreshSeatingCorrelation(restRecs, classRecs) {
+  const cont = document.getElementById('seatingCorrelation');
+  if (!cont) return;
+  const snaps = state.seatingSnapshots || [];
+  if (!snaps.length) {
+    cont.innerHTML = '<span class="muted">席替えタブで「💾 この座席を履歴保存」を実行すると分析が表示されます</span>';
+    return;
+  }
+  const coGroup = computeCoGroupCounts();
+  // 全ペア: 同班経験あり (count>=1) と 無し
+  const ids = state.students.map(s => s.id);
+  const restPairs = computePairs(restRecs); // {key: count}
+  const classPairs = computePairs(classRecs);
+  const havePairsRest = [], notPairsRest = [], havePairsClass = [], notPairsClass = [];
+  for (let i = 0; i < ids.length; i++) {
+    for (let j = i+1; j < ids.length; j++) {
+      const a = ids[i], b = ids[j];
+      const k = `${Math.min(a,b)}-${Math.max(a,b)}`;
+      const inGroup = (coGroup[k] || 0) >= 1;
+      const r = restPairs[k] || 0;
+      const c = classPairs[k] || 0;
+      (inGroup ? havePairsRest : notPairsRest).push(r);
+      (inGroup ? havePairsClass : notPairsClass).push(c);
+    }
+  }
+  const avg = arr => arr.length ? (arr.reduce((a,b) => a+b, 0) / arr.length) : 0;
+  const haveR = avg(havePairsRest), notR = avg(notPairsRest);
+  const haveC = avg(havePairsClass), notC = avg(notPairsClass);
+  const ratioR = notR > 0 ? (haveR / notR) : (haveR > 0 ? Infinity : 0);
+  const ratioC = notC > 0 ? (haveC / notC) : (haveC > 0 ? Infinity : 0);
+  const verdict = (r) => {
+    if (!isFinite(r) || r === 0) return '比較不可';
+    if (r >= 2.0) return '🟢 強い正の相関 (席替えで作った繋がりが交友に発展)';
+    if (r >= 1.3) return '🟡 弱い正の相関';
+    if (r >= 0.8) return '⚪ ほぼ相関なし';
+    return '🔴 負の相関 (同班経験が逆に距離を生んでいる可能性)';
+  };
+  // 児童ごとの「同班経験率→実際関わりに発展」率
+  const sMap = new Map(state.students.map(s => [s.id, s]));
+  const perStudent = state.students.map(s => {
+    const myCoIds = new Set();
+    for (const snap of snaps) for (const g of snap.groups) {
+      if (g.includes(s.id)) g.forEach(x => { if (x !== s.id) myCoIds.add(x); });
+    }
+    const restPartners = new Set(restRecs.filter(r => r.subject === s.id || r.members.includes(s.id))
+      .flatMap(r => [r.subject, ...r.members].filter(x => x !== s.id)));
+    const classPartners = new Set(classRecs.filter(r => r.subject === s.id || r.members.includes(s.id))
+      .flatMap(r => [r.subject, ...r.members].filter(x => x !== s.id)));
+    const restHit = [...myCoIds].filter(x => restPartners.has(x)).length;
+    const classHit = [...myCoIds].filter(x => classPartners.has(x)).length;
+    return { s, total: myCoIds.size, restHit, classHit };
+  }).filter(x => x.total > 0)
+    .sort((a, b) => (b.restHit + b.classHit) / Math.max(1, b.total) - (a.restHit + a.classHit) / Math.max(1, a.total))
+    .slice(0, 10);
+
+  const perRows = perStudent.map(x => {
+    const restPct = Math.round(x.restHit / x.total * 100);
+    const classPct = Math.round(x.classHit / x.total * 100);
+    return `<tr>
+      <td>${escapeHtml(x.s.name)}</td>
+      <td class="num">${x.total}人</td>
+      <td class="num">${x.restHit} (${restPct}%)</td>
+      <td class="num">${x.classHit} (${classPct}%)</td>
+    </tr>`;
+  }).join('');
+
+  cont.innerHTML = `
+    <div style="display:flex; gap:18px; flex-wrap:wrap; align-items:flex-start;">
+      <div style="min-width:340px;">
+        <div><b>履歴された席替え:</b> ${snaps.length}回 (${snaps.map(s => escapeHtml(s.label)).join(' / ')})</div>
+        <div style="margin-top:6px;">
+          <b>同班経験ありペア vs 無しペアの平均共起回数:</b>
+          <table style="margin-top:4px; border-collapse:collapse; font-size:12px;">
+            <tr style="background:#f0f0f5;"><th style="padding:3px 8px; border:1px solid #ddd;">場面</th><th style="padding:3px 8px; border:1px solid #ddd;">同班経験あり</th><th style="padding:3px 8px; border:1px solid #ddd;">経験なし</th><th style="padding:3px 8px; border:1px solid #ddd;">比率</th></tr>
+            <tr><td style="padding:3px 8px; border:1px solid #ddd;">休み時間</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;">${haveR.toFixed(2)}</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;">${notR.toFixed(2)}</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;"><b>${isFinite(ratioR) ? ratioR.toFixed(2) + 'x' : '−'}</b></td></tr>
+            <tr><td style="padding:3px 8px; border:1px solid #ddd;">授業時間</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;">${haveC.toFixed(2)}</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;">${notC.toFixed(2)}</td><td class="num" style="padding:3px 8px; border:1px solid #ddd;"><b>${isFinite(ratioC) ? ratioC.toFixed(2) + 'x' : '−'}</b></td></tr>
+          </table>
+          <div class="muted small" style="margin-top:6px;">休み時間: ${verdict(ratioR)}<br>授業時間: ${verdict(ratioC)}</div>
+        </div>
+      </div>
+      <div style="flex:1; min-width:380px;">
+        <b>児童別「同班だった子と実際に関わっている率」 TOP10:</b>
+        <table style="border-collapse:collapse; font-size:12px; margin-top:4px; width:100%;">
+          <tr style="background:#f0f0f5;"><th style="padding:3px 6px; border:1px solid #ddd;">児童</th><th style="padding:3px 6px; border:1px solid #ddd;">同班経験</th><th style="padding:3px 6px; border:1px solid #ddd;">休でも</th><th style="padding:3px 6px; border:1px solid #ddd;">授業でも</th></tr>
+          ${perRows || '<tr><td colspan="4" class="muted">データなし</td></tr>'}
+        </table>
+      </div>
+    </div>
+  `;
 }
 
 // ========== Sociogram ==========

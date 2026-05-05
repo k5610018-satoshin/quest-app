@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>5年4組 交友関係記録</title>
-<link rel="stylesheet" href="styles.css?v=20260505i">
+<link rel="stylesheet" href="styles.css?v=20260505j">
 </head>
 <body>
 
@@ -432,6 +432,10 @@
   <div class="compare-intro">
     <p>休み時間と授業時間で <b>同じ相手と関わっているか</b> を Jaccard係数 (0〜1) で表示します。<br>
        1.0 に近いほど「関わる相手が同じ」、0.0 に近いほど「全く違う相手」。</p>
+  </div>
+  <div class="card" id="seatingCorrelationCard" style="margin:8px 12px;">
+    <h3>🪑 席替えと交友関係の相関</h3>
+    <div id="seatingCorrelation" class="muted small">席替えタブで「💾 この座席を履歴保存」を実行すると分析が表示されます</div>
   </div>
   <div class="compare-table-wrap">
     <table class="compare-table" id="compareTable"></table>
@@ -889,9 +893,9 @@
   </div>
 </div>
 
-<script src="students.js?v=20260505i"></script>
-<script src="eval-data.js?v=20260505i"></script>
-<script src="app.js?v=20260505i"></script>
-<script src="cloud-sync.js?v=20260505i"></script>
+<script src="students.js?v=20260505j"></script>
+<script src="eval-data.js?v=20260505j"></script>
+<script src="app.js?v=20260505j"></script>
+<script src="cloud-sync.js?v=20260505j"></script>
 </body>
 </html>
