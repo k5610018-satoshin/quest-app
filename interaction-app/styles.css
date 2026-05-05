@@ -2018,7 +2018,7 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 .eval-control-evidences .eval-evidence-list {
   margin-top: 0;
 }
-/* 評価材料：横並びコンパクト化 */
+/* 評価材料：横並びコンパクト化（旧row形式 - 編集モーダル用に残置） */
 .eval-control-evidences .eval-evidence-row {
   grid-template-columns: 80px 1fr;
   gap: 4px;
@@ -2026,6 +2026,44 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 .eval-control-evidences .eval-evidence-detail {
   font-size: 11.5px;
   padding: 3px 6px;
+}
+/* 新形式: 横並びボタン + 共有入力欄 */
+.eval-evidence-buttons {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  margin-bottom: 3px;
+}
+.eval-evidence-buttons .eval-evidence-toggle {
+  padding: 4px 12px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.eval-evidence-buttons .eval-evidence-toggle.focused {
+  background: #1e63b8;
+  color: white;
+  border-color: #1e63b8;
+  box-shadow: 0 0 0 2px rgba(74,144,226,0.5);
+}
+.eval-evidence-detail-shared {
+  width: 100%;
+  padding: 5px 10px;
+  font-size: 12.5px;
+  border: 1.5px solid #b3d4f5;
+  border-radius: 5px;
+  background: #fafdff;
+  box-sizing: border-box;
+}
+.eval-evidence-detail-shared:focus {
+  border-color: #4a90e2;
+  outline: none;
+  background: #fff;
+}
+.eval-evidence-detail-shared:disabled {
+  background: #f5f5f7;
+  color: #aaa;
+  cursor: not-allowed;
 }
 .eval-side-panel .card { padding: 6px 10px; margin-bottom: 6px; }
 .eval-side-panel .card h3 { font-size: 12px; margin: 0 0 4px; }
@@ -2977,55 +3015,93 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== ほめモードUI（児童7カラムに縮小・タグ枠内収納・記述拡大） ========== */
-#praiseRecordView .record-main {
+/* ========== ほめモードUI（自由記述を左カラム下に移動・スクロール解消） ========== */
+#praiseRecordView .record-main.praise-main-2col {
   display: grid;
-  grid-template-columns: 1fr 400px;  /* サイドパネル拡大 */
+  grid-template-columns: 1fr 360px;
   gap: 10px;
 }
 #praiseRecordView .student-grid {
-  grid-template-columns: repeat(7, minmax(0, 1fr));  /* 6→7に縮小 */
+  grid-template-columns: repeat(7, minmax(0, 1fr));
   gap: 4px;
 }
 #praiseRecordView .student-btn {
-  padding: 6px 3px;
-  font-size: 12px;
-  min-height: 42px;
+  padding: 5px 3px;
+  font-size: 11.5px;
+  min-height: 38px;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* タグエリア: グリッドで枠内に確実に収める（min-width:0 + word-break） */
+/* 児童ボタン下の自由記述行 */
+#praiseRecordView .praise-note-row {
+  margin-top: 6px;
+}
+#praiseRecordView #praiseInput {
+  width: 100%;
+  min-height: 70px;
+  font-size: 13px;
+  box-sizing: border-box;
+  padding: 6px 10px;
+  border: 1.5px solid #b3d4f5;
+  border-radius: 6px;
+  background: #fafdff;
+}
+#praiseRecordView #praiseInput:focus {
+  outline: none;
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(74,144,226,0.15);
+}
+/* タグエリア: 4列グリッド（24個 / 4 = 6行） */
 #praiseRecordView .praise-quick-tags {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));  /* 4→3列で1ボタン幅広く */
-  gap: 4px;
-  margin-bottom: 8px;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 3px;
+  margin-bottom: 6px;
   width: 100%;
 }
 #praiseRecordView .praise-tag-btn {
-  padding: 7px 4px;
-  font-size: 11.5px;
+  padding: 5px 3px;
+  font-size: 11px;
   white-space: nowrap;
   text-align: center;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 自由記述textareaを大きく */
-#praiseRecordView #praiseInput {
-  min-height: 130px;
-  font-size: 14px;
-  width: 100%;
-  box-sizing: border-box;
+/* 保存・クリアボタン行 */
+#praiseRecordView .praise-action-row {
+  display: flex;
+  gap: 6px;
+  margin-top: 4px;
 }
-/* praise sidepanelカード本体 */
+#praiseRecordView .praise-action-row #savePraiseBtn {
+  flex: 1;
+  padding: 7px 14px;
+  font-size: 13px;
+  font-weight: 700;
+}
+#praiseRecordView .praise-action-row #cancelPraiseBtn {
+  padding: 5px 12px;
+}
+/* praise sidepanelカード本体（タグ用カードを目立たせる） */
 #praiseRecordView .side-panel .card {
-  padding: 8px 10px;
-  margin-bottom: 8px;
+  padding: 6px 10px;
+  margin-bottom: 6px;
   min-width: 0;
   overflow: hidden;
+}
+#praiseRecordView .side-panel .praise-tag-card h3 {
+  font-size: 12px;
+  margin: 0 0 5px;
+}
+#praiseRecordView .side-panel .today-stats h3 { font-size: 11px; margin: 0 0 3px; }
+#praiseRecordView .side-panel .today-stats .big-number { font-size: 18px; }
+#praiseRecordView .side-panel #todayPraiseEditList {
+  font-size: 11px;
+  max-height: 140px;
 }
 
 /* ========== 交友関係UI 1カラム化（サイドパネル廃止） ========== */
@@ -3424,3 +3500,84 @@ button.compact {
   border-bottom: 1px solid #f0f0f0;
 }
 .kta-corr-table tr:hover td { background: #fafbfc; }
+
+/* ========================================================================
+ * 画面サイズ自動対応（PCの16:9想定 + 高さ短い環境への対策）
+ * body.viewport-* クラスは JS が付与（DOMContentLoaded + resize）
+ * ======================================================================== */
+
+/* 高さ720px以下: 縦スペース圧縮（1366×768 や スケーリング150%等） */
+@media (max-height: 760px) {
+  .app-header { padding: 4px 10px; }
+  .app-header h1 { font-size: 16px; }
+  .tabs .tab-btn { padding: 4px 8px; font-size: 11.5px; }
+  .record-mode-bar { padding: 3px 6px; gap: 4px; }
+  .record-mode-btn { padding: 4px 10px; font-size: 11.5px; }
+  .record-toolbar { padding: 3px 8px; gap: 6px; }
+  .record-toolbar label { font-size: 10.5px; }
+  /* 児童ボタンを小型化 */
+  .student-grid .student-btn { min-height: 32px; padding: 3px 4px; font-size: 11px; }
+  .student-grid.ket-student-grid .student-btn { min-height: 30px; font-size: 10.5px; }
+  /* タグ/評価ボタンも縮小 */
+  .praise-tag-btn { padding: 4px 3px; font-size: 10.5px; }
+  .ket-rating-btn { padding: 4px 10px; font-size: 16px; }
+  .eval-grade-btn { padding: 4px 10px; font-size: 14px; }
+  /* テキストエリアの最小高さを縮小 */
+  #praiseRecordView #praiseInput { min-height: 56px; font-size: 12px; }
+  /* サイドパネル内カードを圧縮 */
+  .side-panel .card { padding: 5px 8px; margin-bottom: 5px; }
+  .side-panel .card h3 { font-size: 11px; margin: 0 0 3px; }
+  /* Recent listやfooterを圧縮 */
+  .recent-list { font-size: 10.5px; }
+  .grid-legend { font-size: 10px; padding: 2px 4px; }
+}
+
+/* 高さ650px以下: さらに圧縮（古いノートPC等） */
+@media (max-height: 650px) {
+  .student-grid .student-btn { min-height: 28px; padding: 2px 3px; font-size: 10.5px; }
+  .ket-rating-btn { padding: 3px 8px; font-size: 14px; }
+  .eval-grade-btn { padding: 3px 8px; font-size: 13px; }
+  details.recent-records summary { padding: 2px 6px; font-size: 10.5px; }
+}
+
+/* 横幅1280px以下: タブバーや余白を圧縮 */
+@media (max-width: 1280px) {
+  .tabs .tab-btn { padding: 5px 8px; font-size: 11.5px; }
+  .record-toolbar { gap: 6px; }
+  .filter-bar { gap: 6px; padding: 4px 8px; }
+}
+
+/* 横幅1024px以下: ほめ・評価モードのサイドパネルを縮小 */
+@media (max-width: 1024px) {
+  #praiseRecordView .record-main.praise-main-2col { grid-template-columns: 1fr 280px; }
+  #evaluationRecordView .record-main { grid-template-columns: 1fr 240px; }
+  .student-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+/* 大画面（1920px以上）: タグやボタンに余裕を */
+@media (min-width: 1920px) {
+  body { font-size: 14px; }
+  .student-grid .student-btn { min-height: 44px; font-size: 13px; }
+  .ket-rating-btn { padding: 6px 16px; font-size: 20px; }
+  .eval-grade-btn { padding: 6px 14px; font-size: 16px; }
+  .praise-tag-btn { font-size: 12.5px; padding: 8px 5px; }
+  #socioSvg { height: 720px; }
+}
+
+/* JS で付与する詳細クラス（フォントサイズ全体スケール） */
+body.viewport-tight { font-size: 12.5px; }
+body.viewport-tight .app-header h1 { font-size: 15px; }
+body.viewport-tight .tabs .tab-btn { font-size: 11px; padding: 3px 6px; }
+body.viewport-tight .record-toolbar { padding: 2px 6px; gap: 5px; }
+body.viewport-tight .record-toolbar label { font-size: 10px; }
+body.viewport-tight .record-toolbar input,
+body.viewport-tight .record-toolbar select { font-size: 11px; padding: 2px 4px; }
+body.viewport-tight .student-grid .student-btn { min-height: 30px; padding: 2px 3px; font-size: 10.5px; }
+body.viewport-tight .student-grid.ket-student-grid .student-btn { min-height: 28px; }
+body.viewport-tight #praiseRecordView #praiseInput { min-height: 50px; font-size: 11.5px; }
+body.viewport-tight .praise-tag-btn { font-size: 10px; padding: 3px 2px; }
+body.viewport-tight .side-panel .card { padding: 4px 6px; margin-bottom: 4px; }
+body.viewport-tight .ket-control-bar,
+body.viewport-tight .eval-control-bar { padding: 4px 8px; }
+body.viewport-tight .ket-rating-btn { padding: 3px 8px; font-size: 13px; }
+body.viewport-tight .eval-grade-btn { padding: 3px 8px; font-size: 12px; }

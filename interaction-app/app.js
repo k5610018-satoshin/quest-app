@@ -3431,39 +3431,75 @@ function refreshEvalUI() {
   renderEvalEvidenceList();
 }
 
-// 評価材料の選択UIを描画（toggle + 自由記述）
+// 評価材料の選択UIを描画（横並びボタン + 共有自由記述欄1つ・フォーカス中の材料に紐付く）
 function renderEvalEvidenceList() {
   const cont = document.getElementById('evalEvidenceList');
   if (!cont) return;
   cont.innerHTML = '';
   if (!state.ui.evalEvidences) state.ui.evalEvidences = {};
   const map = state.ui.evalEvidences;
+  // フォーカス（入力欄が紐付く材料）の確定
+  if (state.ui.evalEvidenceFocus && !(state.ui.evalEvidenceFocus in map)) {
+    state.ui.evalEvidenceFocus = null;
+  }
+  const activeIds = Object.keys(map);
+  if (!state.ui.evalEvidenceFocus && activeIds.length > 0) {
+    state.ui.evalEvidenceFocus = activeIds[0];
+  }
+
+  // ボタン群（横並び）
+  const btnRow = document.createElement('div');
+  btnRow.className = 'eval-evidence-buttons';
   EVAL_EVIDENCE_TYPES.forEach(t => {
-    const row = document.createElement('div');
-    row.className = 'eval-evidence-row';
     const isActive = map[t.id] !== undefined;
+    const isFocused = isActive && state.ui.evalEvidenceFocus === t.id;
     const btn = document.createElement('button');
     btn.type = 'button';
-    btn.className = 'eval-evidence-toggle' + (isActive ? ' active' : '');
-    btn.textContent = t.label;
+    btn.className = 'eval-evidence-toggle'
+      + (isActive ? ' active' : '')
+      + (isFocused ? ' focused' : '');
+    btn.textContent = t.label + (isActive && map[t.id] ? ' ✏' : '');
+    btn.title = isActive
+      ? (isFocused ? 'もう一度クリックで解除' : 'クリックでこの材料の入力欄に切替')
+      : 'クリックで選択して詳細入力';
     btn.addEventListener('click', () => {
-      if (map[t.id] !== undefined) delete map[t.id];
-      else map[t.id] = '';
+      if (!isActive) {
+        map[t.id] = map[t.id] || '';
+        state.ui.evalEvidenceFocus = t.id;
+      } else if (isFocused) {
+        delete map[t.id];
+        const remain = Object.keys(map);
+        state.ui.evalEvidenceFocus = remain[0] || null;
+      } else {
+        state.ui.evalEvidenceFocus = t.id;
+      }
       renderEvalEvidenceList();
     });
-    const inp = document.createElement('input');
-    inp.type = 'text';
-    inp.className = 'eval-evidence-detail';
-    inp.placeholder = isActive ? t.label + 'の詳細（任意）' : '（材料を選んでから）';
-    inp.value = isActive ? (map[t.id] || '') : '';
-    inp.disabled = !isActive;
-    inp.addEventListener('input', () => {
-      if (map[t.id] !== undefined) map[t.id] = inp.value;
-    });
-    row.appendChild(btn);
-    row.appendChild(inp);
-    cont.appendChild(row);
+    btnRow.appendChild(btn);
   });
+  cont.appendChild(btnRow);
+
+  // 共有入力欄（1つ・フォーカス中の材料の詳細を編集）
+  const inp = document.createElement('input');
+  inp.type = 'text';
+  inp.className = 'eval-evidence-detail-shared';
+  const focusType = state.ui.evalEvidenceFocus;
+  if (focusType && focusType in map) {
+    const label = (EVAL_EVIDENCE_TYPES.find(t => t.id === focusType) || {}).label || focusType;
+    inp.placeholder = `${label}の詳細（任意・他材料に切替も可）`;
+    inp.value = map[focusType] || '';
+    inp.disabled = false;
+  } else {
+    inp.placeholder = '上のボタンで材料を選んでから入力';
+    inp.value = '';
+    inp.disabled = true;
+  }
+  inp.addEventListener('input', () => {
+    if (state.ui.evalEvidenceFocus) {
+      map[state.ui.evalEvidenceFocus] = inp.value;
+    }
+  });
+  cont.appendChild(inp);
 }
 
 function refreshEvalCriteriaText() {
@@ -7277,10 +7313,28 @@ switchTab = function(name) {
   else if (name === 'ketebure-analysis') refreshKetebureAnalysis();
 };
 
+// ========== ビューポート検知（画面サイズに応じてUI圧縮） ==========
+function applyViewportClass() {
+  const w = window.innerWidth;
+  const h = window.innerHeight;
+  const body = document.body;
+  // tight = 縦が窮屈 or 縦×横の積が小さい
+  const tight = h < 720 || (w * h) < 1280 * 720;
+  body.classList.toggle('viewport-tight', tight);
+  body.classList.toggle('viewport-wide', w >= 1920);
+  body.classList.toggle('viewport-narrow', w < 1280);
+  body.dataset.viewport = `${w}x${h}`;
+}
+window.addEventListener('resize', () => {
+  clearTimeout(window._vpTimer);
+  window._vpTimer = setTimeout(applyViewportClass, 120);
+});
+
 // init拡張
 const _origInit = init;
 init = function() {
   _origInit();
+  applyViewportClass();
   initHeatmapTab();
   initSeating();
   initKetebureAnalysisTab();

@@ -159,11 +159,11 @@ if ('serviceWorker' in navigator) {
       </div>
     </div>
 
-    <div class="record-main">
+    <div class="record-main praise-main-2col">
       <div class="grid-area">
         <div class="grid-header">
           <div class="status-line">
-            <span class="status-label" id="praiseStatusLabel">児童をタップ（複数選択可）→ ほめポイントを記録</span>
+            <span class="status-label" id="praiseStatusLabel">児童をタップ（複数選択可）→ 右のタグ または下の自由記述 → 保存</span>
           </div>
           <div class="selected-chips" id="praiseSelectedChips"></div>
         </div>
@@ -172,13 +172,14 @@ if ('serviceWorker' in navigator) {
           <span><span class="lg-mark wt">■</span>選択期間でほめが少ない（下位1/3・自動判定）</span>
         </div>
         <div class="student-grid" id="praiseStudentGrid"></div>
-        <div class="action-row">
-          <span class="action-hint">児童を複数選択 → 右の「クイックタグ」または自由入力 → 保存で全員に同内容を記録</span>
+        <!-- 自由記述: 児童ボタンの直下に配置（左カラム下） -->
+        <div class="praise-note-row">
+          <textarea id="praiseInput" placeholder="（タグだけでもOK / ここに詳細を書ける）" rows="3" maxlength="500"></textarea>
         </div>
       </div>
 
-      <aside class="side-panel">
-        <div class="card">
+      <aside class="side-panel praise-side-panel">
+        <div class="card praise-tag-card">
           <h3 id="praiseTargetName">対象児童 (0人選択中)</h3>
           <div class="praise-quick-tags" id="praiseQuickTags">
             <button type="button" class="praise-tag-btn" data-tag="手伝い">🤝 手伝い</button>
@@ -206,14 +207,11 @@ if ('serviceWorker' in navigator) {
             <button type="button" class="praise-tag-btn" data-tag="SOS気づき">🛟 SOS気づき</button>
             <button type="button" class="praise-tag-btn" data-tag="">✏️ 自由入力</button>
           </div>
-          <textarea id="praiseInput" placeholder="（タグだけでもOK / ここに詳細を書ける）" rows="3" maxlength="500"></textarea>
-          <div style="display:flex; justify-content:space-between; align-items:center; gap:8px; margin-top:6px;">
-            <span class="muted small">タグだけ押して保存→後で「今日のほめ」から詳細追加可能</span>
-            <div style="display:flex; gap:6px;">
-              <button class="ghost" id="cancelPraiseBtn">クリア</button>
-              <button class="primary" id="savePraiseBtn" disabled>💾 全員に保存</button>
-            </div>
+          <div class="praise-action-row">
+            <button class="ghost" id="cancelPraiseBtn">クリア</button>
+            <button class="primary" id="savePraiseBtn" disabled>💾 全員に保存</button>
           </div>
+          <span class="muted small" style="display:block; margin-top:4px; font-size:10.5px;">タグだけ押して保存→後で「今日のほめ」から詳細追加可能</span>
         </div>
         <div class="card today-stats" id="todayPraiseCard" style="cursor:pointer;" title="クリックで今日のほめ一覧を開く">
           <h3>今日のほめ <span class="muted small">(タップで追記編集)</span></h3>
@@ -1171,24 +1169,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506j"></script>
-<script src="students.js?v=20260506j"></script>
-<script src="eval-data.js?v=20260506j"></script>
-<script src="eval-data-extra.js?v=20260506j"></script>
-<script src="app.js?v=20260506j"></script>
-<script src="cloud-sync.js?v=20260506j"></script>
-<script src="analytics-plus.js?v=20260506j"></script>
-<script src="dashboard-overview.js?v=20260506j"></script>
-<script src="seating-planner.js?v=20260506j"></script>
-<script src="print-report.js?v=20260506j"></script>
-<script src="search-bar.js?v=20260506j"></script>
-<script src="centrality-extra.js?v=20260506j"></script>
-<script src="seating-correlation.js?v=20260506j"></script>
-<script src="templates.js?v=20260506j"></script>
-<script src="photo-library.js?v=20260506j"></script>
-<script src="voice-memo.js?v=20260506j"></script>
-<script src="ai-insights.js?v=20260506j"></script>
-<script src="extra-features.js?v=20260506j"></script>
-<script src="onboarding-wizard.js?v=20260506j"></script>
+<script src="config.js?v=20260506l"></script>
+<script src="students.js?v=20260506l"></script>
+<script src="eval-data.js?v=20260506l"></script>
+<script src="eval-data-extra.js?v=20260506l"></script>
+<script src="app.js?v=20260506l"></script>
+<script src="cloud-sync.js?v=20260506l"></script>
+<script src="analytics-plus.js?v=20260506l"></script>
+<script src="dashboard-overview.js?v=20260506l"></script>
+<script src="seating-planner.js?v=20260506l"></script>
+<script src="print-report.js?v=20260506l"></script>
+<script src="search-bar.js?v=20260506l"></script>
+<script src="centrality-extra.js?v=20260506l"></script>
+<script src="seating-correlation.js?v=20260506l"></script>
+<script src="templates.js?v=20260506l"></script>
+<script src="photo-library.js?v=20260506l"></script>
+<script src="voice-memo.js?v=20260506l"></script>
+<script src="ai-insights.js?v=20260506l"></script>
+<script src="extra-features.js?v=20260506l"></script>
+<script src="onboarding-wizard.js?v=20260506l"></script>
 </body>
 </html>
