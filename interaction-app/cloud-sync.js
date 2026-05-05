@@ -226,59 +226,93 @@ async function pullFromGas() {
   const data = await res.json();
   if (!data.ok) throw new Error(data.error || 'GAS error');
 
+  // ===== マージヘルパー: 削除反映 + timestamp比較で上書き =====
+  // GAS側で deleted='1' なら local からも削除、既存IDは timestamp 比較で新しい方を採用
+  function mergeArray(localArr, pulled, normalize, kind) {
+    if (!Array.isArray(localArr) || !Array.isArray(pulled)) return { added: 0, updated: 0, deleted: 0 };
+    const idx = new Map(localArr.map((x, i) => [x.id, i]));
+    let added = 0, updated = 0, deleted = 0;
+    for (const item of pulled) {
+      if (!item || !item.id) continue;
+      const localPos = idx.get(item.id);
+      // 削除反映
+      if (String(item.deleted) === '1') {
+        if (localPos !== undefined) {
+          localArr.splice(localPos, 1);
+          // インデックスを再計算
+          idx.clear();
+          localArr.forEach((x, i) => idx.set(x.id, i));
+          deleted++;
+        }
+        continue;
+      }
+      const n = normalize ? normalize(item) : item;
+      if (!n) continue;
+      if (localPos === undefined) {
+        // 新規
+        localArr.push(n);
+        idx.set(n.id, localArr.length - 1);
+        added++;
+      } else {
+        // 既存: timestamp 比較で新しい方を採用
+        const localTs = localArr[localPos].timestamp || '';
+        const pulledTs = n.timestamp || '';
+        if (pulledTs && pulledTs > localTs) {
+          localArr[localPos] = n;
+          updated++;
+        }
+      }
+    }
+    return { added, updated, deleted };
+  }
+
   // ===== 交友関係レコード =====
   const pulledRecs = data.records || [];
-  let mergedRecs = 0;
-  const existingRecIds = new Set(state.records.map(r => r.id));
-  for (const r of pulledRecs) {
-    if (String(r.deleted) === '1') continue;
-    if (existingRecIds.has(r.id)) continue;
-    const n = normalizeRecord(r);
-    if (n) { state.records.push(n); mergedRecs++; }
-  }
+  const recRes = mergeArray(state.records, pulledRecs, normalizeRecord, 'records');
+  const mergedRecs = recRes.added + recRes.updated + recRes.deleted;
 
   // ===== ほめたい =====
   const pulledPraises = data.praises || [];
-  let mergedPraises = 0;
-  if (Array.isArray(state.praises)) {
-    const existingPrIds = new Set(state.praises.map(p => p.id));
-    for (const p of pulledPraises) {
-      if (String(p.deleted) === '1') continue;
-      if (existingPrIds.has(p.id)) continue;
-      const n = (typeof normalizePraise === 'function') ? normalizePraise(p) : p;
-      if (n) { state.praises.push(n); mergedPraises++; }
-    }
-  }
+  const prRes = mergeArray(state.praises, pulledPraises,
+    (typeof normalizePraise === 'function') ? normalizePraise : null, 'praises');
+  const mergedPraises = prRes.added + prRes.updated + prRes.deleted;
 
   // ===== 評価 =====
   const pulledEvals = data.evaluations || [];
-  let mergedEvals = 0;
-  if (Array.isArray(state.evaluations)) {
-    const existingEvIds = new Set(state.evaluations.map(e => e.id));
-    for (const e of pulledEvals) {
-      if (String(e.deleted) === '1') continue;
-      if (existingEvIds.has(e.id)) continue;
-      const n = (typeof normalizeEvaluation === 'function') ? normalizeEvaluation(e) : e;
-      if (n) { state.evaluations.push(n); mergedEvals++; }
+  // evidences_json を配列にパース（GAS側でしているが念のため二重防御）
+  for (const e of pulledEvals) {
+    if (typeof e.evidences === 'string' && e.evidences) {
+      try { e.evidences = JSON.parse(e.evidences); } catch (_) { e.evidences = []; }
     }
+    if (!Array.isArray(e.evidences)) e.evidences = [];
   }
+  const evRes = mergeArray(state.evaluations, pulledEvals,
+    (typeof normalizeEvaluation === 'function') ? normalizeEvaluation : null, 'evaluations');
+  const mergedEvals = evRes.added + evRes.updated + evRes.deleted;
 
   // ===== ABA =====
   const pulledAba = data.abaRecords || [];
-  let mergedAba = 0;
-  if (Array.isArray(state.abaRecords)) {
-    const existingAbaIds = new Set(state.abaRecords.map(r => r.id));
-    for (const r of pulledAba) {
-      if (String(r.deleted) === '1') continue;
-      if (existingAbaIds.has(r.id)) continue;
-      // behaviorsはJSON文字列の場合パース
-      if (typeof r.behaviors === 'string' && r.behaviors) {
-        try { r.behaviors = JSON.parse(r.behaviors); } catch(_) { r.behaviors = [r.behaviors]; }
-      }
-      const n = (typeof normalizeAba === 'function') ? normalizeAba(r) : r;
-      if (n) { state.abaRecords.push(n); mergedAba++; }
+  for (const r of pulledAba) {
+    if (typeof r.behaviors === 'string' && r.behaviors) {
+      try { r.behaviors = JSON.parse(r.behaviors); } catch(_) { r.behaviors = [r.behaviors]; }
     }
   }
+  const abaRes = mergeArray(state.abaRecords, pulledAba,
+    (typeof normalizeAba === 'function') ? normalizeAba : null, 'aba');
+  const mergedAba = abaRes.added + abaRes.updated + abaRes.deleted;
+
+  // ===== けテぶれ =====
+  if (!Array.isArray(state.ketebureRecords)) state.ketebureRecords = [];
+  const pulledKete = data.ketebureRecords || [];
+  for (const k of pulledKete) {
+    if (typeof k.aspects === 'string' && k.aspects) {
+      try { k.aspects = JSON.parse(k.aspects); } catch(_) { k.aspects = []; }
+    }
+    if (!Array.isArray(k.aspects)) k.aspects = [];
+  }
+  const ketRes = mergeArray(state.ketebureRecords, pulledKete,
+    (typeof normalizeKetebure === 'function') ? normalizeKetebure : null, 'ketebure');
+  const mergedKete = ketRes.added + ketRes.updated + ketRes.deleted;
 
   // ===== 座席履歴 =====
   const pulledSeats = data.seatingSnapshots || data.seating || [];
@@ -307,19 +341,21 @@ async function pullFromGas() {
     }
   }
 
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0 || mergedSeats > 0) {
+  const totalChanged = mergedRecs + mergedPraises + mergedEvals + mergedAba + mergedSeats + mergedKete;
+  if (totalChanged > 0) {
     saveState();
     if (typeof refreshAll === 'function') refreshAll();
   }
   updateLastPullTime();
-  if (mergedRecs > 0 || mergedPraises > 0 || mergedEvals > 0 || mergedAba > 0 || mergedSeats > 0) {
+  if (totalChanged > 0) {
     const parts = [];
     if (mergedRecs > 0) parts.push(`記録 ${mergedRecs}件`);
     if (mergedPraises > 0) parts.push(`ほめ ${mergedPraises}件`);
     if (mergedEvals > 0) parts.push(`評価 ${mergedEvals}件`);
     if (mergedAba > 0) parts.push(`ABA ${mergedAba}件`);
+    if (mergedKete > 0) parts.push(`けテぶれ ${mergedKete}件`);
     if (mergedSeats > 0) parts.push(`座席 ${mergedSeats}件`);
-    showSyncStatus(`新規 ${parts.join(' / ')} を取得`);
+    showSyncStatus(`同期 ${parts.join(' / ')}`);
   }
   return { mergedSeats };
 }

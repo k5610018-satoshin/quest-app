@@ -108,31 +108,36 @@ if ('serviceWorker' in navigator) {
         </span>
         <span class="interaction-actions">
           <span class="selected-chips inline" id="selectedChips"></span>
+          <span class="edit-mode-indicator hidden" id="editModeIndicator" title="編集中の元記録"></span>
+          <button class="ghost compact hidden" id="cancelEditBtn" title="編集を中止">✕ 中止</button>
           <button class="ghost compact" id="clearBtn" title="選択を全クリア (Esc)">クリア</button>
           <button class="primary compact" id="saveBtn" disabled>💾 保存(Enter)</button>
         </span>
       </div>
       <div class="status-line hidden" id="statusLine"></div>
 
-      <div class="student-grid" id="studentGrid"></div>
-
-      <!-- 下段バー: 特殊状況 + 活動 + メモ -->
-      <div class="interaction-bottom-bar">
-        <div class="special-row inline">
-          <button class="special-btn" data-special="alone">🚶 一人</button>
-          <button class="special-btn" data-special="with_teacher">👨‍🏫 先生と</button>
-          <button class="special-btn" data-special="other_class">🌐 他クラス</button>
+      <!-- 2カラム: 児童グリッド+下段バー / 直近記録 -->
+      <div class="interaction-content-2col">
+        <div class="interaction-grid-col">
+          <div class="student-grid" id="studentGrid"></div>
+          <!-- 下段バー: 特殊状況 + 活動 + メモ -->
+          <div class="interaction-bottom-bar">
+            <div class="special-row inline">
+              <button class="special-btn" data-special="alone">🚶 一人</button>
+              <button class="special-btn" data-special="with_teacher">👨‍🏫 先生と</button>
+              <button class="special-btn" data-special="other_class">🌐 他クラス</button>
+            </div>
+            <div class="activity-row hidden" id="activityRow">
+              <div class="activity-buttons" id="activityButtons"></div>
+            </div>
+            <input type="text" id="noteInput" class="note-input-inline" placeholder="メモ（任意）..." maxlength="200">
+          </div>
         </div>
-        <div class="activity-row hidden" id="activityRow">
-          <div class="activity-buttons" id="activityButtons"></div>
+        <div class="interaction-recent-col">
+          <h4 class="recent-col-title">📜 直近の記録 <span class="muted small">(クリックで編集)</span></h4>
+          <ul class="recent-list recent-list-2col" id="recentList"></ul>
         </div>
-        <input type="text" id="noteInput" class="note-input-inline" placeholder="メモ（任意）..." maxlength="200">
       </div>
-
-      <details class="recent-records">
-        <summary>📜 直近の記録（クリックで開く・編集削除可）</summary>
-        <ul class="recent-list" id="recentList"></ul>
-      </details>
     </div>
   </div>
   </div><!-- /interactionRecordView -->
@@ -1169,24 +1174,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506l"></script>
-<script src="students.js?v=20260506l"></script>
-<script src="eval-data.js?v=20260506l"></script>
-<script src="eval-data-extra.js?v=20260506l"></script>
-<script src="app.js?v=20260506l"></script>
-<script src="cloud-sync.js?v=20260506l"></script>
-<script src="analytics-plus.js?v=20260506l"></script>
-<script src="dashboard-overview.js?v=20260506l"></script>
-<script src="seating-planner.js?v=20260506l"></script>
-<script src="print-report.js?v=20260506l"></script>
-<script src="search-bar.js?v=20260506l"></script>
-<script src="centrality-extra.js?v=20260506l"></script>
-<script src="seating-correlation.js?v=20260506l"></script>
-<script src="templates.js?v=20260506l"></script>
-<script src="photo-library.js?v=20260506l"></script>
-<script src="voice-memo.js?v=20260506l"></script>
-<script src="ai-insights.js?v=20260506l"></script>
-<script src="extra-features.js?v=20260506l"></script>
-<script src="onboarding-wizard.js?v=20260506l"></script>
+<script src="config.js?v=20260506m"></script>
+<script src="students.js?v=20260506m"></script>
+<script src="eval-data.js?v=20260506m"></script>
+<script src="eval-data-extra.js?v=20260506m"></script>
+<script src="app.js?v=20260506m"></script>
+<script src="cloud-sync.js?v=20260506m"></script>
+<script src="analytics-plus.js?v=20260506m"></script>
+<script src="dashboard-overview.js?v=20260506m"></script>
+<script src="seating-planner.js?v=20260506m"></script>
+<script src="print-report.js?v=20260506m"></script>
+<script src="search-bar.js?v=20260506m"></script>
+<script src="centrality-extra.js?v=20260506m"></script>
+<script src="seating-correlation.js?v=20260506m"></script>
+<script src="templates.js?v=20260506m"></script>
+<script src="photo-library.js?v=20260506m"></script>
+<script src="voice-memo.js?v=20260506m"></script>
+<script src="ai-insights.js?v=20260506m"></script>
+<script src="extra-features.js?v=20260506m"></script>
+<script src="onboarding-wizard.js?v=20260506m"></script>
 </body>
 </html>

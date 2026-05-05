@@ -182,6 +182,7 @@ function saveState() {
     praises: state.praises,
     evaluations: state.evaluations,
     abaRecords: state.abaRecords,
+    ketebureRecords: state.ketebureRecords,  // 致命バグ修正: けテぶれ記録の永続化漏れ
     seatingSnapshots: state.seatingSnapshots,
     settings: state.settings,
     events: state.events,
@@ -963,6 +964,22 @@ function initRecordEvents() {
   // 保存
   document.getElementById('saveBtn').addEventListener('click', saveRecord);
 
+  // 編集中止（編集モード解除）
+  document.getElementById('cancelEditBtn')?.addEventListener('click', () => {
+    if (!state.ui.editingRecordId) return;
+    if (!confirm('編集を中止しますか？（変更は保存されません）')) return;
+    exitInteractionEditMode();
+    // 選択もクリア
+    state.ui.subjectId = null;
+    state.ui.selectedMembers = [];
+    state.ui.specialState = null;
+    state.ui.centerId = null;
+    refreshAfterSelectionChange();
+    refreshSpecialButtons();
+    refreshSidePanel();
+    showToast('編集を中止しました');
+  });
+
   // Undo (Ctrl+Z) / 同じ組合せで続ける はUI削除済（キーボードショートカットのみ）
   // document.getElementById('undoBtn')?.addEventListener('click', undoLastRecord);
   // document.getElementById('quickRepeatBtn')?.addEventListener('click', quickRepeat);
@@ -1045,11 +1062,14 @@ function saveRecord() {
     return;
   }
   // 同一集まり重複検出: 5分以内に同シーン+同集合(主役+メンバー sorted)があれば確認
+  // 編集モード時は元レコード自身は除外
+  const editingId = state.ui.editingRecordId || null;
   const fiveMinAgo = Date.now() - 5 * 60 * 1000;
   const newGroup = state.ui.specialState
     ? `special-${state.ui.subjectId}-${state.ui.specialState}`
     : [state.ui.subjectId, ...state.ui.selectedMembers].sort((a,b)=>a-b).join(',');
   const dup = state.records.find(r => {
+    if (editingId && r.id === editingId) return false;
     if (new Date(r.timestamp).getTime() < fiveMinAgo) return false;
     if (r.scene !== state.ui.currentScene) return false;
     const grp = r.special
@@ -1082,45 +1102,87 @@ function saveRecord() {
     // center が選択中グループ (subject + safeMembers) に含まれていなければ無効化
     const allIds = [state.ui.subjectId, ...safeMembers];
     const center = (state.ui.centerId && allIds.includes(state.ui.centerId)) ? state.ui.centerId : null;
-    const rec = {
-      id: uuid(),
-      timestamp,
-      date: recordDate,
-      scene: sceneId,
-      category: getSceneCategory(sceneId),
-      mode: state.ui.currentMode,
-      subject: state.ui.subjectId,    // 便宜上の起点（最初に選んだ子・中心とは限らない）
-      members: safeMembers,
-      center,                          // 中心人物（指定時のみ）
-      special: state.ui.specialState,
-      activity: state.ui.currentMode === 'activity' ? state.ui.selectedActivity : null,
-      note: noteVal,
-      lessonSubjectId: (sceneId === 'lesson' ? (state.ui.lessonSubjectId || null) : null)
-    };
-    if (noteEl) noteEl.value = '';
-    state.records.push(rec);
-    saveState();
-
-    const subjectName = getStudentName(rec.subject);
-    let summary = '';
-    if (rec.special) {
-      summary = `${subjectName}：${SPECIAL_LABELS[rec.special]}`;
+    if (editingId) {
+      // 編集モード: 既存レコードを上書き（id/timestamp/date は維持）
+      const idx = state.records.findIndex(r => r.id === editingId);
+      if (idx < 0) {
+        showToast('編集対象が見つかりません', 'error');
+        isSaving = false;
+        exitInteractionEditMode();
+        return;
+      }
+      const oldRec = { ...state.records[idx] };
+      const newRec = {
+        ...oldRec,
+        scene: sceneId,
+        category: getSceneCategory(sceneId),
+        mode: state.ui.currentMode,
+        subject: state.ui.subjectId,
+        members: safeMembers,
+        center,
+        special: state.ui.specialState,
+        activity: state.ui.currentMode === 'activity' ? state.ui.selectedActivity : null,
+        note: noteVal,
+        lessonSubjectId: (sceneId === 'lesson' ? (state.ui.lessonSubjectId || null) : null),
+        edited_at: new Date().toISOString()
+      };
+      state.records[idx] = newRec;
+      pushUndo({ type: 'edit', oldRec, newRec });
+      saveState();
+      if (typeof pushRecordToGas === 'function') pushRecordToGas(newRec, 'edit').catch(() => {});
+      if (noteEl) noteEl.value = '';
+      showToast(`✏ 更新: ${getStudentName(newRec.subject)}`);
+      // 編集モードを抜けてクリア
+      exitInteractionEditMode();
+      state.ui.subjectId = null;
+      state.ui.selectedMembers = [];
+      state.ui.specialState = null;
+      state.ui.centerId = null;
+      refreshAfterSelectionChange();
+      refreshSpecialButtons();
+      refreshSidePanel();
+      updateHealthBadge();
     } else {
-      summary = `${subjectName}：${rec.members.map(getStudentName).join('・')}`;
-    }
-    if (rec.activity) summary += ` (${rec.activity})`;
-    showToast(`✓ 保存: ${summary}`);
+      // 新規作成
+      const rec = {
+        id: uuid(),
+        timestamp,
+        date: recordDate,
+        scene: sceneId,
+        category: getSceneCategory(sceneId),
+        mode: state.ui.currentMode,
+        subject: state.ui.subjectId,
+        members: safeMembers,
+        center,
+        special: state.ui.specialState,
+        activity: state.ui.currentMode === 'activity' ? state.ui.selectedActivity : null,
+        note: noteVal,
+        lessonSubjectId: (sceneId === 'lesson' ? (state.ui.lessonSubjectId || null) : null)
+      };
+      if (noteEl) noteEl.value = '';
+      state.records.push(rec);
+      saveState();
+      // GASへの新規送信は cloud-sync.js の patchSaveRecordForSync が自動で行う（重複防止のためここでは呼ばない）
 
-    // 起点とメンバーをクリア（次のグループを選びやすくする）
-    state.ui.subjectId = null;
-    state.ui.selectedMembers = [];
-    state.ui.specialState = null;
-    state.ui.centerId = null;
-    // 活動は維持（連続記録を高速化）
-    refreshAfterSelectionChange();
-    refreshSpecialButtons();
-    refreshSidePanel();
-    updateHealthBadge();
+      const subjectName = getStudentName(rec.subject);
+      let summary = '';
+      if (rec.special) {
+        summary = `${subjectName}：${SPECIAL_LABELS[rec.special]}`;
+      } else {
+        summary = `${subjectName}：${rec.members.map(getStudentName).join('・')}`;
+      }
+      if (rec.activity) summary += ` (${rec.activity})`;
+      showToast(`✓ 保存: ${summary}`);
+
+      state.ui.subjectId = null;
+      state.ui.selectedMembers = [];
+      state.ui.specialState = null;
+      state.ui.centerId = null;
+      refreshAfterSelectionChange();
+      refreshSpecialButtons();
+      refreshSidePanel();
+      updateHealthBadge();
+    }
   } finally {
     isSaving = false;
     refreshSaveButton();
@@ -1249,6 +1311,8 @@ function refreshSidePanel() {
   for (const r of recent) {
     const li = document.createElement('li');
     li.className = 'recent-item';
+    li.dataset.recId = r.id;
+    li.title = 'クリックで編集モードに入る';
     const subj = escapeHtml(getStudentName(r.subject));
     let body = '';
     if (r.special) {
@@ -1259,13 +1323,22 @@ function refreshSidePanel() {
     const act = r.activity ? ` [${escapeHtml(r.activity)}]` : '';
     li.innerHTML = `<span class="recent-body"><span class="time">${escapeHtml(formatTime(r.timestamp))}</span> <span class="subject">${subj}</span> ▶ ${body}${act}</span>` +
       `<span class="recent-actions">` +
-        `<button class="recent-btn" data-edit-id="${escapeHtml(r.id)}" title="編集">✏</button>` +
+        `<button class="recent-btn" data-edit-id="${escapeHtml(r.id)}" title="編集モード">✏</button>` +
         `<button class="recent-btn" data-del-id="${escapeHtml(r.id)}" title="削除">🗑</button>` +
       `</span>`;
     ul.appendChild(li);
   }
+  // 行全体クリック・編集ボタンクリック → インライン編集モード（児童ボタンに復元）
   ul.querySelectorAll('button[data-edit-id]').forEach(btn => {
-    btn.addEventListener('click', e => { e.stopPropagation(); openEditModal(btn.dataset.editId); });
+    btn.addEventListener('click', e => { e.stopPropagation(); enterInteractionEditMode(btn.dataset.editId); });
+  });
+  ul.querySelectorAll('.recent-item').forEach(li => {
+    li.addEventListener('click', e => {
+      // 削除ボタンや編集ボタンのクリックは除外（子要素のbuttonは個別ハンドラで処理）
+      if (e.target.closest('button')) return;
+      const id = li.dataset.recId;
+      if (id) enterInteractionEditMode(id);
+    });
   });
   ul.querySelectorAll('button[data-del-id]').forEach(btn => {
     btn.addEventListener('click', e => {
@@ -1273,13 +1346,76 @@ function refreshSidePanel() {
       const rec = state.records.find(r => r.id === btn.dataset.delId);
       if (!rec) return;
       if (!confirm(`削除しますか?\n${formatDateTime(rec.timestamp)} ${getStudentName(rec.subject)}`)) return;
+      // GAS削除も合わせて
+      if (typeof pushRecordToGas === 'function') pushRecordToGas(rec, 'delete').catch(() => {});
       state.records = state.records.filter(r => r.id !== btn.dataset.delId);
+      // 編集中レコードを削除した場合は編集モード解除
+      if (state.ui.editingRecordId === btn.dataset.delId) exitInteractionEditMode();
       pushUndo({ type: 'delete', rec });
       saveState();
       refreshAll();
       showToast('🗑 削除しました (Ctrl+Zで復元)');
     });
   });
+  // 編集中の記録に印
+  if (state.ui.editingRecordId) {
+    const li = ul.querySelector(`li[data-rec-id="${state.ui.editingRecordId}"]`);
+    if (li) li.classList.add('editing');
+  }
+}
+
+// 直近記録から児童ボタンに状態を復元してインライン編集
+function enterInteractionEditMode(recId) {
+  const rec = state.records.find(r => r.id === recId);
+  if (!rec) return;
+  // 別レコード編集中なら確認
+  if (state.ui.editingRecordId && state.ui.editingRecordId !== recId) {
+    if (!confirm('別の記録を編集中です。破棄して切り替えますか？')) return;
+  }
+  state.ui.editingRecordId = recId;
+  state.ui.subjectId = rec.subject;
+  state.ui.selectedMembers = (rec.members || []).slice();
+  state.ui.specialState = rec.special || null;
+  state.ui.centerId = rec.center || null;
+  state.ui.currentScene = rec.scene;
+  state.ui.currentMode = rec.mode || 'simple';
+  state.ui.lessonSubjectId = rec.lessonSubjectId || null;
+  state.ui.recordDate = rec.date;
+  state.ui.selectedActivity = rec.activity || null;
+  // フォームのDOM反映
+  const dateInp = document.getElementById('recordDate');
+  if (dateInp) dateInp.value = rec.date;
+  const noteEl = document.getElementById('noteInput');
+  if (noteEl) noteEl.value = rec.note || '';
+  // モード/シーンの表示更新
+  document.querySelectorAll('.mode-btn[data-mode]').forEach(b =>
+    b.classList.toggle('active', b.dataset.mode === state.ui.currentMode));
+  refreshSceneButtons();
+  refreshLessonSubjectButtons();
+  refreshActivityButtons();
+  refreshAfterSelectionChange();
+  refreshSpecialButtons();
+  refreshSidePanel();
+  // 編集インジケータ
+  const ind = document.getElementById('editModeIndicator');
+  if (ind) {
+    ind.classList.remove('hidden');
+    ind.textContent = `✏ 編集中: ${formatTime(rec.timestamp)} ${getStudentName(rec.subject)}`;
+  }
+  document.getElementById('cancelEditBtn')?.classList.remove('hidden');
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) saveBtn.textContent = '💾 上書き保存(Enter)';
+  refreshSaveButton();
+  showToast('編集モード: 児童ボタンを変更して保存', 'success');
+}
+
+function exitInteractionEditMode() {
+  state.ui.editingRecordId = null;
+  const ind = document.getElementById('editModeIndicator');
+  if (ind) { ind.classList.add('hidden'); ind.textContent = ''; }
+  document.getElementById('cancelEditBtn')?.classList.add('hidden');
+  const saveBtn = document.getElementById('saveBtn');
+  if (saveBtn) saveBtn.textContent = '💾 保存(Enter)';
 }
 
 // ========== Records filter helper ==========
@@ -2026,9 +2162,14 @@ function deleteSelectedRecords() {
   const n = state.ui.selectedHistoryIds.size;
   if (n === 0) return;
   if (!confirm(`${n}件の記録を削除します。よろしいですか？`)) return;
+  // GAS削除も合わせて
+  const toDelete = state.records.filter(r => state.ui.selectedHistoryIds.has(r.id));
   state.records = state.records.filter(r => !state.ui.selectedHistoryIds.has(r.id));
   state.ui.selectedHistoryIds.clear();
   saveState();
+  if (typeof pushRecordToGas === 'function') {
+    for (const rec of toDelete) pushRecordToGas(rec, 'delete').catch(() => {});
+  }
   showToast(`${n}件削除しました`);
   refreshHistory();
   refreshSidePanel();
@@ -2885,6 +3026,7 @@ function savePraise() {
     if (ex) {
       ex.content = content;
       ex.tags = tags;
+      ex.timestamp = new Date().toISOString();  // 多端末同期で編集が伝播するように更新
       saveState();
       if (typeof pushPraiseToGas === 'function') pushPraiseToGas(ex, 'edit').catch(() => {});
       const summary = content || tags.join('+');
@@ -5657,6 +5799,7 @@ function saveEditModal() {
   state.records[i] = newRec;
   pushUndo({ type: 'edit', oldRec, newRec });
   saveState();
+  if (typeof pushRecordToGas === 'function') pushRecordToGas(newRec, 'edit').catch(() => {});
   closeEditModal();
   refreshAll();
   showToast(`✓ 編集しました: ${getStudentName(newRec.subject)}`);

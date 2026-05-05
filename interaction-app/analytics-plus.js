@@ -279,7 +279,7 @@ function refreshRollingChart() {
   for (let i = N - 1; i >= 0; i--) {
     const d = new Date(today);
     d.setDate(today.getDate() - i);
-    dates.push(d.toISOString().slice(0, 10));
+    dates.push(_localDate(d));  // local YYYY-MM-DD で集計（records.dateと一致させる）
   }
   const dateMap = new Map(dates.map(d => [d, 0]));
   for (const r of recs) {
