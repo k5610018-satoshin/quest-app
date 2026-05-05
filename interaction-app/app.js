@@ -385,8 +385,6 @@ function renderStudentGrid() {
     const btn = document.createElement('button');
     btn.className = 'student-btn';
     btn.dataset.studentId = s.id;
-    if (s.highlight) btn.classList.add('highlight');
-    if (s.watch) btn.classList.add('watch');
     btn.title = `${s.kana}${s.note ? ' / ' + s.note : ''} (出席番号 ${s.id}) — 右クリックで個別分析`;
     const num = document.createElement('span');
     num.className = 'num';
@@ -429,11 +427,37 @@ function computeCoverageMap() {
   return { todaySet, daysAgo };
 }
 
+// 動的判定: 記録された「日数(distinct dates)」が下位1/3に入る児童IDのSet。
+// 全体記録が少ない初期段階(最大日数<3)では誰もマークしない。
+function computeUndercountedSet() {
+  const dayMap = new Map();
+  for (const r of state.records) {
+    if (!r || !r.date) continue;
+    const ids = [r.subject, ...(r.members || [])].filter(x => x != null);
+    for (const id of ids) {
+      if (!dayMap.has(id)) dayMap.set(id, new Set());
+      dayMap.get(id).add(r.date);
+    }
+  }
+  const counts = state.students.map(s => (dayMap.get(s.id) || new Set()).size);
+  const max = counts.length ? Math.max(...counts) : 0;
+  if (max < 3) return new Set();
+  const sorted = [...counts].sort((a, b) => a - b);
+  const cutoffIdx = Math.max(1, Math.floor(state.students.length / 3));
+  const threshold = sorted[cutoffIdx - 1];
+  const result = new Set();
+  state.students.forEach((s, i) => {
+    if (counts[i] <= threshold && counts[i] < max) result.add(s.id);
+  });
+  return result;
+}
+
 function refreshGridState() {
   const { todaySet, daysAgo } = computeCoverageMap();
+  const lowCountSet = computeUndercountedSet();
   document.querySelectorAll('.student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
-    btn.classList.remove('subject', 'selected', 'disabled', 'covered-today', 'alert', 'center-marked');
+    btn.classList.remove('subject', 'selected', 'disabled', 'covered-today', 'alert', 'center-marked', 'watch');
     if (state.ui.subjectId === id) {
       btn.classList.add('subject');
     } else if (state.ui.selectedMembers.includes(id)) {
@@ -443,6 +467,7 @@ function refreshGridState() {
     }
     if (state.ui.centerId === id) btn.classList.add('center-marked');
     if (todaySet.has(id)) btn.classList.add('covered-today');
+    if (lowCountSet.has(id)) btn.classList.add('watch');
     if (daysAgo[id] >= ALERT_DAYS && daysAgo[id] !== 999) btn.classList.add('alert');
     else if (daysAgo[id] === 999 && state.records.length > 30) btn.classList.add('alert');
   });
