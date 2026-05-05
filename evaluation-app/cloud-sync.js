@@ -11,13 +11,15 @@ const SYNC_STORAGE_KEY  = 'evaluationApp_gasSync';
 const PENDING_QUEUE_KEY = 'evaluationApp_pendingQueue';
 const LAST_PULL_KEY     = 'evaluationApp_lastPull';
 
-// ===== 同期設定 =====
-const syncConfig = {
-  enabled:  false,
-  endpoint: '',
-  apiKey:   '',
-  autoSync: false
+// ===== 同期設定 (デフォルト値・初回起動時に自動適用) =====
+// 注意: ユーザー本人専用前提でGAS URL/APIキーをハードコード
+const DEFAULT_SYNC = {
+  enabled:  true,
+  endpoint: 'https://script.google.com/macros/s/AKfycbxKGW6OnwnXBHsPL4I0lvDF1_7vllud3J9_AoMMeQbQIildu2GMSlBAO3LXv-Qki4xT/exec',
+  apiKey:   '6vn-n4nMAU_RYRd5',
+  autoSync: true
 };
+const syncConfig = { ...DEFAULT_SYNC };
 
 let _autoSyncTimer = null;
 let _isSyncing = false;
@@ -58,7 +60,13 @@ function getOrCreateDeviceId() {
 function loadSyncConfig() {
   try {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
-    if (raw) Object.assign(syncConfig, JSON.parse(raw));
+    if (raw) {
+      const data = JSON.parse(raw);
+      if (data.endpoint) syncConfig.endpoint = data.endpoint;
+      if (data.apiKey)   syncConfig.apiKey   = data.apiKey;
+      if (typeof data.enabled  === 'boolean') syncConfig.enabled  = data.enabled;
+      if (typeof data.autoSync === 'boolean') syncConfig.autoSync = data.autoSync;
+    }
   } catch (_) {}
 }
 

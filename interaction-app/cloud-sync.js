@@ -11,13 +11,15 @@ const SYNC_STORAGE_KEY  = 'interactionApp_gasSync';
 const PENDING_QUEUE_KEY = 'interactionApp_pendingQueue';
 const LAST_PULL_KEY     = 'interactionApp_lastPull';
 
-// ===== 同期設定 (localStorageから読み込み) =====
-const syncConfig = {
-  enabled:  false,
-  endpoint: '',
-  apiKey:   '',
-  autoSync: false   // 5分ごと自動sync
+// ===== 同期設定 (デフォルト値・初回起動時に自動適用) =====
+// 注意: ユーザー本人専用前提でGAS URL/APIキーをハードコード
+const DEFAULT_SYNC = {
+  enabled:  true,
+  endpoint: 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec',
+  apiKey:   'cLgXe27Zo-2w7cfL',
+  autoSync: true
 };
+const syncConfig = { ...DEFAULT_SYNC };
 
 // 自動同期タイマー
 let _autoSyncTimer = null;
@@ -66,7 +68,11 @@ function loadSyncConfig() {
     const raw = localStorage.getItem(SYNC_STORAGE_KEY);
     if (raw) {
       const saved = JSON.parse(raw);
-      Object.assign(syncConfig, saved);
+      // 既存設定があってもデフォルト値は壊さない: 空でない場合のみ上書き
+      if (saved.endpoint) syncConfig.endpoint = saved.endpoint;
+      if (saved.apiKey)   syncConfig.apiKey   = saved.apiKey;
+      if (typeof saved.enabled  === 'boolean') syncConfig.enabled  = saved.enabled;
+      if (typeof saved.autoSync === 'boolean') syncConfig.autoSync = saved.autoSync;
     }
   } catch (_) {}
 }
