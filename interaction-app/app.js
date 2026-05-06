@@ -2691,12 +2691,161 @@ function applyGradeData(grade) {
   if (typeof window.EVAL_DATA.getUnitsForGrade === 'function') {
     state.units = window.EVAL_DATA.getUnitsForGrade(grade) || [];
   }
+  // ユーザー追加のカスタム単元をマージ（グローバル: 学年関係なくこの設定下で常に表示）
+  const custom = (state.settings && Array.isArray(state.settings.customUnits)) ? state.settings.customUnits : [];
+  if (custom.length) {
+    // 既存IDと衝突しないようにフィルタ
+    const existingIds = new Set(state.units.map(u => u.id));
+    const merged = custom.filter(u => u && u.id && u.subject && u.name && !existingIds.has(u.id));
+    state.units = state.units.concat(merged);
+  }
   // 評価タブ初期化: 選択中の教科が新学年に存在しなければリセット
   const subjectIds = new Set(state.subjects.map(s => s.id));
   if (state.ui.evalSubjectId && !subjectIds.has(state.ui.evalSubjectId)) {
     state.ui.evalSubjectId = '';
     state.ui.evalUnitId = '';
   }
+}
+
+// ===== 単元追加・編集モーダル =====
+function openUnitModal(mode) {
+  // mode: 'add' | 'edit'
+  const subjId = state.ui.evalSubjectId;
+  const subj = state.subjects.find(s => s.id === subjId);
+  if (!subj) { showToast('先に教科を選んでください', 'error'); return; }
+
+  let editing = null;
+  if (mode === 'edit') {
+    editing = state.units.find(u => u.id === state.ui.evalUnitId && u.custom);
+    if (!editing) { showToast('カスタム単元のみ編集可能', 'error'); return; }
+  }
+
+  const body = document.getElementById('editModalBody');
+  if (!body) return;
+  const v = editing || { name: '', period: '', criteria: { knowledge: '', thinking: '', attitude: '' } };
+
+  body.innerHTML = `
+    <h3 style="margin:0 0 8px;">${mode === 'add' ? '➕ 単元を追加' : '✏ 単元を編集'} <span class="muted small">[${escapeHtml(subj.label)}]</span></h3>
+    <div class="edit-modal-row">
+      <label>単元名 <span style="color:#c62828;">*</span></label>
+      <input type="text" id="unitNameInp" placeholder="例: 大造じいさんとガン" maxlength="80" value="${escapeHtml(v.name)}" style="width:100%; padding:6px 8px; font-size:14px;">
+    </div>
+    <div class="edit-modal-row">
+      <label>時期</label>
+      <input type="text" id="unitPeriodInp" placeholder="例: 5月、後期 など（任意）" maxlength="30" value="${escapeHtml(v.period || '')}" style="width:100%; padding:6px 8px; font-size:13px;">
+    </div>
+    <div class="edit-modal-row">
+      <label>評価規準（任意）</label>
+      <div style="display:flex; flex-direction:column; gap:6px;">
+        <textarea id="unitCriKnow" placeholder="知識・技能 の評価規準" rows="2" maxlength="200" style="font-size:12px; padding:5px;">${escapeHtml(v.criteria?.knowledge || '')}</textarea>
+        <textarea id="unitCriThink" placeholder="思考・判断・表現 の評価規準" rows="2" maxlength="200" style="font-size:12px; padding:5px;">${escapeHtml(v.criteria?.thinking || '')}</textarea>
+        <textarea id="unitCriAtt" placeholder="主体的に学習に取り組む態度 の評価規準" rows="2" maxlength="200" style="font-size:12px; padding:5px;">${escapeHtml(v.criteria?.attitude || '')}</textarea>
+      </div>
+    </div>
+    <p class="muted small" style="margin:6px 0 0;">※ 規準は省略可。後から編集できます。</p>
+  `;
+
+  const modal = document.getElementById('editModal');
+  modal.classList.remove('hidden');
+  // 単元モーダル用の専用 saveBtn / cancelBtn を取り出す（編集モーダルと共用）
+  const saveBtn = modal.querySelector('#saveEditBtn');
+  const cancelBtn = modal.querySelector('#cancelEditBtn');
+  const closeModal = () => modal.classList.add('hidden');
+
+  setTimeout(() => document.getElementById('unitNameInp')?.focus(), 50);
+
+  const cleanup = () => {
+    saveBtn.removeEventListener('click', saveHandler);
+    cancelBtn.removeEventListener('click', cancelHandler);
+  };
+  const saveHandler = () => {
+    const name = (document.getElementById('unitNameInp').value || '').trim();
+    if (!name) { showToast('単元名を入力してください', 'error'); return; }
+    const period = (document.getElementById('unitPeriodInp').value || '').trim();
+    const criteria = {
+      knowledge: (document.getElementById('unitCriKnow').value || '').trim(),
+      thinking: (document.getElementById('unitCriThink').value || '').trim(),
+      attitude: (document.getElementById('unitCriAtt').value || '').trim()
+    };
+    if (mode === 'add') {
+      const u = addCustomUnit(subjId, name, period, criteria);
+      if (u) {
+        state.ui.evalUnitId = u.id;
+        renderEvalUnitOptions();
+        refreshEvalUI();
+        showToast(`「${name}」を追加しました`);
+      } else {
+        showToast('追加に失敗', 'error');
+        return;
+      }
+    } else {
+      if (updateCustomUnit(editing.id, { name, period, criteria })) {
+        renderEvalUnitOptions();
+        refreshEvalUI();
+        showToast(`「${name}」を更新しました`);
+      } else {
+        showToast('更新に失敗', 'error');
+        return;
+      }
+    }
+    closeModal();
+    cleanup();
+  };
+  const cancelHandler = () => { closeModal(); cleanup(); };
+  saveBtn.addEventListener('click', saveHandler);
+  cancelBtn.addEventListener('click', cancelHandler);
+}
+
+// ===== カスタム単元の追加・編集・削除 =====
+function addCustomUnit(subject, name, period, criteria) {
+  if (!subject || !name) return null;
+  const id = 'cu-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 10000).toString(36);
+  // 同教科のカスタム単元の sequence を最大値+1 で末尾に配置（既定単元の後ろに来る）
+  const sameSubjectMax = state.units
+    .filter(u => u.subject === subject)
+    .reduce((max, u) => Math.max(max, u.sequence || 0), 0);
+  const unit = {
+    id,
+    subject,
+    name: String(name).trim().slice(0, 80),
+    sequence: sameSubjectMax + 1,
+    period: period ? String(period).trim().slice(0, 30) : '',
+    custom: true,
+    criteria: criteria || { knowledge: '', thinking: '', attitude: '' },
+    archived: false
+  };
+  state.settings.customUnits = state.settings.customUnits || [];
+  state.settings.customUnits.push(unit);
+  state.units.push(unit);
+  saveState();
+  return unit;
+}
+
+function updateCustomUnit(id, updates) {
+  if (!id || !updates) return false;
+  const u = state.units.find(x => x.id === id && x.custom);
+  if (!u) return false;
+  if (typeof updates.name === 'string') u.name = updates.name.trim().slice(0, 80);
+  if (typeof updates.period === 'string') u.period = updates.period.trim().slice(0, 30);
+  if (updates.criteria && typeof updates.criteria === 'object') {
+    u.criteria = u.criteria || {};
+    ['knowledge','thinking','attitude'].forEach(k => {
+      if (typeof updates.criteria[k] === 'string') u.criteria[k] = updates.criteria[k];
+    });
+  }
+  // settings 側も同期
+  state.settings.customUnits = (state.settings.customUnits || []).map(x => x.id === id ? { ...x, ...u } : x);
+  saveState();
+  return true;
+}
+
+function removeCustomUnit(id) {
+  if (!id) return false;
+  const before = state.units.length;
+  state.units = state.units.filter(u => !(u.id === id && u.custom));
+  state.settings.customUnits = (state.settings.customUnits || []).filter(u => u.id !== id);
+  saveState();
+  return state.units.length < before;
 }
 
 function saveAppSettings() {
@@ -3693,6 +3842,26 @@ function initEvaluationEvents() {
     });
   }
 
+  // 単元の手動追加・編集・削除
+  document.getElementById('evalAddUnitBtn')?.addEventListener('click', () => openUnitModal('add'));
+  document.getElementById('evalEditUnitBtn')?.addEventListener('click', () => openUnitModal('edit'));
+  document.getElementById('evalDeleteUnitBtn')?.addEventListener('click', () => {
+    const u = state.units.find(x => x.id === state.ui.evalUnitId && x.custom);
+    if (!u) { showToast('カスタム単元のみ削除可能', 'error'); return; }
+    // 既存記録があるか確認
+    const linked = state.evaluations.filter(e => e.unitId === u.id).length;
+    const msg = linked > 0
+      ? `「${u.name}」には既存の評価記録が ${linked} 件あります。\n\n単元を削除すると、この単元での今後の記録ができなくなります（既存記録は残ります）。\n\n本当に削除しますか？`
+      : `カスタム単元「${u.name}」を削除しますか？`;
+    if (!confirm(msg)) return;
+    if (removeCustomUnit(u.id)) {
+      state.ui.evalUnitId = '';
+      renderEvalUnitOptions();
+      refreshEvalUI();
+      showToast(`「${u.name}」を削除しました`);
+    }
+  });
+
   // 観点ボタン
   const vpCont = document.getElementById('evalViewpoints');
   if (vpCont) {
@@ -3824,15 +3993,23 @@ function renderEvalUnitOptions() {
   if (!sel) return;
   sel.innerHTML = '';
   const units = state.units.filter(u => u.subject === state.ui.evalSubjectId && !u.archived);
+  // 既定→カスタム の順（カスタムは sequence 大きいので自然に末尾）
   units.sort((a, b) => (a.sequence || 0) - (b.sequence || 0));
   units.forEach(u => {
     const o = document.createElement('option');
     o.value = u.id;
-    o.textContent = `${u.sequence ? u.sequence + '. ' : ''}${u.name}${u.period ? ' (' + u.period + ')' : ''}`;
+    const customMark = u.custom ? ' ✏' : '';
+    o.textContent = `${u.sequence ? u.sequence + '. ' : ''}${u.name}${u.period ? ' (' + u.period + ')' : ''}${customMark}`;
     sel.appendChild(o);
   });
   if (!state.ui.evalUnitId && units.length) state.ui.evalUnitId = units[0].id;
   if (state.ui.evalUnitId) sel.value = state.ui.evalUnitId;
+  // 編集/削除ボタンの表示切替（カスタム単元選択中のみ表示）
+  const cur = state.units.find(u => u.id === state.ui.evalUnitId);
+  const editBtn = document.getElementById('evalEditUnitBtn');
+  const delBtn = document.getElementById('evalDeleteUnitBtn');
+  if (editBtn) editBtn.style.display = (cur && cur.custom) ? '' : 'none';
+  if (delBtn) delBtn.style.display = (cur && cur.custom) ? '' : 'none';
 }
 
 function populateEvalListUnits() {
