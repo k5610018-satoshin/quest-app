@@ -1046,13 +1046,17 @@ if ('serviceWorker' in navigator) {
     </div>
 
     <div class="card" id="gasViewCard" style="border-left:4px solid #4a90e2;">
-      <h3>📋 GASスプレッドシート: 人間用ビューシート</h3>
-      <p class="muted small">GASのスプレッドシートには「machine用シート」(records/praises/evaluations/aba_records/ketebure_records) と、児童名・教科名・観点を解決した「人間用ビューシート」(view_交友関係/view_ほめたい/view_評価/view_ABA/view_けテぶれ) があります。</p>
+      <h3>📋 GASスプレッドシート: 管理</h3>
+      <p class="muted small">「machine用」(records/praises/evaluations/aba_records/ketebure_records) と「人間用ビュー」(view_交友関係/view_ほめたい/view_評価/view_ABA/view_けテぶれ) のタブがあります。</p>
       <div class="btn-row">
+        <button class="primary" id="openSheetBtn">📂 スプレッドシートを開く</button>
+        <button class="ghost" id="renameSheetBtn">📝 ファイル名を変更</button>
+      </div>
+      <div class="btn-row" style="margin-top:6px;">
         <button class="ghost" id="rebuildViewsBtn">🔄 ビューシートを再生成</button>
         <button class="ghost" id="pushRosterBtn">👥 名簿を再送（児童名解決用）</button>
       </div>
-      <p class="muted small" style="margin-top:6px;">スプレッドシート上のメニュー「🆘 担任記録 → 🔄 人間用ビューを再生成」からも実行できます。</p>
+      <p class="muted small" style="margin-top:6px;">「🔄 ビュー再生成」がエラーになる場合は、スプレッドシートを開いてメニュー「🆘 担任記録 → 🔄 人間用ビューを再生成」から実行してください（GAS Editor 直実行のため確実）。</p>
     </div>
 
     <div class="card">
@@ -1192,24 +1196,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506n"></script>
-<script src="students.js?v=20260506n"></script>
-<script src="eval-data.js?v=20260506n"></script>
-<script src="eval-data-extra.js?v=20260506n"></script>
-<script src="app.js?v=20260506n"></script>
-<script src="cloud-sync.js?v=20260506n"></script>
-<script src="analytics-plus.js?v=20260506n"></script>
-<script src="dashboard-overview.js?v=20260506n"></script>
-<script src="seating-planner.js?v=20260506n"></script>
-<script src="print-report.js?v=20260506n"></script>
-<script src="search-bar.js?v=20260506n"></script>
-<script src="centrality-extra.js?v=20260506n"></script>
-<script src="seating-correlation.js?v=20260506n"></script>
-<script src="templates.js?v=20260506n"></script>
-<script src="photo-library.js?v=20260506n"></script>
-<script src="voice-memo.js?v=20260506n"></script>
-<script src="ai-insights.js?v=20260506n"></script>
-<script src="extra-features.js?v=20260506n"></script>
-<script src="onboarding-wizard.js?v=20260506n"></script>
+<script src="config.js?v=20260506o"></script>
+<script src="students.js?v=20260506o"></script>
+<script src="eval-data.js?v=20260506o"></script>
+<script src="eval-data-extra.js?v=20260506o"></script>
+<script src="app.js?v=20260506o"></script>
+<script src="cloud-sync.js?v=20260506o"></script>
+<script src="analytics-plus.js?v=20260506o"></script>
+<script src="dashboard-overview.js?v=20260506o"></script>
+<script src="seating-planner.js?v=20260506o"></script>
+<script src="print-report.js?v=20260506o"></script>
+<script src="search-bar.js?v=20260506o"></script>
+<script src="centrality-extra.js?v=20260506o"></script>
+<script src="seating-correlation.js?v=20260506o"></script>
+<script src="templates.js?v=20260506o"></script>
+<script src="photo-library.js?v=20260506o"></script>
+<script src="voice-memo.js?v=20260506o"></script>
+<script src="ai-insights.js?v=20260506o"></script>
+<script src="extra-features.js?v=20260506o"></script>
+<script src="onboarding-wizard.js?v=20260506o"></script>
 </body>
 </html>

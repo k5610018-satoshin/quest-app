@@ -2328,15 +2328,45 @@ function initSettingsEvents() {
   document.getElementById('refreshSnapshotsBtn')?.addEventListener('click', renderSnapshotList);
   document.getElementById('rebuildViewsBtn')?.addEventListener('click', async () => {
     if (typeof requestViewRebuild !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
-    showToast('ビュー再生成中...');
-    const ok = await requestViewRebuild();
-    showToast(ok ? '✓ ビュー再生成完了' : '✗ ビュー再生成失敗', ok ? 'success' : 'error');
+    showToast('ビュー再生成中...（10秒程度）');
+    const result = await requestViewRebuild();
+    if (result.ok) {
+      const s = result.stats || {};
+      const summary = `交友${s.records||0}/ほめ${s.praises||0}/評価${s.evaluations||0}/ABA${s.aba||0}/けテ${s.ketebure||0}件`;
+      showToast(`✓ ビュー再生成完了: ${summary}`);
+    } else {
+      alert('ビュー再生成失敗:\n\n' + (result.error || 'unknown error') + '\n\nGAS Editorのメニュー「🆘 担任記録 → 🔄 人間用ビューを再生成」から手動実行も可能です。');
+      showToast('✗ ビュー再生成失敗', 'error');
+    }
   });
   document.getElementById('pushRosterBtn')?.addEventListener('click', async () => {
     if (typeof pushRosterToGas !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
     showToast('名簿送信中...');
     const ok = await pushRosterToGas(true);
     showToast(ok ? '✓ 名簿送信完了' : '✗ 名簿送信失敗（クラウド同期未設定？）', ok ? 'success' : 'error');
+  });
+  document.getElementById('renameSheetBtn')?.addEventListener('click', async () => {
+    if (typeof renameSheet !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
+    const info = await getSheetInfo();
+    const cur = info?.sheet_name || '（不明）';
+    const newName = prompt(`現在のスプレッドシート名: ${cur}\n\n新しい名前を入力してください:`, '★学級記録システムデータ');
+    if (!newName) return;
+    showToast('名前変更中...');
+    const result = await renameSheet(newName);
+    if (result.ok) {
+      showToast(`✓ 名前変更完了: ${result.oldName} → ${result.newName}`);
+    } else {
+      alert('名前変更失敗:\n\n' + (result.error || 'unknown'));
+    }
+  });
+  document.getElementById('openSheetBtn')?.addEventListener('click', async () => {
+    if (typeof getSheetInfo !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
+    const info = await getSheetInfo();
+    if (info && info.sheet_url) {
+      window.open(info.sheet_url, '_blank');
+    } else {
+      showToast('スプレッドシート情報の取得に失敗', 'error');
+    }
   });
   setupRosterEvents();
   renderSnapshotList();

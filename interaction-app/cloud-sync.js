@@ -800,7 +800,7 @@ async function pushRosterToGas(force) {
 
 // ===== ビュー再生成リクエスト（GAS側で view_* シートを再構築） =====
 async function requestViewRebuild() {
-  if (!checkSyncReady()) return false;
+  if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
   try {
     const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
@@ -811,12 +811,51 @@ async function requestViewRebuild() {
         deviceId: _deviceId
       })
     });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error('HTTP ' + res.status + ' - ' + txt.slice(0, 200));
+    }
     const data = await res.json();
-    return data.ok;
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return { ok: true, stats: data.stats };
   } catch (err) {
     console.warn('[sync] view rebuild失敗:', err.message);
-    return false;
+    return { ok: false, error: err.message };
+  }
+}
+
+// ===== スプレッドシート情報取得 =====
+async function getSheetInfo() {
+  if (!checkSyncReady()) return null;
+  try {
+    const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&action=info`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return data;
+  } catch (err) {
+    console.warn('[sync] sheet info失敗:', err.message);
+    return null;
+  }
+}
+
+// ===== スプレッドシート名変更 =====
+async function renameSheet(newName) {
+  if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
+  try {
+    const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&action=rename&name=${encodeURIComponent(newName)}`;
+    const res = await fetch(url);
+    if (!res.ok) {
+      const txt = await res.text();
+      throw new Error('HTTP ' + res.status + ' - ' + txt.slice(0, 200));
+    }
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    return { ok: true, oldName: data.old_name, newName: data.new_name };
+  } catch (err) {
+    console.warn('[sync] rename失敗:', err.message);
+    return { ok: false, error: err.message };
   }
 }
 

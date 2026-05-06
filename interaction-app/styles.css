@@ -3607,6 +3607,139 @@ button.compact {
 .kta-corr-table tr:hover td { background: #fafbfc; }
 
 /* ========================================================================
+ * 縦スペース最大活用: 記録タブを viewport いっぱいに広げて、
+ * 児童グリッドと右カラムが残りスペースを自動で吸収するように
+ * ======================================================================== */
+
+/* body と html: ページ全体を viewport にフィット */
+html, body { height: 100%; min-height: 0; }
+body { display: flex; flex-direction: column; }
+.app-header { flex-shrink: 0; }
+.tab-panel { flex: 1; min-height: 0; overflow: hidden; }
+.tab-panel.active { display: flex; flex-direction: column; }
+/* 記録タブ以外のタブは内部スクロール許可 */
+.tab-panel.active:not(#tab-record) { overflow-y: auto; }
+
+/* 記録タブ: モード切替バー + 中身（中身が flex: 1） */
+#tab-record .record-mode-bar { flex-shrink: 0; }
+#tab-record > div[id$="RecordView"] {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+#tab-record > div[id$="RecordView"].hidden { display: none; }
+#tab-record > div[id$="RecordView"] > .record-toolbar,
+#tab-record > div[id$="RecordView"] > .ket-toolbar-row,
+#tab-record > div[id$="RecordView"] > .aba-flat > .aba-status-bar {
+  flex-shrink: 0;
+}
+#tab-record > div[id$="RecordView"] > .record-main {
+  flex: 1;
+  min-height: 0;
+}
+#tab-record .record-main > .grid-area {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+#tab-record .record-main > .side-panel {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* 児童グリッドの行を残スペースで自動拡張（最低48px） */
+#tab-record .student-grid {
+  align-content: stretch;
+  grid-auto-rows: minmax(48px, 1fr);
+}
+
+/* 交友関係: 2カラム内部の児童グリッドも拡張 */
+#interactionRecordView .interaction-content-2col {
+  flex: 1;
+  min-height: 0;
+}
+#interactionRecordView .interaction-grid-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#interactionRecordView .interaction-grid-col .student-grid {
+  flex: 1;
+  min-height: 0;
+}
+#interactionRecordView .interaction-bottom-bar { flex-shrink: 0; }
+#interactionRecordView .interaction-recent-col {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#interactionRecordView .recent-list-2col {
+  flex: 1;
+  min-height: 0;
+  max-height: none !important;
+  overflow-y: auto;
+}
+
+/* 評価モード: グリッド領域の児童ボタンを縦に伸長 */
+#evaluationRecordView .grid-area .student-grid {
+  flex: 1;
+  min-height: 0;
+}
+#evaluationRecordView .eval-control-bar,
+#evaluationRecordView .grid-legend { flex-shrink: 0; }
+#evaluationRecordView .eval-side-panel {
+  flex-shrink: 0;
+}
+/* 評価サイドパネル内: 評価規準カードを縦伸長 */
+#evaluationRecordView .eval-side-panel .card:last-child {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* けテぶれモード: 児童グリッドを縦伸長 */
+#ketebureRecordView .ket-control-bar,
+#ketebureRecordView .ket-status-line,
+#ketebureRecordView .ket-unrecorded-banner,
+#ketebureRecordView .ket-stuck-banner,
+#ketebureRecordView .ket-bottom-row,
+#ketebureRecordView details.ket-side-collapsible {
+  flex-shrink: 0;
+}
+#ketebureRecordView .ket-student-grid {
+  flex: 1 !important;
+  min-height: 0;
+  align-content: stretch;
+  grid-auto-rows: minmax(38px, 1fr) !important;
+}
+
+/* ABA モード: 縦に伸長 */
+#abaRecordView .aba-flat {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+#abaRecordView .aba-flat-grid {
+  flex: 1;
+  min-height: 0;
+}
+
+/* ほめモード: グリッドとサイドパネルを縦伸長 */
+#praiseRecordView .grid-area .student-grid {
+  flex: 1;
+  min-height: 0;
+}
+#praiseRecordView .praise-note-row {
+  flex-shrink: 0;
+}
+
+/* ========================================================================
  * 画面サイズ自動対応（PCの16:9想定 + 高さ短い環境への対策）
  * body.viewport-* クラスは JS が付与（DOMContentLoaded + resize）
  * ======================================================================== */
