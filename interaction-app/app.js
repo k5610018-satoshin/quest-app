@@ -66,7 +66,7 @@ const state = {
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
   evaluations: [],     // [{id, studentId, subjectId, unitId, viewpoint, grade, scale, date, timestamp, deviceId?}]
   abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], targetStudentId, antecedent, consequence, response}]
-  ketebureRecords: [], // [{id, studentId, date, timestamp, type:'shukudai'|'seikatsu', rating:'◎'|'○'|'△', aspects:[], notes}]
+  ketebureRecords: [], // [{id, studentId, date, timestamp, type:'shukudai'|'seikatsu', rating:'A'|'B'|'C', aspects:[], notes}] (旧データの ◎/○/△ も読込互換)
   seatingSnapshots: [],// [{id, date, label, groups: [[ids],...]}]
   subjects: (window.EVAL_DATA && window.EVAL_DATA.subjects) || [],
   viewpoints: (window.EVAL_DATA && window.EVAL_DATA.viewpoints) || [],
@@ -169,6 +169,8 @@ function loadState() {
     if (Array.isArray(state.settings.customStudents) && state.settings.customStudents.length > 0) {
       state.students = state.settings.customStudents.map(s => ({ ...s }));
     }
+    // 保留中UI状態を復元（リロード前の選択を取り戻す）
+    if (data.pendingUI) _restorePendingUI(data.pendingUI);
   } catch (e) {
     console.error('保存データのパース失敗', e);
     showToast('保存データの読み込みに失敗。バックアップから復元してください', 'error');
@@ -201,7 +203,9 @@ function getRecordCounts(stateOrData) {
 function takeRotatingSnapshot(json) {
   try {
     let idx = parseInt(localStorage.getItem(SNAPSHOT_CURSOR_KEY) || '-1', 10);
+    if (!Number.isFinite(idx)) idx = -1;
     idx = (idx + 1) % SNAPSHOT_KEYS.length;
+    if (!Number.isFinite(idx) || idx < 0 || idx >= SNAPSHOT_KEYS.length) idx = 0;
     const wrapped = JSON.stringify({ ts: new Date().toISOString(), data: json });
     localStorage.setItem(SNAPSHOT_KEYS[idx], wrapped);
     localStorage.setItem(SNAPSHOT_CURSOR_KEY, String(idx));
@@ -209,6 +213,40 @@ function takeRotatingSnapshot(json) {
   } catch (e) {
     console.warn('snapshot failed:', e);
   }
+}
+
+function pruneOldShrinkLogs(keepN) {
+  try {
+    const keys = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(SHRINK_LOG_KEY + '-')) keys.push(k);
+    }
+    keys.sort();
+    while (keys.length > keepN) {
+      const oldest = keys.shift();
+      try { localStorage.removeItem(oldest); } catch (_) {}
+    }
+  } catch (_) {}
+}
+
+function listShrinkLogs() {
+  const out = [];
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (!k || !k.startsWith(SHRINK_LOG_KEY + '-')) continue;
+      try {
+        const wrapped = JSON.parse(localStorage.getItem(k));
+        const data = JSON.parse(wrapped.data);
+        out.push({
+          key: k, ts: wrapped.ts, reason: wrapped.reason,
+          counts: getRecordCounts(data)
+        });
+      } catch (_) {}
+    }
+  } catch (_) {}
+  return out.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
 }
 
 function listSnapshots() {
@@ -236,12 +274,22 @@ function restoreFromSnapshot(snapKey) {
   try {
     const wrapped = JSON.parse(raw);
     if (!wrapped || !wrapped.data) throw new Error('invalid snapshot');
-    // 復元前の現状を別枠に保管（万一に備える）
+    // 復元前の現状を時刻つきキーで別枠に保管（連続復元でも上書きしない）
     const cur = localStorage.getItem(STORAGE_KEY);
     if (cur) {
-      try { localStorage.setItem('interaction-pre-restore', cur); } catch (_) {}
+      try {
+        const ts = new Date().toISOString().replace(/[:.]/g, '-');
+        localStorage.setItem('interaction-pre-restore-' + ts, cur);
+        localStorage.setItem('interaction-pre-restore', cur); // 互換
+      } catch (_) {}
     }
+    // 他タブの上書き競合を防ぐフラグ（10秒間有効）
+    try {
+      localStorage.setItem('interaction-restore-in-progress', String(Date.now()));
+    } catch (_) {}
     localStorage.setItem(STORAGE_KEY, wrapped.data);
+    // 縮小検知のメモリキャッシュをリセット（復元後の最初のsaveStateで縮小として扱われないように）
+    _prevSaveCounts = null;
     return true;
   } catch (e) {
     console.error('restore failed:', e);
@@ -250,25 +298,117 @@ function restoreFromSnapshot(snapKey) {
   }
 }
 
+// 前回保存時の件数キャッシュ（毎回 prevJson を parse する負荷を回避）
+let _prevSaveCounts = null;
 function detectShrinkRisk(prevJson) {
-  if (!prevJson) return null;
-  try {
-    const prevData = JSON.parse(prevJson);
-    const before = getRecordCounts(prevData);
-    const after = getRecordCounts(state);
-    for (const k of Object.keys(before)) {
-      const b = before[k] || 0;
-      const a = after[k] || 0;
-      // 10件以上 or 10% 以上の減少を疑わしいと判定
-      if (b >= 10 && (b - a) >= Math.max(10, Math.floor(b * 0.1))) {
-        return { key: k, before: b, after: a };
-      }
+  // メモリキャッシュ優先（巨大JSONを毎saveStateでparseする負荷を回避）
+  let before = _prevSaveCounts;
+  if (!before && prevJson) {
+    try { before = getRecordCounts(JSON.parse(prevJson)); } catch (_) { return null; }
+  }
+  if (!before) return null;
+  const after = getRecordCounts(state);
+  for (const k of Object.keys(before)) {
+    const b = before[k] || 0;
+    const a = after[k] || 0;
+    if (b >= 10 && (b - a) >= Math.max(10, Math.floor(b * 0.1))) {
+      return { key: k, before: b, after: a };
     }
-  } catch (_) {}
+  }
   return null;
 }
 
+// ===== UI 保留状態の永続化（Map/Set は JSON 化で消えるため Array に変換）=====
+// 対象フィールド: 保留中の選択（一括保存待ち）。リロードや誤閉じで消失するのを防ぐ。
+//   - ketSelected:        Map<studentId, {rating, aspects}>
+//   - evalSelected:       Map<studentId, grade>
+//   - ketebureAspects:    Set<aspectId>
+//   - praiseSelectedTags: Set<tag>
+//   - praiseTargetIds:    Set<studentId>
+function _serializePendingUI() {
+  const ui = state.ui || {};
+  const out = {};
+  try {
+    if (ui.ketSelected instanceof Map && ui.ketSelected.size > 0) {
+      out.ketSelected = [...ui.ketSelected.entries()];
+    }
+    if (ui.evalSelected instanceof Map && ui.evalSelected.size > 0) {
+      out.evalSelected = [...ui.evalSelected.entries()];
+    }
+    if (ui.ketebureAspects instanceof Set && ui.ketebureAspects.size > 0) {
+      out.ketebureAspects = [...ui.ketebureAspects];
+    }
+    if (ui.praiseSelectedTags instanceof Set && ui.praiseSelectedTags.size > 0) {
+      out.praiseSelectedTags = [...ui.praiseSelectedTags];
+    }
+    if (ui.praiseTargetIds instanceof Set && ui.praiseTargetIds.size > 0) {
+      out.praiseTargetIds = [...ui.praiseTargetIds];
+    }
+    // 保留中の自由記述・評価値・観点モード等もリロードで消えると痛いので保存
+    if (ui.ketebureRating) out.ketebureRating = ui.ketebureRating;
+    if (ui.ketebureType) out.ketebureType = ui.ketebureType;
+    if (ui.evalActiveGrade) out.evalActiveGrade = ui.evalActiveGrade;
+    if (ui.evalEvidences && Object.keys(ui.evalEvidences).length > 0) {
+      out.evalEvidences = ui.evalEvidences;
+      if (ui.evalEvidenceFocus) out.evalEvidenceFocus = ui.evalEvidenceFocus;
+    }
+  } catch (_) {}
+  return out;
+}
+
+function _restorePendingUI(pending) {
+  if (!pending || typeof pending !== 'object') return;
+  state.ui = state.ui || {};
+  try {
+    if (Array.isArray(pending.ketSelected)) {
+      state.ui.ketSelected = new Map(pending.ketSelected);
+    }
+    if (Array.isArray(pending.evalSelected)) {
+      state.ui.evalSelected = new Map(pending.evalSelected);
+    }
+    if (Array.isArray(pending.ketebureAspects)) {
+      state.ui.ketebureAspects = new Set(pending.ketebureAspects);
+    }
+    if (Array.isArray(pending.praiseSelectedTags)) {
+      state.ui.praiseSelectedTags = new Set(pending.praiseSelectedTags);
+    }
+    if (Array.isArray(pending.praiseTargetIds)) {
+      state.ui.praiseTargetIds = new Set(pending.praiseTargetIds);
+    }
+    if (pending.ketebureRating) state.ui.ketebureRating = pending.ketebureRating;
+    if (pending.ketebureType) state.ui.ketebureType = pending.ketebureType;
+    if (pending.evalActiveGrade) state.ui.evalActiveGrade = pending.evalActiveGrade;
+    if (pending.evalEvidences && typeof pending.evalEvidences === 'object') {
+      state.ui.evalEvidences = pending.evalEvidences;
+      if (pending.evalEvidenceFocus) state.ui.evalEvidenceFocus = pending.evalEvidenceFocus;
+    }
+  } catch (e) {
+    console.warn('[restorePendingUI] failed to restore:', e);
+  }
+}
+
+// 開発用: state.ui に新しい Map/Set を追加した時に自動で警告（serializeに追加し忘れ検出）
+function _checkPendingUIDrift() {
+  const known = new Set(['ketSelected','evalSelected','ketebureAspects','praiseSelectedTags','praiseTargetIds']);
+  for (const k in state.ui) {
+    const v = state.ui[k];
+    if ((v instanceof Map || v instanceof Set) && v.size > 0 && !known.has(k)) {
+      console.warn(`[Map/Set drift] state.ui.${k} は永続化されません。_serializePendingUI に追加してください。`);
+    }
+  }
+}
+
 function saveState() {
+  // 復元中は他タブが書き込まないようガード（10秒以内なら復元優先）
+  try {
+    const restoreFlag = parseInt(localStorage.getItem('interaction-restore-in-progress') || '0', 10);
+    if (restoreFlag && Date.now() - restoreFlag < 10000) {
+      console.warn('[DATA SAFETY] 別タブが復元処理中。saveStateを一時スキップ');
+      return;
+    }
+  } catch (_) {}
+  // 開発: 未登録の Map/Set が state.ui に追加されていないか警告
+  try { _checkPendingUIDrift(); } catch (_) {}
   const data = {
     version: APP_VERSION,
     records: state.records,
@@ -285,7 +425,9 @@ function saveState() {
     lastEvalSubject: state.ui.evalSubjectId,
     lastEvalUnit: state.ui.evalUnitId,
     lastEvalViewpoint: state.ui.evalViewpoint,
-    lastEvalScale: state.ui.evalScale
+    lastEvalScale: state.ui.evalScale,
+    // 保留中UI状態（リロードしても消えないよう Map/Set を Array にして保存）
+    pendingUI: _serializePendingUI()
   };
   const json = JSON.stringify(data);
   let prev = null;
@@ -295,15 +437,20 @@ function saveState() {
   const shrink = detectShrinkRisk(prev);
   if (shrink && prev) {
     try {
-      // 縮小発生時の元データを保護用スロットに退避（複数回の縮小に備えて時刻つき）
+      // 縮小発生時の元データを時刻つきキーで退避（連続縮小でも最古退避が消えない）
+      const tsKey = new Date().toISOString().replace(/[:.]/g, '-');
       const shrinkBackup = JSON.stringify({
         ts: new Date().toISOString(),
         reason: `${shrink.key}: ${shrink.before}→${shrink.after}`,
         data: prev
       });
+      localStorage.setItem(SHRINK_LOG_KEY + '-' + tsKey, shrinkBackup);
+      // 互換: 単一スロットも更新（既存復元UIが見る）
       localStorage.setItem(SHRINK_LOG_KEY, shrinkBackup);
+      // 古い退避は最大3件まで保持（容量圧迫防止）
+      pruneOldShrinkLogs(3);
     } catch (_) {}
-    console.warn(`[DATA SAFETY] 縮小検知: ${shrink.key} ${shrink.before}→${shrink.after}件。元データは ${SHRINK_LOG_KEY} に退避済み`);
+    console.warn(`[DATA SAFETY] 縮小検知: ${shrink.key} ${shrink.before}→${shrink.after}件。元データを退避済み`);
     if (typeof showToast === 'function') {
       showToast(`⚠ データ${shrink.key}が${shrink.before}→${shrink.after}に減少。設定タブの🆘緊急復元から戻せます`, 'error');
     }
@@ -320,6 +467,8 @@ function saveState() {
     if (Date.now() - _lastSnapshotTime > SNAPSHOT_INTERVAL_MS) {
       takeRotatingSnapshot(json);
     }
+    // 次回の縮小検知用にメモリキャッシュ更新（巨大JSON再parseを回避）
+    _prevSaveCounts = getRecordCounts(state);
   } catch (e) {
     console.error('保存失敗', e);
     if (e.name === 'QuotaExceededError' || /quota/i.test(e.message || '')) {
@@ -451,12 +600,21 @@ function normalizeEvaluation(ev) {
   };
 }
 
+// 過去データ互換: ◎/○/△ を A/B/C に正規化（保存・比較用）
+function normalizeKetRating(r) {
+  if (r === '◎') return 'A';
+  if (r === '○') return 'B';
+  if (r === '△') return 'C';
+  if (r === 'A' || r === 'B' || r === 'C') return r;
+  return null;
+}
+
 function normalizeKetebure(k) {
   if (!k || typeof k !== 'object') return null;
   const studentId = parseInt(k.studentId);
   if (!studentId || studentId < 1) return null;
   const type = (k.type === 'seikatsu') ? 'seikatsu' : 'shukudai';
-  const rating = (k.rating === '◎' || k.rating === '○' || k.rating === '△') ? k.rating : null;
+  const rating = normalizeKetRating(k.rating);
   if (!rating) return null;
   const aspects = Array.isArray(k.aspects)
     ? k.aspects.map(a => String(a).trim()).filter(Boolean).slice(0, 8)
@@ -1497,6 +1655,8 @@ function refreshSidePanel() {
 
 // 直近記録から児童ボタンに状態を復元してインライン編集
 function enterInteractionEditMode(recId) {
+  // 同じレコードを再クリックした場合は何もしない（フォーム入力消失防止）
+  if (state.ui.editingRecordId === recId) return;
   const rec = state.records.find(r => r.id === recId);
   if (!rec) return;
   // 別レコード編集中なら確認
@@ -2328,12 +2488,18 @@ function initSettingsEvents() {
   document.getElementById('refreshSnapshotsBtn')?.addEventListener('click', renderSnapshotList);
   document.getElementById('rebuildViewsBtn')?.addEventListener('click', async () => {
     if (typeof requestViewRebuild !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
-    showToast('ビュー再生成中...（10秒程度）');
-    const result = await requestViewRebuild();
+    const labels = { records: '交友', praises: 'ほめ', evaluations: '評価', aba: 'ABA', ketebure: 'けテ' };
+    showToast('ビュー再生成中...（5種類を順次実行）');
+    const result = await requestViewRebuild({
+      onProgress: (type, count) => {
+        showToast(`✓ ${labels[type] || type}: ${count} 件`);
+      }
+    });
     if (result.ok) {
       const s = result.stats || {};
       const summary = `交友${s.records||0}/ほめ${s.praises||0}/評価${s.evaluations||0}/ABA${s.aba||0}/けテ${s.ketebure||0}件`;
-      showToast(`✓ ビュー再生成完了: ${summary}`);
+      const errMsg = result.partialErrors ? `\n⚠ 一部エラー: ${result.partialErrors.join('; ')}` : '';
+      showToast(`✓ ビュー再生成完了: ${summary}${errMsg}`);
     } else {
       alert('ビュー再生成失敗:\n\n' + (result.error || 'unknown error') + '\n\nGAS Editorのメニュー「🆘 担任記録 → 🔄 人間用ビューを再生成」から手動実行も可能です。');
       showToast('✗ ビュー再生成失敗', 'error');
@@ -2377,29 +2543,20 @@ function renderSnapshotList() {
   const cont = document.getElementById('snapshotList');
   if (!cont) return;
   const snaps = listSnapshots();
-  // 縮小検知時の退避データも表示
-  let shrinkSnap = null;
-  try {
-    const raw = localStorage.getItem(SHRINK_LOG_KEY);
-    if (raw) {
-      const wrapped = JSON.parse(raw);
-      const data = JSON.parse(wrapped.data);
-      shrinkSnap = { ts: wrapped.ts, reason: wrapped.reason, counts: getRecordCounts(data), key: SHRINK_LOG_KEY };
-    }
-  } catch (_) {}
-  if (snaps.length === 0 && !shrinkSnap) {
+  const shrinkLogs = listShrinkLogs();
+  if (snaps.length === 0 && shrinkLogs.length === 0) {
     cont.innerHTML = '<p class="muted">まだスナップショットはありません（保存30分後に最初のスナップショットが取られます）</p>';
     return;
   }
   let html = '<table class="snap-table" style="width:100%;border-collapse:collapse;font-size:12px;">';
   html += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid #ddd;">取得時刻</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid #ddd;">件数</th><th style="padding:4px 6px;border-bottom:1px solid #ddd;">操作</th></tr></thead><tbody>';
-  if (shrinkSnap) {
-    const t = new Date(shrinkSnap.ts);
-    const c = shrinkSnap.counts;
+  for (const s of shrinkLogs) {
+    const t = new Date(s.ts);
+    const c = s.counts;
     html += `<tr style="background:#fff8e0;">
-      <td style="padding:4px 6px;">💾 ${t.toLocaleString()} <span class="muted small">(${escapeHtml(shrinkSnap.reason)})</span></td>
+      <td style="padding:4px 6px;">💾 ${t.toLocaleString()} <span class="muted small">(${escapeHtml(s.reason || '')})</span></td>
       <td style="text-align:right;padding:4px 6px;">交友${c.records}/ほめ${c.praises}/評価${c.evaluations}/ABA${c.abaRecords}/けテ${c.ketebureRecords}</td>
-      <td style="padding:4px 6px;"><button class="ghost" data-snap-key="${shrinkSnap.key}" style="padding:3px 8px;font-size:11px;">復元</button></td>
+      <td style="padding:4px 6px;"><button class="ghost" data-snap-key="${s.key}" style="padding:3px 8px;font-size:11px;">復元</button></td>
     </tr>`;
   }
   for (const s of snaps) {
@@ -2629,6 +2786,7 @@ function rosterAddRow() {
   state.settings.customStudents = state.students.slice();
   saveState();
   refreshRosterTable();
+  if (typeof pushRosterToGas === 'function') pushRosterToGas(true).catch(() => {});
 }
 
 function rosterDeleteRow(id) {
@@ -2638,6 +2796,7 @@ function rosterDeleteRow(id) {
   saveState();
   refreshRosterTable();
   if (typeof renderStudentButtons === 'function') renderStudentButtons();
+  if (typeof pushRosterToGas === 'function') pushRosterToGas(true).catch(() => {});
 }
 
 function applyRosterCsv() {
@@ -3076,6 +3235,10 @@ function initPeriodBtnGroup(groupId, initValue, onChange) {
 
 function switchRecordMode(mode) {
   if (!['interaction', 'praise', 'evaluation', 'aba', 'ketebure'].includes(mode)) mode = 'interaction';
+  // 編集モード中に別モードに切替えたら編集状態をクリア（リーク防止）
+  if (mode !== 'interaction' && state.ui.editingRecordId) {
+    if (typeof exitInteractionEditMode === 'function') exitInteractionEditMode();
+  }
   state.ui.recordMode = mode;
   document.querySelectorAll('.record-mode-btn').forEach(b => {
     b.classList.toggle('active', b.dataset.recordMode === mode);
@@ -3763,11 +3926,13 @@ function refreshEvalGridState() {
   document.querySelectorAll('#evalStudentGrid .student-btn').forEach(btn => {
     const id = parseInt(btn.dataset.studentId);
     btn.classList.remove('covered-today', 'watch', 'subject', 'eval-active-student', 'eval-pending');
+    btn.removeAttribute('data-grade');
     btn.querySelectorAll('.eval-grade-tag, .eval-count-badge, .eval-pending-grade').forEach(t => t.remove());
     const list = findEvaluations(id, subj, unit, vp);
     const ev = list.length ? list[list.length - 1] : null;
     if (ev) {
       btn.classList.add('covered-today');
+      btn.dataset.grade = ev.grade; // CSS で背景色分け用
       const tag = document.createElement('span');
       tag.className = 'eval-grade-tag';
       tag.textContent = ev.grade;
@@ -3789,6 +3954,7 @@ function refreshEvalGridState() {
     const pendGrade = pending.get(id);
     if (pendGrade) {
       btn.classList.add('eval-pending');
+      btn.dataset.grade = pendGrade; // 保留値で上書き（変更が分かりやすい）
       const pTag = document.createElement('span');
       pTag.className = 'eval-pending-grade';
       pTag.textContent = pendGrade;
@@ -3849,17 +4015,20 @@ function renderEvalEvidenceList() {
       + (isFocused ? ' focused' : '');
     btn.textContent = t.label + (isActive && map[t.id] ? ' ✏' : '');
     btn.title = isActive
-      ? (isFocused ? 'もう一度クリックで解除' : 'クリックでこの材料の入力欄に切替')
+      ? (isFocused ? 'もう一度クリックで解除' : 'クリックでこの材料の入力欄に切替（さらにもう一度で解除）')
       : 'クリックで選択して詳細入力';
     btn.addEventListener('click', () => {
       if (!isActive) {
+        // 未選択 → 追加してフォーカス
         map[t.id] = map[t.id] || '';
         state.ui.evalEvidenceFocus = t.id;
       } else if (isFocused) {
+        // 選択中＆フォーカス中 → 2回タップ解除
         delete map[t.id];
         const remain = Object.keys(map);
         state.ui.evalEvidenceFocus = remain[0] || null;
       } else {
+        // 選択中だがフォーカス外 → フォーカスのみ移動（次のタップで解除可）
         state.ui.evalEvidenceFocus = t.id;
       }
       renderEvalEvidenceList();
@@ -4350,7 +4519,7 @@ const KETEBURE_ASPECTS = {
   ]
 };
 
-const KETEBURE_RATINGS = ['◎', '○', '△'];
+const KETEBURE_RATINGS = ['A', 'B', 'C'];
 
 function initKetebureEvents() {
   state.ui.ketebureType = state.ui.ketebureType || 'shukudai';
@@ -4502,7 +4671,7 @@ function updateKetStatusLabel() {
   const pending = state.ui.ketSelected ? state.ui.ketSelected.size : 0;
   if (state.ui.ketActiveStudent) {
     const s = state.students.find(x => x.id === state.ui.ketActiveStudent);
-    lbl.textContent = `${s ? s.name : ''} を選択中 → 評価値（◎○△）をタップで記録に追加`;
+    lbl.textContent = `${s ? s.name : ''} を選択中 → 評価値（A/B/C）をタップで記録に追加`;
   } else if (pending > 0) {
     lbl.textContent = `${pending}人選択中${r ? '（' + r + (aspects ? '・' + aspects : '') + '）' : ''} → 「💾 記録」で一括保存`;
   } else if (r) {
@@ -4513,14 +4682,33 @@ function updateKetStatusLabel() {
 }
 
 // 児童ボタンクリック: 選択トグル + 児童先行モード対応
+// - 既に同 rating + 同 aspects で保留 → 解除（2回タップ解除を維持）
+// - 既に保留だが rating か aspects が変わっていれば → 上書き（評価変更/観点追加）
+// - 未選択 → 新規追加
 function onKetStudentClick(studentId) {
-  // 既に保留に入っていれば解除（誤タップリカバリ）
-  if (state.ui.ketSelected.has(studentId)) {
-    state.ui.ketSelected.delete(studentId);
+  const existing = state.ui.ketSelected.has(studentId) ? state.ui.ketSelected.get(studentId) : null;
+  const r = state.ui.ketebureRating;
+
+  if (existing) {
+    // 評価値が変わっていなければ rating は据え置きで判定
+    const targetRating = r || existing.rating;
+    const currentAspects = [...(state.ui.ketebureAspects || [])].sort();
+    const existingAspects = [...(existing.aspects || [])].sort();
+    const sameRating = (existing.rating === targetRating);
+    const sameAspects = (currentAspects.length === existingAspects.length)
+      && currentAspects.every((a, i) => a === existingAspects[i]);
+
+    if (sameRating && sameAspects) {
+      // 完全同一 = 2回タップ → 解除
+      state.ui.ketSelected.delete(studentId);
+    } else {
+      // 何かが変わった = 評価変更 or 観点追加
+      applyKetSelection(studentId, targetRating);
+    }
     refreshKetebureUI();
     return;
   }
-  const r = state.ui.ketebureRating;
+
   if (r) {
     // 評価値あり → 保留リストに追加
     applyKetSelection(studentId, r);
@@ -4536,7 +4724,7 @@ function onKetStudentClick(studentId) {
 function applyKetSelection(studentId, rating) {
   state.ui.ketSelected.set(studentId, {
     rating,
-    aspects: [...state.ui.ketebureAspects]
+    aspects: [...(state.ui.ketebureAspects || [])]
   });
 }
 
@@ -4576,7 +4764,7 @@ function saveKetebureBatch() {
 }
 
 function ketAllMaruRecord() {
-  if (!confirm(`${state.ui.ketebureType === 'shukudai' ? '宿題' : '生活'}けテぶれで全員に◎を記録します。よろしいですか？`)) return;
+  if (!confirm(`${state.ui.ketebureType === 'shukudai' ? '宿題' : '生活'}けテぶれで全員にAを記録します。よろしいですか？`)) return;
   const date = state.ui.ketebureDate || todayISO();
   const type = state.ui.ketebureType;
   let saved = 0;
@@ -4586,7 +4774,7 @@ function ketAllMaruRecord() {
       k.studentId === s.id && k.date === date && k.type === type);
     if (exists) continue;
     const rec = normalizeKetebure({
-      studentId: s.id, date, type, rating: '◎', aspects: [], notes: ''
+      studentId: s.id, date, type, rating: 'A', aspects: [], notes: ''
     });
     if (rec) {
       state.ketebureRecords.push(rec);
@@ -4595,11 +4783,11 @@ function ketAllMaruRecord() {
     }
   }
   saveState();
-  showToast(`${saved}人に◎を記録しました（既記録はスキップ）`);
+  showToast(`${saved}人にAを記録しました（既記録はスキップ）`);
   refreshKetebureUI();
 }
 
-// 連続◎ストリーク計算: studentId → 日数
+// 連続A（最高評価）ストリーク計算: studentId → 日数
 function computeKetebureStreaks(type) {
   const recs = state.ketebureRecords.filter(k => k.type === type);
   const byStudent = new Map();
@@ -4609,18 +4797,19 @@ function computeKetebureStreaks(type) {
   }
   const result = new Map();
   for (const [sid, list] of byStudent) {
-    // 各児童について「日付ごとに最良の評価」を取り、最新日から連続◎を数える
+    // 各児童について「日付ごとに最良の評価」を取り、最新日から連続Aを数える
     const byDate = new Map();
     for (const r of list) {
       const cur = byDate.get(r.date);
-      // 優先順位: ◎ > ○ > △
-      const order = { '◎': 3, '○': 2, '△': 1 };
+      // 優先順位: A > B > C （過去データの ◎/○/△ も互換）
+      const order = { 'A': 3, 'B': 2, 'C': 1, '◎': 3, '○': 2, '△': 1 };
       if (!cur || (order[r.rating] || 0) > (order[cur] || 0)) byDate.set(r.date, r.rating);
     }
     const dates = [...byDate.keys()].sort().reverse();  // 新しい順
     let streak = 0;
     for (const d of dates) {
-      if (byDate.get(d) === '◎') streak++;
+      const v = byDate.get(d);
+      if (v === 'A' || v === '◎') streak++;
       else break;
     }
     if (streak > 0) result.set(sid, streak);
@@ -4628,7 +4817,7 @@ function computeKetebureStreaks(type) {
   return result;
 }
 
-// 観点別躓き検出: 直近5回の同観点で△が3回以上
+// 観点別躓き検出: 直近5回の同観点でCが3回以上
 function detectKetStuckAspects(type) {
   const recs = state.ketebureRecords.filter(k => k.type === type)
     .sort((a, b) => (b.timestamp || '').localeCompare(a.timestamp || ''));
@@ -4639,7 +4828,7 @@ function detectKetStuckAspects(type) {
       // 児童x観点 で aspects に a.id を含む直近5記録
       const recent = recs.filter(r => r.studentId === s.id && Array.isArray(r.aspects) && r.aspects.includes(a.id)).slice(0, 5);
       if (recent.length < 3) continue;
-      const deltaCount = recent.filter(r => r.rating === '△').length;
+      const deltaCount = recent.filter(r => r.rating === 'C' || r.rating === '△').length;
       if (deltaCount >= 3) {
         stuck.push({ studentId: s.id, name: s.name, aspectFull: a.full, deltaCount, total: recent.length });
       }
@@ -4682,36 +4871,41 @@ function refreshKetGridDecorations() {
     btn.classList.remove('covered-today', 'watch', 'ket-selected', 'ket-active-student');
     btn.querySelectorAll('.ket-streak-badge, .ket-rating-tag, .ket-pending-rating').forEach(t => t.remove());
     // 本日記録あり?
+    btn.removeAttribute('data-rating');
     const todayRec = state.ketebureRecords.find(k => k.studentId === id && k.date === date && k.type === type);
     if (todayRec) {
       btn.classList.add('covered-today');
+      const dispRating = normalizeKetRating(todayRec.rating) || todayRec.rating;
+      btn.dataset.rating = dispRating; // CSS で背景色分け用
       const tag = document.createElement('span');
       tag.className = 'ket-rating-tag';
-      tag.textContent = todayRec.rating;
-      tag.style.color = todayRec.rating === '◎' ? '#d4a017' : (todayRec.rating === '△' ? '#c0392b' : '#7f8c8d');
+      tag.textContent = dispRating;
       btn.appendChild(tag);
     } else {
       btn.classList.add('watch');
     }
-    // 連続◎バッジ
+    // 連続Aバッジ
     const streak = streaks.get(id);
     if (streak && streak >= 2) {
       const sb = document.createElement('span');
       sb.className = 'ket-streak-badge';
       sb.textContent = '🔥' + streak;
-      sb.title = `${streak}日連続◎`;
+      sb.title = `${streak}日連続A`;
       btn.appendChild(sb);
     }
     // 選択中ハイライト + 保留評価値 + 保留観点
     if (selected.has(id)) {
       btn.classList.add('ket-selected');
       const sel = selected.get(id);
+      const dispRating = normalizeKetRating(sel.rating) || sel.rating;
+      // 保留中の rating で色分け（既存の data-rating を上書きしてもよい）
+      btn.dataset.rating = dispRating;
       const pr = document.createElement('span');
       pr.className = 'ket-pending-rating';
       // 評価値 (大)
       const rEl = document.createElement('span');
       rEl.className = 'pr-rating';
-      rEl.textContent = sel.rating;
+      rEl.textContent = dispRating;
       pr.appendChild(rEl);
       // 観点 (小・並列)
       const aspectMap = {};
@@ -4723,7 +4917,7 @@ function refreshKetGridDecorations() {
         aEl.textContent = labels.join('');
         pr.appendChild(aEl);
       }
-      pr.title = `${sel.rating}${labels.length ? ' / ' + labels.join('・') : ''}`;
+      pr.title = `${dispRating}${labels.length ? ' / ' + labels.join('・') : ''}`;
       btn.appendChild(pr);
     }
     // 児童先行モードのハイライト
@@ -4765,8 +4959,8 @@ function refreshKetStuckBanner() {
     return;
   }
   el.classList.add('show');
-  el.innerHTML = '⚠ 観点別躓き(直近5回中△3回以上): ' +
-    stuck.map(x => `<span class="ket-stuck-item"><b>${escapeHtml(x.name)}</b>: ${escapeHtml(x.aspectFull)}△${x.deltaCount}/${x.total}</span>`).join('');
+  el.innerHTML = '⚠ 観点別躓き(直近5回中C3回以上): ' +
+    stuck.map(x => `<span class="ket-stuck-item"><b>${escapeHtml(x.name)}</b>: ${escapeHtml(x.aspectFull)}C${x.deltaCount}/${x.total}</span>`).join('');
 }
 
 function refreshKetSidePanel() {
@@ -4775,9 +4969,9 @@ function refreshKetSidePanel() {
   const today = state.ketebureRecords.filter(k => k.date === date && k.type === type);
   const cnt = document.getElementById('ketTodayCount'); if (cnt) cnt.textContent = today.length;
   const cov = document.getElementById('ketTodayCovered'); if (cov) cov.textContent = new Set(today.map(t => t.studentId)).size;
-  const m = document.getElementById('ketTodayMaru'); if (m) m.textContent = today.filter(t => t.rating === '◎').length;
-  const m1 = document.getElementById('ketTodayMaruOne'); if (m1) m1.textContent = today.filter(t => t.rating === '○').length;
-  const d = document.getElementById('ketTodayDelta'); if (d) d.textContent = today.filter(t => t.rating === '△').length;
+  const m = document.getElementById('ketTodayMaru'); if (m) m.textContent = today.filter(t => normalizeKetRating(t.rating) === 'A').length;
+  const m1 = document.getElementById('ketTodayMaruOne'); if (m1) m1.textContent = today.filter(t => normalizeKetRating(t.rating) === 'B').length;
+  const d = document.getElementById('ketTodayDelta'); if (d) d.textContent = today.filter(t => normalizeKetRating(t.rating) === 'C').length;
 
   // 連続◎ TOP5
   const streakList = document.getElementById('ketStreakList');
@@ -4806,8 +5000,9 @@ function refreshKetSidePanel() {
           const s = sMap.get(r.studentId);
           const aspects = (r.aspects || []).map(id => (list.find(x => x.id === id) || {}).label || id).join('');
           const notes = r.notes ? ` <span class="muted small">${escapeHtml(r.notes)}</span>` : '';
+          const dispR = normalizeKetRating(r.rating) || r.rating;
           return `<li style="padding:3px 6px; border-bottom:1px solid #eee;" data-rid="${r.id}">
-            <b>${s ? escapeHtml(s.name) : '?'}:</b> ${r.rating}${aspects ? '['+aspects+']' : ''}${notes}
+            <b>${s ? escapeHtml(s.name) : '?'}:</b> ${dispR}${aspects ? '['+aspects+']' : ''}${notes}
             <span style="float:right;">
               <button class="ghost" data-edit-ket="${r.id}" style="padding:1px 6px; font-size:10px;">編集</button>
               <button class="ghost danger" data-del="${r.id}" style="padding:1px 6px; font-size:10px;">削除</button>
@@ -4839,6 +5034,8 @@ function openKetebureEditModal(id) {
   const aspectsSet = new Set(r.aspects || []);
   const body = document.getElementById('editModalBody');
   if (!body) return;
+  // 旧データ ◎○△ も A/B/C と同じ扱いで active に
+  const curRating = normalizeKetRating(r.rating) || r.rating;
   body.innerHTML = `
     <div class="muted small" style="margin-bottom:8px;">
       ${escapeHtml(s ? s.name : '?')} ・ ${escapeHtml(r.date)} ・ ${r.type === 'shukudai' ? '宿題' : '生活'}けテぶれ
@@ -4846,7 +5043,7 @@ function openKetebureEditModal(id) {
     <div class="edit-modal-row">
       <label>評価</label>
       <div id="editKetRatingBtns" style="display:flex; gap:6px;">
-        ${KETEBURE_RATINGS.map(g => `<button type="button" class="ket-rating-btn${g === r.rating ? ' active' : ''}" data-rating="${g}" style="min-width:40px;">${g}</button>`).join('')}
+        ${KETEBURE_RATINGS.map(g => `<button type="button" class="ket-rating-btn${g === curRating ? ' active' : ''}" data-rating="${g}" style="min-width:40px;">${g}</button>`).join('')}
       </div>
     </div>
     <div class="edit-modal-row">
@@ -4860,7 +5057,7 @@ function openKetebureEditModal(id) {
       <textarea id="editKetNote" placeholder="メモ（任意）" maxlength="300">${escapeHtml(r.notes || '')}</textarea>
     </div>
   `;
-  let selRating = r.rating;
+  let selRating = curRating;
   body.querySelectorAll('#editKetRatingBtns button').forEach(b => {
     b.addEventListener('click', () => {
       selRating = b.dataset.rating;
@@ -7752,7 +7949,15 @@ const KTA_ASPECTS_SHUKUDAI = ['け', 'テ', 'ぶ', 'れ'];
 const KTA_ASPECTS_SHUKUDAI_FULL = { 'け': '計画', 'テ': 'テスト', 'ぶ': '分析', 'れ': '練習' };
 const KTA_ASPECTS_SEIKATSU = ['心', 'け', 'ぶ', '→'];
 const KTA_ASPECTS_SEIKATSU_FULL = { '心': '心構え', 'け': '計画', 'ぶ': '分析', '→': '改善' };
-const KTA_RATING_COLORS = { '◎': '#2e7d32', '○': '#0277bd', '△': '#d68000', '×': '#c62828' };
+const KTA_RATING_COLORS = { 'A': '#2e7d32', 'B': '#1976d2', 'C': '#c62828', '×': '#9e9e9e' };
+// 過去データの ◎/○/△ を A/B/C に正規化（分析タブ用）
+function _ktaNormRating(r) {
+  if (r === '◎') return 'A';
+  if (r === '○') return 'B';
+  if (r === '△') return 'C';
+  if (r === 'A' || r === 'B' || r === 'C' || r === '×') return r;
+  return null;
+}
 
 function getFilteredKetebure() {
   const type = document.getElementById('ktAType')?.value || 'all';
@@ -7796,12 +8001,13 @@ function refreshKetebureAnalysis() {
 
 function renderKtARatingDist(recs) {
   const target = document.getElementById('ktARatingDist');
-  const ratings = ['◎','○','△','×'];
+  const ratings = ['A','B','C','×'];
   const bySplit = { shukudai: {}, seikatsu: {} };
   ratings.forEach(r => { bySplit.shukudai[r] = 0; bySplit.seikatsu[r] = 0; });
   for (const r of recs) {
-    if (!r.rating) continue;
-    if (bySplit[r.type] && r.rating in bySplit[r.type]) bySplit[r.type][r.rating]++;
+    const norm = _ktaNormRating(r.rating);
+    if (!norm) continue;
+    if (bySplit[r.type] && norm in bySplit[r.type]) bySplit[r.type][norm]++;
   }
   const renderBar = (label, counts) => {
     const total = ratings.reduce((s, r) => s + counts[r], 0);
@@ -7893,9 +8099,9 @@ function renderKtAAlerts(recs) {
     if (arr.length === 0) {
       reasons.push('記録なし');
     } else {
-      const last3 = arr.slice(0, 3).map(r => r.rating);
-      const triCount = last3.filter(r => r === '△' || r === '×').length;
-      if (triCount >= 2 && last3.length >= 2) reasons.push(`直近${last3.length}件中${triCount}件が△/×`);
+      const last3 = arr.slice(0, 3).map(r => _ktaNormRating(r.rating));
+      const triCount = last3.filter(r => r === 'C' || r === '×').length;
+      if (triCount >= 2 && last3.length >= 2) reasons.push(`直近${last3.length}件中${triCount}件がC/×`);
       if (arr.length === 1) reasons.push('記録1件のみ');
       // 計画停滞: shukudai最近で「け」が出てこない
       const shArr = arr.filter(r => r.type === 'shukudai').slice(0, 5);
@@ -7928,7 +8134,7 @@ function renderKtAAlerts(recs) {
 
 function renderKtAStars(recs) {
   const target = document.getElementById('ktAStars');
-  // 自走児: ◎が多く + 全観点に登場 + 記録数が多い
+  // 自走児: Aが多く + 全観点に登場 + 記録数が多い
   const byStudent = {};
   for (const r of recs) {
     if (!byStudent[r.studentId]) byStudent[r.studentId] = [];
@@ -7938,7 +8144,7 @@ function renderKtAStars(recs) {
   for (const s of state.students) {
     const arr = byStudent[s.id] || [];
     if (arr.length < 3) continue;
-    const goodCount = arr.filter(r => r.rating === '◎').length;
+    const goodCount = arr.filter(r => _ktaNormRating(r.rating) === 'A').length;
     const goodRate = goodCount / arr.length;
     // 全観点に登場した数
     const allAspects = new Set();
@@ -7958,7 +8164,7 @@ function renderKtAStars(recs) {
   for (const s of stars.slice(0, 10)) {
     html += `<li>
       <span class="kta-star-name">${escapeHtml(s.student.name)}</span>
-      <span class="kta-star-stat">◎${s.goodCount}/${s.count} (${Math.round(s.goodRate*100)}%)</span>
+      <span class="kta-star-stat">A${s.goodCount}/${s.count} (${Math.round(s.goodRate*100)}%)</span>
       <span class="kta-star-aspects">${s.aspectCount}観点</span>
     </li>`;
   }
@@ -7980,14 +8186,15 @@ function renderKtAStudentCards(recs) {
       html += `<div class="kta-card empty"><h4>${escapeHtml(s.name)}</h4><div class="muted small">記録なし</div></div>`;
       continue;
     }
-    const ratings = { '◎': 0, '○': 0, '△': 0, '×': 0 };
+    const ratings = { 'A': 0, 'B': 0, 'C': 0, '×': 0 };
     const aspectCounts = {};
     for (const r of arr) {
-      if (r.rating in ratings) ratings[r.rating]++;
+      const norm = _ktaNormRating(r.rating);
+      if (norm && norm in ratings) ratings[norm]++;
       if (Array.isArray(r.aspects)) for (const a of r.aspects) aspectCounts[a] = (aspectCounts[a] || 0) + 1;
     }
     const total = arr.length;
-    const ratingBar = ['◎','○','△','×'].map(r => {
+    const ratingBar = ['A','B','C','×'].map(r => {
       const pct = total > 0 ? (ratings[r] / total * 100) : 0;
       if (ratings[r] === 0) return '';
       return `<span class="kta-mini-seg" style="width:${pct}%; background:${KTA_RATING_COLORS[r]};" title="${r}${ratings[r]}件"></span>`;
@@ -7995,13 +8202,13 @@ function renderKtAStudentCards(recs) {
     // 強み弱みは出現観点トップ/最下位
     const allAspects = Object.entries(aspectCounts).sort((a,b)=>b[1]-a[1]);
     const top = allAspects.slice(0, 2).map(([a,c]) => `<span class="kta-asp-good">${a}</span>`).join('');
-    const goodRate = total > 0 ? Math.round(ratings['◎'] / total * 100) : 0;
-    const cls = goodRate >= 50 ? 'star' : (ratings['△'] + ratings['×'] >= total / 2 ? 'alert' : '');
+    const goodRate = total > 0 ? Math.round(ratings['A'] / total * 100) : 0;
+    const cls = goodRate >= 50 ? 'star' : (ratings['C'] + ratings['×'] >= total / 2 ? 'alert' : '');
     html += `<div class="kta-card ${cls} ${s.highlight ? 'highlight' : ''}">
       <h4>${escapeHtml(s.name)} <span class="kta-card-count">${total}件</span></h4>
       <div class="kta-card-bar">${ratingBar}</div>
       <div class="kta-card-meta">
-        <span>◎${ratings['◎']} ○${ratings['○']} △${ratings['△']}${ratings['×']>0?' ×'+ratings['×']:''}</span>
+        <span>A${ratings['A']} B${ratings['B']} C${ratings['C']}${ratings['×']>0?' ×'+ratings['×']:''}</span>
       </div>
       ${top ? `<div class="kta-card-aspects">強み: ${top}</div>` : ''}
     </div>`;

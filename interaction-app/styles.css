@@ -1663,12 +1663,16 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   line-height: 1;
   transition: all 0.12s;
 }
-.ket-rating-btn[data-rating="◎"] { color: #d4a017; border-color: #d4a017; }
-.ket-rating-btn[data-rating="○"] { color: #7f8c8d; border-color: #7f8c8d; }
-.ket-rating-btn[data-rating="△"] { color: #c0392b; border-color: #c0392b; }
-.ket-rating-btn.active[data-rating="◎"] { background: #f1c40f; color: white; }
-.ket-rating-btn.active[data-rating="○"] { background: #95a5a6; color: white; }
-.ket-rating-btn.active[data-rating="△"] { background: #e74c3c; color: white; }
+.ket-rating-btn[data-rating="A"] { color: #2e7d32; border-color: #2e7d32; }
+.ket-rating-btn[data-rating="B"] { color: #1976d2; border-color: #1976d2; }
+.ket-rating-btn[data-rating="C"] { color: #c62828; border-color: #c62828; }
+.ket-rating-btn.active[data-rating="A"] { background: #2e7d32; color: white; box-shadow: 0 2px 8px rgba(46,125,50,0.4); }
+.ket-rating-btn.active[data-rating="B"] { background: #1976d2; color: white; box-shadow: 0 2px 8px rgba(25,118,210,0.4); }
+.ket-rating-btn.active[data-rating="C"] { background: #c62828; color: white; box-shadow: 0 2px 8px rgba(198,40,40,0.4); }
+/* 旧データ表示時の互換 (◎/○/△) */
+.ket-rating-btn[data-rating="◎"] { color: #2e7d32; border-color: #2e7d32; }
+.ket-rating-btn[data-rating="○"] { color: #1976d2; border-color: #1976d2; }
+.ket-rating-btn[data-rating="△"] { color: #c62828; border-color: #c62828; }
 .ket-aspect-buttons {
   display: flex;
   gap: 3px;
@@ -1762,9 +1766,13 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   position: absolute;
   bottom: 1px;
   right: 1px;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 13px;
+  font-weight: 800;
   line-height: 1;
+  padding: 1px 3px;
+  border-radius: 3px;
+  background: white;
+  border: 1px solid currentColor;
 }
 
 /* ========== けテぶれ専用UI 1カラム化（評価ボタン目立たせ・スクロール不要） ========== */
@@ -1928,6 +1936,67 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   border-radius: 2px;
   letter-spacing: -0.5px;
 }
+
+/* === 評価値別の児童ボタン色分け（保存済 + 保留中の両方で効く） === */
+/* A = 緑（最高） */
+.student-grid.ket-student-grid .student-btn[data-rating="A"],
+.student-grid.ket-student-grid .student-btn[data-rating="◎"] {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+.student-grid.ket-student-grid .student-btn[data-rating="A"] .ket-rating-tag,
+.student-grid.ket-student-grid .student-btn[data-rating="◎"] .ket-rating-tag {
+  color: #2e7d32;
+  background: white;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+/* B = 青（標準） */
+.student-grid.ket-student-grid .student-btn[data-rating="B"],
+.student-grid.ket-student-grid .student-btn[data-rating="○"] {
+  background: #e3f2fd;
+  border-color: #1976d2;
+}
+.student-grid.ket-student-grid .student-btn[data-rating="B"] .ket-rating-tag,
+.student-grid.ket-student-grid .student-btn[data-rating="○"] .ket-rating-tag {
+  color: #1565c0;
+  background: white;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+/* C = 赤（要支援） */
+.student-grid.ket-student-grid .student-btn[data-rating="C"],
+.student-grid.ket-student-grid .student-btn[data-rating="△"] {
+  background: #ffebee;
+  border-color: #c62828;
+}
+.student-grid.ket-student-grid .student-btn[data-rating="C"] .ket-rating-tag,
+.student-grid.ket-student-grid .student-btn[data-rating="△"] .ket-rating-tag {
+  color: #c62828;
+  background: white;
+  padding: 0 3px;
+  border-radius: 2px;
+}
+/* 保留中（ket-selected）の枠は黄色を維持しつつ、内側は評価値の薄色を活かす */
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="A"] {
+  background: #c8e6c9;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="B"] {
+  background: #bbdefb;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="C"] {
+  background: #ffcdd2;
+}
+/* 保留中の rating ピル背景も評価値色で */
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="A"] .ket-pending-rating {
+  background: #2e7d32;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="B"] .ket-pending-rating {
+  background: #1976d2;
+}
+.student-grid.ket-student-grid .student-btn.ket-selected[data-rating="C"] .ket-pending-rating {
+  background: #c62828;
+}
 /* 児童先行モード（評価未選択でタップした児童のハイライト） */
 .student-grid.ket-student-grid .student-btn.ket-active-student {
   background: #e8f4ff;
@@ -1997,6 +2066,63 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   line-height: 1.1;
   border: 1px solid #c19400;
   z-index: 2;
+}
+/* === 評価グレード別の児童ボタン色分け（保存済 + 保留中の両方で効く） === */
+/* A / 5 = 緑（最高） */
+#evalStudentGrid .student-btn[data-grade="A"],
+#evalStudentGrid .student-btn[data-grade="5"] {
+  background: #e8f5e9;
+  border-color: #4caf50;
+}
+/* 4 = 黄緑 */
+#evalStudentGrid .student-btn[data-grade="4"] {
+  background: #f1f8e9;
+  border-color: #8bc34a;
+}
+/* B / 3 = 青（標準） */
+#evalStudentGrid .student-btn[data-grade="B"],
+#evalStudentGrid .student-btn[data-grade="3"] {
+  background: #e3f2fd;
+  border-color: #1976d2;
+}
+/* 2 = オレンジ */
+#evalStudentGrid .student-btn[data-grade="2"] {
+  background: #fff3e0;
+  border-color: #f57c00;
+}
+/* C / 1 = 赤（要支援） */
+#evalStudentGrid .student-btn[data-grade="C"],
+#evalStudentGrid .student-btn[data-grade="1"] {
+  background: #ffebee;
+  border-color: #c62828;
+}
+/* 保留中（eval-pending）は枠を黄色に保ちつつ、内側は評価値色を維持 */
+#evalStudentGrid .student-btn.eval-pending[data-grade="A"],
+#evalStudentGrid .student-btn.eval-pending[data-grade="5"] { background: #c8e6c9; }
+#evalStudentGrid .student-btn.eval-pending[data-grade="4"] { background: #dcedc8; }
+#evalStudentGrid .student-btn.eval-pending[data-grade="B"],
+#evalStudentGrid .student-btn.eval-pending[data-grade="3"] { background: #bbdefb; }
+#evalStudentGrid .student-btn.eval-pending[data-grade="2"] { background: #ffe0b2; }
+#evalStudentGrid .student-btn.eval-pending[data-grade="C"],
+#evalStudentGrid .student-btn.eval-pending[data-grade="1"] { background: #ffcdd2; }
+/* 保留中の評価値ピル背景もグレード色で分かりやすく */
+#evalStudentGrid .student-btn.eval-pending[data-grade="A"] .eval-pending-grade,
+#evalStudentGrid .student-btn.eval-pending[data-grade="5"] .eval-pending-grade {
+  background: #2e7d32; color: white; border-color: #1b5e20;
+}
+#evalStudentGrid .student-btn.eval-pending[data-grade="4"] .eval-pending-grade {
+  background: #66bb6a; color: white; border-color: #4a8b3e;
+}
+#evalStudentGrid .student-btn.eval-pending[data-grade="B"] .eval-pending-grade,
+#evalStudentGrid .student-btn.eval-pending[data-grade="3"] .eval-pending-grade {
+  background: #1976d2; color: white; border-color: #0d47a1;
+}
+#evalStudentGrid .student-btn.eval-pending[data-grade="2"] .eval-pending-grade {
+  background: #f57c00; color: white; border-color: #e65100;
+}
+#evalStudentGrid .student-btn.eval-pending[data-grade="C"] .eval-pending-grade,
+#evalStudentGrid .student-btn.eval-pending[data-grade="1"] .eval-pending-grade {
+  background: #c62828; color: white; border-color: #8b0000;
 }
 .eval-control-grade {
   display: flex;
@@ -2849,28 +2975,36 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   font-size: 11px;
 }
 
-/* ========== ABA 2カラム式レイアウト（両カラムスクロール不要を目指す） ========== */
+/* ========== ABA 2カラム式レイアウト（左：選択、右：A/C/対応） ========== */
 .aba-flat {
-  height: calc(100vh - 110px);
+  /* height は #abaRecordView の flex で決まるため固定値は使わない */
   padding: 4px 8px;
 }
 .aba-flat .aba-flat-grid {
   display: grid;
-  grid-template-columns: 1.5fr 1fr;
+  /* 左を広めに、右は最小限。textarea は flex で縦伸長するので狭くてもOK */
+  grid-template-columns: minmax(0, 1.85fr) minmax(260px, 1fr);
   gap: 6px;
   flex: 1;
   overflow: hidden;
   padding: 2px;
 }
-.aba-flat .aba-flat-left,
+.aba-flat .aba-flat-left {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  /* 相手行が現れて溢れた時のため左カラム単独でスクロール可能に */
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding-right: 2px;
+}
 .aba-flat .aba-flat-right {
   display: flex;
   flex-direction: column;
   gap: 2px;
   min-height: 0;
   overflow: hidden;
-}
-.aba-flat .aba-flat-right {
   background: #fef9f9;
   border: 1px solid #f5d0d0;
   border-radius: 6px;
@@ -2878,37 +3012,40 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
 }
 /* 各行をコンパクトに */
 .aba-flat .aba-flat-row {
-  grid-template-columns: 64px 1fr;
+  grid-template-columns: 60px 1fr;
   gap: 4px;
   padding: 1px 2px 2px;
   border-bottom: 1px dashed #f0f0f0;
+  flex-shrink: 0; /* 行が圧縮されないようにし、溢れたら親でスクロール */
 }
 .aba-flat .aba-flat-label {
   font-size: 10.5px;
-  padding-top: 3px;
-  line-height: 1.2;
+  padding-top: 2px;
+  line-height: 1.15;
 }
 .aba-flat .aba-flat-label .muted { font-size: 9px; }
 
 /* ===== 左カラム: 全選択項目をスクロールなしで詰める ===== */
 .aba-flat .aba-quick-dates { gap: 2px; }
-.aba-flat .aba-date-btn { padding: 3px 8px; font-size: 11px; }
+.aba-flat .aba-date-btn { padding: 2px 7px; font-size: 10.5px; }
 
 .aba-flat .aba-slot-grid {
   grid-template-columns: repeat(10, 1fr);
   gap: 2px;
 }
 .aba-flat .aba-slot-btn {
-  padding: 3px 1px;
+  padding: 2px 1px;
   font-size: 10.5px;
+  min-height: 22px;
 }
 .aba-flat .aba-subject-grid {
   grid-template-columns: repeat(10, 1fr);
   gap: 2px;
 }
 .aba-flat .aba-subject-btn {
-  padding: 3px 1px;
+  padding: 2px 1px;
   font-size: 10.5px;
+  min-height: 22px;
 }
 .aba-flat .aba-weather-grid {
   display: grid;
@@ -2916,8 +3053,9 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   gap: 2px;
 }
 .aba-flat .aba-weather-grid > * {
-  padding: 3px 1px;
+  padding: 2px 1px;
   font-size: 10.5px;
+  min-height: 22px;
 }
 
 /* 行動グリッド: 14個を 7×2 で展開（スクロール不要） */
@@ -2927,25 +3065,26 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   gap: 2px;
 }
 .aba-flat .aba-behavior-btn {
-  padding: 3px 1px;
-  font-size: 11px;
+  padding: 2px 1px;
+  font-size: 10.5px;
   border-width: 1px;
   white-space: nowrap;
-  min-height: 26px;
+  min-height: 24px;
 }
 .aba-flat .aba-behavior-btn small { display: none; }
 
-/* 児童グリッド: 7列でコンパクト表示 */
+/* 児童グリッド: 10列でコンパクト表示（時間帯/教科/天気と揃える） */
 .aba-flat .aba-student-grid {
   display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  grid-template-columns: repeat(10, 1fr);
   gap: 2px;
 }
 .aba-flat .aba-student-grid .student-btn {
-  padding: 3px 2px;
-  font-size: 11px;
-  min-height: 30px;
+  padding: 2px 1px;
+  font-size: 10.5px;
+  min-height: 26px;
   position: relative;
+  line-height: 1.15;
 }
 .aba-flat .aba-student-grid .student-btn .num {
   font-size: 8.5px;
@@ -2976,37 +3115,55 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   border-color: #c0392b;
 }
 
-/* ===== 右カラム: A/C/対応 ===== */
+/* ===== 右カラム: A/C/対応（textarea を残スペースで縦伸長） ===== */
 .aba-flat .aba-flat-row-vertical {
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  padding: 3px 2px;
+  gap: 3px;
+  padding: 4px 2px;
   border-bottom: 1px dashed #f5d0d0;
-  flex: 1;
+  flex: 1 1 0;
   min-height: 0;
 }
 .aba-flat .aba-flat-row-vertical:last-child { border-bottom: none; }
 .aba-flat .aba-flat-row-vertical .aba-flat-label {
   padding-top: 0;
-  font-size: 10.5px;
+  font-size: 11px;
   line-height: 1.1;
+  flex-shrink: 0;
+}
+.aba-flat .aba-flat-row-vertical .aba-flat-content {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
+  gap: 3px;
 }
 .aba-flat .aba-flat-row-vertical .aba-quick-row {
   margin: 0;
   display: flex;
   flex-wrap: wrap;
   gap: 2px;
+  flex-shrink: 0;
 }
 .aba-flat .aba-flat-row-vertical .aba-quick {
-  font-size: 9.5px;
-  padding: 2px 5px;
+  font-size: 10px;
+  padding: 2px 6px;
+}
+.aba-flat .aba-flat-row-vertical .aba-flat-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 0;
+  min-height: 0;
 }
 .aba-flat .aba-flat-row-vertical .aba-flat-text textarea {
-  min-height: 22px;
-  font-size: 11px;
-  padding: 3px 5px;
-  flex: 1;
+  min-height: 36px;
+  height: 100%;
+  font-size: 12px;
+  padding: 5px 7px;
+  flex: 1 1 0;
+  resize: none;
+  box-sizing: border-box;
 }
 
 /* ステータスバーをコンパクト化 */
@@ -3724,9 +3881,24 @@ body { display: flex; flex-direction: column; }
   display: flex;
   flex-direction: column;
   min-height: 0;
+  height: auto !important; /* 古い calc(100vh - 110px) を flex に委ねる */
 }
 #abaRecordView .aba-flat-grid {
   flex: 1;
+  min-height: 0;
+}
+/* 左カラムは溢れたらスクロール、右はtextareaで縦埋め */
+#abaRecordView .aba-flat-left {
+  overflow-y: auto !important;
+  min-height: 0;
+}
+#abaRecordView .aba-flat-right {
+  overflow: hidden;
+  min-height: 0;
+}
+#abaRecordView .aba-flat-row-vertical .aba-flat-text,
+#abaRecordView .aba-flat-row-vertical .aba-flat-text textarea {
+  flex: 1 1 0;
   min-height: 0;
 }
 

@@ -219,6 +219,11 @@ async function syncNow() {
 
 async function pullFromGas() {
   if (!checkSyncReady()) return;
+  // 編集モード中はpullを延期（編集中レコードがpull先で上書きされるリスク回避）
+  if (window.state && window.state.ui && window.state.ui.editingRecordId) {
+    console.warn('[sync] 編集モード中のためpullを延期');
+    return;
+  }
   const since = localStorage.getItem(LAST_PULL_KEY) || '2000-01-01T00:00:00.000Z';
   // dataType=all で records, praises, evaluations, aba を一括取得
   const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=${encodeURIComponent(since)}&deviceId=${encodeURIComponent(_deviceId)}&dataType=all`;
@@ -799,8 +804,13 @@ async function pushRosterToGas(force) {
 }
 
 // ===== ビュー再生成リクエスト（GAS側で view_* シートを再構築） =====
-async function requestViewRebuild() {
-  if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
+// type 指定なし: 5種類を順次実行（GAS 6分タイムアウト対策）
+// type 指定あり: 1種類だけ実行
+const VIEW_TYPES = ['records', 'praises', 'evaluations', 'aba', 'ketebure'];
+
+async function _requestRebuildOne(type, timeoutMs) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs || 90000);
   try {
     const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
@@ -808,8 +818,10 @@ async function requestViewRebuild() {
       body: JSON.stringify({
         action: 'rebuild',
         dataType: 'views',
+        type: type,
         deviceId: _deviceId
-      })
+      }),
+      signal: ctrl.signal
     });
     if (!res.ok) {
       const txt = await res.text();
@@ -817,11 +829,46 @@ async function requestViewRebuild() {
     }
     const data = await res.json();
     if (!data.ok) throw new Error(data.error || 'GAS error');
-    return { ok: true, stats: data.stats };
-  } catch (err) {
-    console.warn('[sync] view rebuild失敗:', err.message);
-    return { ok: false, error: err.message };
+    return data.stats || { type: type, count: '?' };
+  } finally {
+    clearTimeout(timer);
   }
+}
+
+async function requestViewRebuild(opts) {
+  if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
+  opts = opts || {};
+  // 単一タイプ指定モード
+  if (opts.type) {
+    try {
+      const stats = await _requestRebuildOne(opts.type, 90000);
+      return { ok: true, stats: { [opts.type]: stats.count } };
+    } catch (err) {
+      const msg = err.name === 'AbortError'
+        ? `タイムアウト(90秒): ${opts.type}のデータが多い可能性。GASエディタから手動実行してください`
+        : err.message;
+      console.warn(`[sync] view rebuild(${opts.type})失敗:`, msg);
+      return { ok: false, error: msg };
+    }
+  }
+  // 全タイプ順次実行モード
+  const stats = {};
+  const errors = [];
+  for (const t of VIEW_TYPES) {
+    try {
+      const r = await _requestRebuildOne(t, 90000);
+      stats[t] = r.count != null ? r.count : (r.error || '?');
+      if (typeof opts.onProgress === 'function') opts.onProgress(t, stats[t]);
+    } catch (err) {
+      const msg = err.name === 'AbortError' ? 'timeout' : err.message;
+      stats[t] = 'error: ' + msg;
+      errors.push(`${t}: ${msg}`);
+    }
+  }
+  if (errors.length === VIEW_TYPES.length) {
+    return { ok: false, error: '全ビュー失敗: ' + errors.join(' / '), stats: stats };
+  }
+  return { ok: true, stats: stats, partialErrors: errors.length ? errors : null };
 }
 
 // ===== スプレッドシート情報取得 =====

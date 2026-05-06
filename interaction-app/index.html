@@ -299,7 +299,7 @@ if ('serviceWorker' in navigator) {
 
     <!-- けテぶれモード（観点別評価ベース・1カラム） -->
   <div id="ketebureRecordView" class="hidden">
-    <!-- 1段目: 日付 + 種別 + 全員◎ -->
+    <!-- 1段目: 日付 + 種別 + 全員A -->
     <div class="record-toolbar ket-toolbar-row">
       <div class="toolbar-group">
         <label>日</label>
@@ -317,11 +317,11 @@ if ('serviceWorker' in navigator) {
         <label>今日</label>
         <span class="ket-today-mini">
           <b id="ketTodayCount">0</b>件/<b id="ketTodayCovered">0</b>人
-          <span class="muted small">◎<b id="ketTodayMaru">0</b>/○<b id="ketTodayMaruOne">0</b>/△<b id="ketTodayDelta">0</b></span>
+          <span class="muted small">A<b id="ketTodayMaru">0</b>/B<b id="ketTodayMaruOne">0</b>/C<b id="ketTodayDelta">0</b></span>
         </span>
       </div>
       <div class="toolbar-group right">
-        <button class="ghost" id="ketAllMaruBtn" title="全員に◎を一括記録（観点なし）" style="padding:4px 10px; font-size:11.5px;">⭐ 全員◎</button>
+        <button class="ghost" id="ketAllMaruBtn" title="全員にAを一括記録（観点なし）" style="padding:4px 10px; font-size:11.5px;">⭐ 全員A</button>
       </div>
     </div>
 
@@ -357,18 +357,18 @@ if ('serviceWorker' in navigator) {
     <div class="ket-bottom-row">
       <input type="text" id="ketebureNote" class="ket-note-input" placeholder="メモ（任意・選択児童全員に同じメモが付きます）" maxlength="200">
       <span class="ket-legend">
-        <b style="color:#2e7d32;">●</b>記録済
-        <b style="color:#f39c12;">🔥N</b>連続◎
+        <b style="color:#2e7d32;">A</b>金/<b style="color:#1976d2;">B</b>青/<b style="color:#c62828;">C</b>赤
+        <b style="color:#f39c12;">🔥N</b>連続A
         <b style="color:#f7c948;">枠</b>選択中
       </span>
     </div>
 
-    <!-- 折りたたみ: 連続◎TOP + 今日の記録 -->
+    <!-- 折りたたみ: 連続ATOP + 今日の記録 -->
     <details class="ket-side-collapsible">
-      <summary>📋 連続◎TOP / 今日の記録一覧（クリックで開く・編集削除可）</summary>
+      <summary>📋 連続ATOP / 今日の記録一覧（クリックで開く・編集削除可）</summary>
       <div class="ket-collapse-grid">
         <div>
-          <h4 style="margin:6px 0 3px; font-size:12px;">🔥 連続◎ TOP5</h4>
+          <h4 style="margin:6px 0 3px; font-size:12px;">🔥 連続A TOP5</h4>
           <ol class="watch-list" id="ketStreakList" style="font-size:11.5px;"></ol>
         </div>
         <div>
@@ -790,7 +790,7 @@ if ('serviceWorker' in navigator) {
   <!-- 上段: 学級全体サマリー (3カラム) -->
   <div class="kta-top-3col">
     <div class="card kta-card">
-      <h3>📊 評価分布 <span class="muted small">— ◎○△の割合</span></h3>
+      <h3>📊 評価分布 <span class="muted small">— A/B/Cの割合</span></h3>
       <div id="ktARatingDist"></div>
     </div>
     <div class="card kta-card">
@@ -806,16 +806,16 @@ if ('serviceWorker' in navigator) {
   <!-- 中段: 要観察児童 + 強み発見 -->
   <div class="kta-middle-2col">
     <div class="card kta-card">
-      <h3>⚠ 要観察 <span class="muted small">— 連続△・記録少・計画停滞</span></h3>
+      <h3>⚠ 要観察 <span class="muted small">— 連続C・記録少・計画停滞</span></h3>
       <div id="ktAAlerts"></div>
     </div>
     <div class="card kta-card">
-      <h3>🌟 けテぶれ自走児 <span class="muted small">— ◎多+全観点バランス◎</span></h3>
+      <h3>🌟 けテぶれ自走児 <span class="muted small">— A多+全観点バランス◎</span></h3>
       <div id="ktAStars"></div>
     </div>
   </div>
 
-  <!-- 下段: 児童別カードグリッド (◎○△分布 + 観点強度) -->
+  <!-- 下段: 児童別カードグリッド (A/B/C分布 + 観点強度) -->
   <div class="card">
     <h3>👤 児童別 けテぶれカード <span class="muted small">— 観点ごとの強み・弱み</span></h3>
     <div class="kta-card-grid" id="ktAStudentCards"></div>
@@ -1196,24 +1196,24 @@ if ('serviceWorker' in navigator) {
   </div>
 </div>
 
-<script src="config.js?v=20260506o"></script>
-<script src="students.js?v=20260506o"></script>
-<script src="eval-data.js?v=20260506o"></script>
-<script src="eval-data-extra.js?v=20260506o"></script>
-<script src="app.js?v=20260506o"></script>
-<script src="cloud-sync.js?v=20260506o"></script>
-<script src="analytics-plus.js?v=20260506o"></script>
-<script src="dashboard-overview.js?v=20260506o"></script>
-<script src="seating-planner.js?v=20260506o"></script>
-<script src="print-report.js?v=20260506o"></script>
-<script src="search-bar.js?v=20260506o"></script>
-<script src="centrality-extra.js?v=20260506o"></script>
-<script src="seating-correlation.js?v=20260506o"></script>
-<script src="templates.js?v=20260506o"></script>
-<script src="photo-library.js?v=20260506o"></script>
-<script src="voice-memo.js?v=20260506o"></script>
-<script src="ai-insights.js?v=20260506o"></script>
-<script src="extra-features.js?v=20260506o"></script>
-<script src="onboarding-wizard.js?v=20260506o"></script>
+<script src="config.js?v=20260506t"></script>
+<script src="students.js?v=20260506t"></script>
+<script src="eval-data.js?v=20260506t"></script>
+<script src="eval-data-extra.js?v=20260506t"></script>
+<script src="app.js?v=20260506t"></script>
+<script src="cloud-sync.js?v=20260506t"></script>
+<script src="analytics-plus.js?v=20260506t"></script>
+<script src="dashboard-overview.js?v=20260506t"></script>
+<script src="seating-planner.js?v=20260506t"></script>
+<script src="print-report.js?v=20260506t"></script>
+<script src="search-bar.js?v=20260506t"></script>
+<script src="centrality-extra.js?v=20260506t"></script>
+<script src="seating-correlation.js?v=20260506t"></script>
+<script src="templates.js?v=20260506t"></script>
+<script src="photo-library.js?v=20260506t"></script>
+<script src="voice-memo.js?v=20260506t"></script>
+<script src="ai-insights.js?v=20260506t"></script>
+<script src="extra-features.js?v=20260506t"></script>
+<script src="onboarding-wizard.js?v=20260506t"></script>
 </body>
 </html>
