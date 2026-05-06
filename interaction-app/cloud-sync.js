@@ -40,6 +40,8 @@ function initCloudSync() {
   if (syncConfig.enabled && syncConfig.endpoint) {
     // 起動時に差分pull
     pullFromGas().catch(err => console.warn('[sync] 起動時pull失敗:', err.message));
+    // 起動時に名簿をpush（ビューシートが児童名解決に使う）
+    setTimeout(() => pushRosterToGas().catch(() => {}), 3000);
   }
 
   if (syncConfig.autoSync) {
@@ -254,12 +256,21 @@ async function pullFromGas() {
         idx.set(n.id, localArr.length - 1);
         added++;
       } else {
-        // 既存: timestamp 比較で新しい方を採用
-        const localTs = localArr[localPos].timestamp || '';
-        const pulledTs = n.timestamp || '';
-        if (pulledTs && pulledTs > localTs) {
+        // 既存: timestamp 比較で新しい方を採用 (>= で同秒編集の取りこぼし防止)
+        // edited_at があればそちらを優先
+        const localTs = localArr[localPos].edited_at || localArr[localPos].timestamp || '';
+        const pulledTs = n.edited_at || n.timestamp || '';
+        if (pulledTs && pulledTs >= localTs && pulledTs !== localTs) {
           localArr[localPos] = n;
           updated++;
+        } else if (pulledTs && pulledTs === localTs) {
+          // 同時刻: deviceId で tie-break (現端末優先で no-op)
+          const localDev = localArr[localPos].deviceId || '';
+          const pulledDev = n.deviceId || '';
+          if (pulledDev && pulledDev !== localDev && pulledDev > localDev) {
+            localArr[localPos] = n;
+            updated++;
+          }
         }
       }
     }
@@ -748,6 +759,65 @@ function checkSyncReady() {
 
 function escapeAttr(s) {
   return String(s || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;');
+}
+
+// ===== 名簿(roster) を GAS に push（人間用ビューシートが児童名解決に使う） =====
+
+let _lastRosterPush = 0;
+async function pushRosterToGas(force) {
+  if (!checkSyncReady()) return false;
+  if (!Array.isArray(state.students) || state.students.length === 0) return false;
+  // 連続push防止: 5分以内なら再送しない（force=trueで強制）
+  if (!force && Date.now() - _lastRosterPush < 5 * 60 * 1000) return false;
+  try {
+    const students = state.students.map(s => ({
+      id: s.id,
+      name: s.name || '',
+      kana: s.kana || '',
+      watch: s.watch || false,
+      highlight: s.highlight || false
+    }));
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'set',
+        dataType: 'roster',
+        students: students,
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || 'GAS error');
+    _lastRosterPush = Date.now();
+    return true;
+  } catch (err) {
+    console.warn('[sync] roster push失敗:', err.message);
+    return false;
+  }
+}
+
+// ===== ビュー再生成リクエスト（GAS側で view_* シートを再構築） =====
+async function requestViewRebuild() {
+  if (!checkSyncReady()) return false;
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'rebuild',
+        dataType: 'views',
+        deviceId: _deviceId
+      })
+    });
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const data = await res.json();
+    return data.ok;
+  } catch (err) {
+    console.warn('[sync] view rebuild失敗:', err.message);
+    return false;
+  }
 }
 
 // ===== app.js の saveRecord をラップ =====

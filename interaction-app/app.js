@@ -175,6 +175,99 @@ function loadState() {
   }
 }
 
+// ===== データ喪失防止: ロールバックスナップショット (10枠ローテーション) =====
+const SNAPSHOT_KEYS = [
+  'interaction-snap-0', 'interaction-snap-1', 'interaction-snap-2', 'interaction-snap-3',
+  'interaction-snap-4', 'interaction-snap-5', 'interaction-snap-6', 'interaction-snap-7',
+  'interaction-snap-8', 'interaction-snap-9'
+];
+const SNAPSHOT_CURSOR_KEY = 'interaction-snap-cursor';
+const SNAPSHOT_INTERVAL_MS = 30 * 60 * 1000; // 30分ごと
+const SHRINK_LOG_KEY = 'interaction-shrink-log'; // 縮小検知時の元データバックアップ
+let _lastSnapshotTime = 0;
+
+function getRecordCounts(stateOrData) {
+  const s = stateOrData || state;
+  return {
+    records: (s.records || []).length,
+    praises: (s.praises || []).length,
+    evaluations: (s.evaluations || []).length,
+    abaRecords: (s.abaRecords || []).length,
+    ketebureRecords: (s.ketebureRecords || []).length,
+    seatingSnapshots: (s.seatingSnapshots || []).length
+  };
+}
+
+function takeRotatingSnapshot(json) {
+  try {
+    let idx = parseInt(localStorage.getItem(SNAPSHOT_CURSOR_KEY) || '-1', 10);
+    idx = (idx + 1) % SNAPSHOT_KEYS.length;
+    const wrapped = JSON.stringify({ ts: new Date().toISOString(), data: json });
+    localStorage.setItem(SNAPSHOT_KEYS[idx], wrapped);
+    localStorage.setItem(SNAPSHOT_CURSOR_KEY, String(idx));
+    _lastSnapshotTime = Date.now();
+  } catch (e) {
+    console.warn('snapshot failed:', e);
+  }
+}
+
+function listSnapshots() {
+  const out = [];
+  for (let i = 0; i < SNAPSHOT_KEYS.length; i++) {
+    try {
+      const raw = localStorage.getItem(SNAPSHOT_KEYS[i]);
+      if (!raw) continue;
+      const wrapped = JSON.parse(raw);
+      if (!wrapped || !wrapped.data) continue;
+      const data = JSON.parse(wrapped.data);
+      out.push({
+        key: SNAPSHOT_KEYS[i],
+        ts: wrapped.ts,
+        counts: getRecordCounts(data)
+      });
+    } catch (_) {}
+  }
+  return out.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+}
+
+function restoreFromSnapshot(snapKey) {
+  const raw = localStorage.getItem(snapKey);
+  if (!raw) { showToast('スナップショットが見つかりません', 'error'); return false; }
+  try {
+    const wrapped = JSON.parse(raw);
+    if (!wrapped || !wrapped.data) throw new Error('invalid snapshot');
+    // 復元前の現状を別枠に保管（万一に備える）
+    const cur = localStorage.getItem(STORAGE_KEY);
+    if (cur) {
+      try { localStorage.setItem('interaction-pre-restore', cur); } catch (_) {}
+    }
+    localStorage.setItem(STORAGE_KEY, wrapped.data);
+    return true;
+  } catch (e) {
+    console.error('restore failed:', e);
+    showToast('復元失敗: ' + e.message, 'error');
+    return false;
+  }
+}
+
+function detectShrinkRisk(prevJson) {
+  if (!prevJson) return null;
+  try {
+    const prevData = JSON.parse(prevJson);
+    const before = getRecordCounts(prevData);
+    const after = getRecordCounts(state);
+    for (const k of Object.keys(before)) {
+      const b = before[k] || 0;
+      const a = after[k] || 0;
+      // 10件以上 or 10% 以上の減少を疑わしいと判定
+      if (b >= 10 && (b - a) >= Math.max(10, Math.floor(b * 0.1))) {
+        return { key: k, before: b, after: a };
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
 function saveState() {
   const data = {
     version: APP_VERSION,
@@ -182,7 +275,7 @@ function saveState() {
     praises: state.praises,
     evaluations: state.evaluations,
     abaRecords: state.abaRecords,
-    ketebureRecords: state.ketebureRecords,  // 致命バグ修正: けテぶれ記録の永続化漏れ
+    ketebureRecords: state.ketebureRecords,
     seatingSnapshots: state.seatingSnapshots,
     settings: state.settings,
     events: state.events,
@@ -195,17 +288,51 @@ function saveState() {
     lastEvalScale: state.ui.evalScale
   };
   const json = JSON.stringify(data);
+  let prev = null;
+  try { prev = localStorage.getItem(STORAGE_KEY); } catch (_) {}
+
+  // 縮小検知（実害は出さず警告＋元データを別枠に確保）
+  const shrink = detectShrinkRisk(prev);
+  if (shrink && prev) {
+    try {
+      // 縮小発生時の元データを保護用スロットに退避（複数回の縮小に備えて時刻つき）
+      const shrinkBackup = JSON.stringify({
+        ts: new Date().toISOString(),
+        reason: `${shrink.key}: ${shrink.before}→${shrink.after}`,
+        data: prev
+      });
+      localStorage.setItem(SHRINK_LOG_KEY, shrinkBackup);
+    } catch (_) {}
+    console.warn(`[DATA SAFETY] 縮小検知: ${shrink.key} ${shrink.before}→${shrink.after}件。元データは ${SHRINK_LOG_KEY} に退避済み`);
+    if (typeof showToast === 'function') {
+      showToast(`⚠ データ${shrink.key}が${shrink.before}→${shrink.after}に減少。設定タブの🆘緊急復元から戻せます`, 'error');
+    }
+  }
+
   try {
     // 二重化: メイン → バックアップへ前回分を退避
-    const prev = localStorage.getItem(STORAGE_KEY);
     if (prev) {
-      try { localStorage.setItem(STORAGE_BACKUP_KEY, prev); } catch (_) { /* バックアップ失敗は無視 */ }
+      try { localStorage.setItem(STORAGE_BACKUP_KEY, prev); } catch (_) {}
     }
     localStorage.setItem(STORAGE_KEY, json);
+
+    // 30分ごとにローテーションスナップショット
+    if (Date.now() - _lastSnapshotTime > SNAPSHOT_INTERVAL_MS) {
+      takeRotatingSnapshot(json);
+    }
   } catch (e) {
     console.error('保存失敗', e);
     if (e.name === 'QuotaExceededError' || /quota/i.test(e.message || '')) {
-      showToast('容量超過。エクスポートして履歴を整理してください', 'error');
+      // 容量超過時、古いスナップショットを1つ削除して再試行
+      try {
+        const cursor = parseInt(localStorage.getItem(SNAPSHOT_CURSOR_KEY) || '0', 10);
+        const oldestIdx = (cursor + 1) % SNAPSHOT_KEYS.length;
+        localStorage.removeItem(SNAPSHOT_KEYS[oldestIdx]);
+        localStorage.setItem(STORAGE_KEY, json);
+        showToast('容量超過。古いスナップショットを削除して保存しました', 'success');
+      } catch (e2) {
+        showToast('容量超過。設定タブからJSONエクスポートしてください', 'error');
+      }
     } else {
       showToast('保存失敗: ' + (e.message || 'unknown'), 'error');
     }
@@ -459,9 +586,13 @@ function formatDateTime(iso) {
   const d = new Date(iso);
   return `${d.getMonth() + 1}/${d.getDate()} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
+// セッション内連番カウンタ（同ms内の id 衝突を確実に防ぐ）
+let _uuidCounter = 0;
 function uuid() {
   if (window.crypto && typeof crypto.randomUUID === 'function') return 'r-' + crypto.randomUUID();
-  return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);
+  _uuidCounter = (_uuidCounter + 1) % 100000;
+  // 36進タイムスタンプ + ランダム16文字 + 連番 = 衝突確率実質ゼロ
+  return 'r-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 10) + Math.random().toString(36).slice(2, 10) + '-' + _uuidCounter.toString(36);
 }
 function showToast(msg, type = 'success') {
   const t = document.getElementById('toast');
@@ -2194,7 +2325,74 @@ function initSettingsEvents() {
   document.getElementById('resetBtn').addEventListener('click', resetAll);
   document.getElementById('saveActivitiesBtn').addEventListener('click', saveActivities);
   document.getElementById('saveAppSettingsBtn')?.addEventListener('click', saveAppSettings);
+  document.getElementById('refreshSnapshotsBtn')?.addEventListener('click', renderSnapshotList);
+  document.getElementById('rebuildViewsBtn')?.addEventListener('click', async () => {
+    if (typeof requestViewRebuild !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
+    showToast('ビュー再生成中...');
+    const ok = await requestViewRebuild();
+    showToast(ok ? '✓ ビュー再生成完了' : '✗ ビュー再生成失敗', ok ? 'success' : 'error');
+  });
+  document.getElementById('pushRosterBtn')?.addEventListener('click', async () => {
+    if (typeof pushRosterToGas !== 'function') { showToast('クラウド同期が無効です', 'error'); return; }
+    showToast('名簿送信中...');
+    const ok = await pushRosterToGas(true);
+    showToast(ok ? '✓ 名簿送信完了' : '✗ 名簿送信失敗（クラウド同期未設定？）', ok ? 'success' : 'error');
+  });
   setupRosterEvents();
+  renderSnapshotList();
+}
+
+// 緊急復元: スナップショット一覧を描画
+function renderSnapshotList() {
+  const cont = document.getElementById('snapshotList');
+  if (!cont) return;
+  const snaps = listSnapshots();
+  // 縮小検知時の退避データも表示
+  let shrinkSnap = null;
+  try {
+    const raw = localStorage.getItem(SHRINK_LOG_KEY);
+    if (raw) {
+      const wrapped = JSON.parse(raw);
+      const data = JSON.parse(wrapped.data);
+      shrinkSnap = { ts: wrapped.ts, reason: wrapped.reason, counts: getRecordCounts(data), key: SHRINK_LOG_KEY };
+    }
+  } catch (_) {}
+  if (snaps.length === 0 && !shrinkSnap) {
+    cont.innerHTML = '<p class="muted">まだスナップショットはありません（保存30分後に最初のスナップショットが取られます）</p>';
+    return;
+  }
+  let html = '<table class="snap-table" style="width:100%;border-collapse:collapse;font-size:12px;">';
+  html += '<thead><tr><th style="text-align:left;padding:4px 6px;border-bottom:1px solid #ddd;">取得時刻</th><th style="text-align:right;padding:4px 6px;border-bottom:1px solid #ddd;">件数</th><th style="padding:4px 6px;border-bottom:1px solid #ddd;">操作</th></tr></thead><tbody>';
+  if (shrinkSnap) {
+    const t = new Date(shrinkSnap.ts);
+    const c = shrinkSnap.counts;
+    html += `<tr style="background:#fff8e0;">
+      <td style="padding:4px 6px;">💾 ${t.toLocaleString()} <span class="muted small">(${escapeHtml(shrinkSnap.reason)})</span></td>
+      <td style="text-align:right;padding:4px 6px;">交友${c.records}/ほめ${c.praises}/評価${c.evaluations}/ABA${c.abaRecords}/けテ${c.ketebureRecords}</td>
+      <td style="padding:4px 6px;"><button class="ghost" data-snap-key="${shrinkSnap.key}" style="padding:3px 8px;font-size:11px;">復元</button></td>
+    </tr>`;
+  }
+  for (const s of snaps) {
+    const t = new Date(s.ts);
+    const c = s.counts;
+    html += `<tr>
+      <td style="padding:4px 6px;">${t.toLocaleString()}</td>
+      <td style="text-align:right;padding:4px 6px;">交友${c.records}/ほめ${c.praises}/評価${c.evaluations}/ABA${c.abaRecords}/けテ${c.ketebureRecords}</td>
+      <td style="padding:4px 6px;"><button class="ghost" data-snap-key="${s.key}" style="padding:3px 8px;font-size:11px;">復元</button></td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  cont.innerHTML = html;
+  cont.querySelectorAll('button[data-snap-key]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.snapKey;
+      if (!confirm('このスナップショットから復元します。\n現在のデータは別枠（interaction-pre-restore）に保管されますが、念のためまずJSONエクスポートをお勧めします。\n\n復元しますか？')) return;
+      if (restoreFromSnapshot(key)) {
+        showToast('復元完了。リロードします');
+        setTimeout(() => location.reload(), 800);
+      }
+    });
+  });
 }
 
 function refreshSettings() {
@@ -2566,6 +2764,7 @@ function importJSON(file) {
     const normPraises = Array.isArray(data.praises) ? data.praises.map(normalizePraise).filter(Boolean) : [];
     const normEvals   = Array.isArray(data.evaluations) ? data.evaluations.map(normalizeEvaluation).filter(Boolean) : [];
     const normAbas    = Array.isArray(data.abaRecords) ? data.abaRecords.map(normalizeAba).filter(Boolean) : [];
+    const normKete    = Array.isArray(data.ketebureRecords) ? data.ketebureRecords.map(normalizeKetebure).filter(Boolean) : [];
     const normSeats   = Array.isArray(data.seatingSnapshots)
       ? data.seatingSnapshots.filter(s => s && Array.isArray(s.groups))
       : [];
@@ -2575,6 +2774,7 @@ function importJSON(file) {
       ['ほめ', normPraises.length],
       ['評価', normEvals.length],
       ['ABA',  normAbas.length],
+      ['けテぶれ', normKete.length],
       ['席替え', normSeats.length]
     ].filter(t => t[1] > 0).map(t => `${t[0]} ${t[1]}件`).join(' / ');
 
@@ -2587,20 +2787,36 @@ function importJSON(file) {
 
     if (append) {
       // 各モード: 既存IDと重複しないものだけ追加
+      if (!Array.isArray(state.ketebureRecords)) state.ketebureRecords = [];
       const newRecs = normRecords.filter(r => !state.records.some(x => x.id === r.id));
       const newPra  = normPraises.filter(p => !state.praises.some(x => x.id === p.id));
       const newEv   = normEvals.filter(e2 => !state.evaluations.some(x => x.id === e2.id));
       const newAba  = normAbas.filter(a => !state.abaRecords.some(x => x.id === a.id));
+      const newKete = normKete.filter(k => !state.ketebureRecords.some(x => x.id === k.id));
       const newSeat = normSeats.filter(s => !state.seatingSnapshots.some(x => x.id === s.id));
       state.records.push(...newRecs);
       state.praises.push(...newPra);
       state.evaluations.push(...newEv);
       state.abaRecords.push(...newAba);
+      state.ketebureRecords.push(...newKete);
       state.seatingSnapshots.push(...newSeat);
+      // append時もattributes/eventsを尊重 (古いデータで上書きしない、新規キーのみ追加)
+      if (data.attributes && typeof data.attributes === 'object') {
+        for (const k of Object.keys(data.attributes)) {
+          if (!state.attributes[k]) state.attributes[k] = data.attributes[k];
+        }
+      }
+      if (Array.isArray(data.events)) {
+        const existingEventKeys = new Set((state.events || []).map(e => `${e.date}|${e.label}`));
+        for (const ev of data.events) {
+          const key = `${ev.date}|${ev.label}`;
+          if (!existingEventKeys.has(key)) state.events.push(ev);
+        }
+      }
       saveState();
       refreshAll();
       updateHealthBadge();
-      const added = `交友${newRecs.length} / ほめ${newPra.length} / 評価${newEv.length} / ABA${newAba.length} / 席${newSeat.length}`;
+      const added = `交友${newRecs.length} / ほめ${newPra.length} / 評価${newEv.length} / ABA${newAba.length} / けテぶれ${newKete.length} / 席${newSeat.length}`;
       showToast(`✓ 追加: ${added}（重複は除外）`);
     } else {
       if (!confirm('本当に既存データを全て置き換えますか？\n念のため、現在のデータを退避エクスポートします。')) return;
@@ -2609,6 +2825,7 @@ function importJSON(file) {
       state.praises = normPraises;
       state.evaluations = normEvals;
       state.abaRecords = normAbas;
+      state.ketebureRecords = normKete;
       state.seatingSnapshots = normSeats;
       if (Array.isArray(data.events)) state.events = data.events;
       if (data.attributes && typeof data.attributes === 'object') state.attributes = data.attributes;

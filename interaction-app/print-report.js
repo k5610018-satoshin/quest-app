@@ -130,8 +130,10 @@ function buildStudentSection(studentId, opts) {
     noteHtml += '</ul>';
   }
 
-  // === 席履歴 ===
-  const seats = (window.state.seatingSnapshots || []).slice(-3);
+  // === 席履歴 (push順ではなく日付降順で「直近3回」を保証) ===
+  const seats = (window.state.seatingSnapshots || []).slice()
+    .sort((a, b) => (b.date || '').localeCompare(a.date || ''))
+    .slice(0, 3);
   let seatHtml = '';
   if (seats.length === 0) {
     seatHtml = '<p class="pr-muted">席替え履歴なし</p>';

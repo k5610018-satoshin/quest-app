@@ -2952,18 +2952,23 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   color: #aaa;
 }
 
-/* 相手選択 */
+/* 相手選択 - 児童グリッドと同じ10列で省スペース化（時間帯/教科/天気がスクロール外に追いやられないように） */
 .aba-flat .aba-target-grid {
-  display: grid;
-  grid-template-columns: repeat(7, 1fr);
+  display: grid !important;
+  grid-template-columns: repeat(10, 1fr);
   gap: 2px;
 }
 .aba-flat .aba-target-grid .student-btn {
-  padding: 3px 2px;
-  font-size: 11px;
-  min-height: 30px;
+  padding: 3px 2px !important;
+  font-size: 10.5px !important;
+  min-height: auto !important;
+  line-height: 1.2;
   border-color: #c0392b;
   color: #c0392b;
+}
+.aba-flat .aba-target-grid .student-btn .num {
+  font-size: 8.5px;
+  color: #aaa;
 }
 .aba-flat .aba-target-grid .student-btn.active {
   background: #c0392b;
@@ -3195,11 +3200,12 @@ details.recent-records .recent-list {
   margin: 2px 0 4px;
 }
 #interactionRecordView .student-grid {
-  gap: 3px;
+  gap: 5px;
 }
 #interactionRecordView .student-grid .student-btn {
-  padding: 4px 4px;
-  font-size: 12px;
+  padding: 8px 5px;
+  font-size: 14px;
+  min-height: 48px;
 }
 #interactionRecordView .special-row {
   margin-top: 4px;
@@ -3614,8 +3620,9 @@ button.compact {
   .record-mode-btn { padding: 4px 10px; font-size: 11.5px; }
   .record-toolbar { padding: 3px 8px; gap: 6px; }
   .record-toolbar label { font-size: 10.5px; }
-  /* 児童ボタンを小型化 */
-  .student-grid .student-btn { min-height: 32px; padding: 3px 4px; font-size: 11px; }
+  /* 児童ボタンを小型化（けテぶれ・ABA等は更に小型化、交友関係は控えめ） */
+  .student-grid .student-btn { min-height: 36px; padding: 4px 4px; font-size: 12px; }
+  #interactionRecordView .student-grid .student-btn { min-height: 42px; padding: 6px 4px; font-size: 13px; }
   .student-grid.ket-student-grid .student-btn { min-height: 30px; font-size: 10.5px; }
   /* タグ/評価ボタンも縮小 */
   .praise-tag-btn { padding: 4px 3px; font-size: 10.5px; }
@@ -3671,7 +3678,8 @@ body.viewport-tight .record-toolbar { padding: 2px 6px; gap: 5px; }
 body.viewport-tight .record-toolbar label { font-size: 10px; }
 body.viewport-tight .record-toolbar input,
 body.viewport-tight .record-toolbar select { font-size: 11px; padding: 2px 4px; }
-body.viewport-tight .student-grid .student-btn { min-height: 30px; padding: 2px 3px; font-size: 10.5px; }
+body.viewport-tight .student-grid .student-btn { min-height: 32px; padding: 3px 3px; font-size: 11px; }
+body.viewport-tight #interactionRecordView .student-grid .student-btn { min-height: 38px; padding: 5px 4px; font-size: 12px; }
 body.viewport-tight .student-grid.ket-student-grid .student-btn { min-height: 28px; }
 body.viewport-tight #praiseRecordView #praiseInput { min-height: 50px; font-size: 11.5px; }
 body.viewport-tight .praise-tag-btn { font-size: 10px; padding: 3px 2px; }

@@ -22,10 +22,14 @@ function daysSince(dateStr) {
 }
 
 function getISOWeek(dateStr) {
+  // ISO 8601 週番号（月曜起点・木曜が含まれる週がその週）
   const d = new Date(dateStr + 'T00:00:00');
-  const yearStart = new Date(d.getFullYear(), 0, 1);
-  const days = Math.floor((d - yearStart) / 86400000);
-  return d.getFullYear() + '-W' + String(Math.ceil((days + yearStart.getDay() + 1) / 7)).padStart(2, '0');
+  d.setHours(0, 0, 0, 0);
+  // 木曜にずらす（その日の属する週の木曜が、ISO週の年と週番号を決定）
+  d.setDate(d.getDate() + 3 - ((d.getDay() + 6) % 7));
+  const week1 = new Date(d.getFullYear(), 0, 4);
+  const wn = 1 + Math.round(((d - week1) / 86400000 - 3 + ((week1.getDay() + 6) % 7)) / 7);
+  return d.getFullYear() + '-W' + String(wn).padStart(2, '0');
 }
 
 function _esc(s) {
@@ -80,15 +84,24 @@ function refreshOverview() {
   abas.filter(a => getISOWeek(a.date) === thisWeek).forEach(a => observedThisWeek.add(a.studentId));
   const zeroThisWeek = studs.filter(s => !observedThisWeek.has(s.id));
 
-  // 最終観察からの日数 → 5日以上未観察
+  // 最終観察からの日数 → 5日以上未観察（全モード合算: 交友/ほめ/評価/ABA/けテぶれ）
   const lastSeenMap = new Map();
+  const updateSeen = (id, date) => {
+    if (!id || !date) return;
+    const cur = lastSeenMap.get(id);
+    if (!cur || date > cur) lastSeenMap.set(id, date);
+  };
   for (const r of recs) {
     const ids = [r.subject, ...(r.members || [])];
-    for (const id of ids) {
-      const cur = lastSeenMap.get(id);
-      if (!cur || r.date > cur) lastSeenMap.set(id, r.date);
-    }
+    for (const id of ids) updateSeen(id, r.date);
   }
+  for (const p of praises) updateSeen(p.studentId, p.date);
+  for (const e of (state.evaluations || [])) updateSeen(e.studentId, e.date);
+  for (const a of (abas || [])) {
+    updateSeen(a.studentId, a.date);
+    if (a.targetStudentId) updateSeen(a.targetStudentId, a.date);
+  }
+  for (const k of (state.ketebureRecords || [])) updateSeen(k.studentId, k.date);
   const longUnseen = studs
     .map(s => ({ ...s, daysAgo: daysSince(lastSeenMap.get(s.id)) }))
     .filter(s => s.daysAgo >= 5 && s.daysAgo < 999)
@@ -226,6 +239,8 @@ function refreshOverview() {
   target.innerHTML = html;
 
   // クリック委任：児童名タップで個別ダッシュボード表示
+  // 多重登録防止: removeEventListener で念のため外してから付け直す
+  target.removeEventListener('click', overviewClickHandler);
   target.addEventListener('click', overviewClickHandler);
 }
 
