@@ -1,0 +1,389 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>担任記録アプリ — 診断レポート</title>
+<style>
+  body { font-family: 'メイリオ', system-ui, sans-serif; max-width: 880px; margin: 24px auto; padding: 0 16px; color: #222; line-height: 1.55; }
+  h1 { font-size: 20px; margin-bottom: 4px; }
+  .sub { color: #666; font-size: 13px; margin-bottom: 16px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 14px 18px; margin: 12px 0; background: #fafafa; }
+  .card h2 { margin: 0 0 8px; font-size: 16px; color: #2c3e50; border-bottom: 2px solid #4a90e2; padding-bottom: 4px; }
+  table { width: 100%; border-collapse: collapse; margin: 6px 0; font-size: 13px; }
+  th, td { text-align: left; padding: 4px 8px; border-bottom: 1px solid #eee; }
+  th { background: #f5f7fa; }
+  .ok { color: #2a7; font-weight: bold; }
+  .warn { color: #c70; font-weight: bold; }
+  .err { color: #c33; font-weight: bold; }
+  .status { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: bold; }
+  .status.ok { background: #d4edda; color: #155724; }
+  .status.warn { background: #fff3cd; color: #856404; }
+  .status.err { background: #f8d7da; color: #721c24; }
+  button { font-size: 14px; padding: 8px 14px; border-radius: 6px; border: 1px solid #4a90e2; background: #4a90e2; color: white; cursor: pointer; margin: 4px 4px 4px 0; }
+  button:hover { background: #357abd; }
+  button.secondary { background: #6c757d; border-color: #6c757d; }
+  button.danger { background: #d9534f; border-color: #d9534f; }
+  pre { background: #f4f4f4; padding: 10px; border-radius: 4px; max-height: 280px; overflow: auto; font-size: 12px; }
+  .copy-area { background: white; border: 1px solid #ddd; border-radius: 4px; padding: 10px; font-family: monospace; font-size: 11px; white-space: pre-wrap; max-height: 280px; overflow: auto; }
+  .note { color: #666; font-size: 13px; }
+</style>
+</head>
+<body>
+<h1>📊 担任記録アプリ — 診断レポート</h1>
+<p class="sub">アプリと同じChromeでこのページを開いてください。<b>各層(localStorage/IndexedDB/クラウド)の件数や設定状態を一括チェック</b>します。</p>
+
+<div class="card">
+  <h2>1. 現状サマリ</h2>
+  <table id="summaryTable">
+    <thead><tr><th>層</th><th>件数</th><th>更新時刻</th><th>状態</th></tr></thead>
+    <tbody>
+      <tr><td>localStorage (L1)</td><td id="cell-local-count">…</td><td id="cell-local-ts">…</td><td id="cell-local-status">…</td></tr>
+      <tr><td>IndexedDB (L2)</td><td id="cell-idb-count">…</td><td id="cell-idb-ts">…</td><td id="cell-idb-status">…</td></tr>
+      <tr><td>クラウドGAS (L3)</td><td id="cell-cloud-count">…</td><td id="cell-cloud-ts">…</td><td id="cell-cloud-status">…</td></tr>
+    </tbody>
+  </table>
+  <button id="refreshBtn">🔄 再取得</button>
+  <span id="overallBadge"></span>
+</div>
+
+<div class="card">
+  <h2>2. 同期設定</h2>
+  <table id="cfgTable">
+    <tbody>
+      <tr><th>同期有効 (enabled)</th><td id="cfg-enabled">…</td></tr>
+      <tr><th>自動同期 (autoSync)</th><td id="cfg-auto">…</td></tr>
+      <tr><th>endpoint</th><td id="cfg-endpoint" style="word-break:break-all">…</td></tr>
+      <tr><th>API key</th><td id="cfg-key">…</td></tr>
+      <tr><th>lastPull</th><td id="cfg-lastpull">…</td></tr>
+      <tr><th>deviceId</th><td id="cfg-deviceid">…</td></tr>
+      <tr><th>pendingQueue</th><td id="cfg-queue">…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>3. Service Worker / アプリバージョン</h2>
+  <table>
+    <tbody>
+      <tr><th>SW登録数</th><td id="sw-count">…</td></tr>
+      <tr><th>SW active</th><td id="sw-active" style="word-break:break-all">…</td></tr>
+      <tr><th>cache名</th><td id="sw-cache">…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>4. 種別ごとの件数 (3層比較)</h2>
+  <table id="typeTable">
+    <thead><tr><th>種別</th><th>localStorage</th><th>IndexedDB</th><th>クラウドGAS</th><th>状態</th></tr></thead>
+    <tbody id="typeBody">
+      <tr><td colspan="5">読み込み中…</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <h2>5. 強制復元</h2>
+  <p class="note">現状を確認した上で、ローカルが少ない場合はクラウドから全件取り直します（既存ローカルは保持・非破壊）。</p>
+  <button id="forceRestoreBtn" class="danger">🆘 クラウドから強制復元</button>
+  <div id="restoreOut" style="margin-top:8px"></div>
+</div>
+
+<div class="card">
+  <h2>6. レポート (コピペで送れる形式)</h2>
+  <p class="note">このセクションをコピーして、Claudeとの会話やIssueに貼り付けてください。</p>
+  <button id="copyReportBtn" class="secondary">📋 全文コピー</button>
+  <div class="copy-area" id="reportArea">…</div>
+</div>
+
+<script>
+const STORAGE_KEY = 'interactionApp_v1';
+const SYNC_KEY = 'interactionApp_gasSync';
+const LAST_PULL_KEY = 'interactionApp_lastPull';
+const QUEUE_KEY = 'interactionApp_pendingQueue';
+const DEVICE_ID_KEY = 'interactionApp_deviceId';
+const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
+const DEFAULT_API_KEY = 'cLgXe27Zo-2w7cfL';
+
+function counts(s) {
+  return {
+    records: (s.records || []).length,
+    praises: (s.praises || []).length,
+    evaluations: (s.evaluations || []).length,
+    abaRecords: (s.abaRecords || []).length,
+    ketebureRecords: (s.ketebureRecords || []).length,
+    seatingSnapshots: (s.seatingSnapshots || []).length
+  };
+}
+function totalOf(c) { return Object.values(c).reduce((a, b) => a + b, 0); }
+
+async function readLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return { exists: false, data: {} };
+    return { exists: true, data: JSON.parse(raw) };
+  } catch (e) {
+    return { exists: false, data: {}, error: e.message };
+  }
+}
+
+async function readIdb() {
+  if (!window.indexedDB) return { exists: false, data: {}, error: 'IndexedDB unavailable' };
+  return new Promise((resolve) => {
+    const req = indexedDB.open('interactionApp', 1);
+    req.onerror = () => resolve({ exists: false, data: {}, error: req.error?.message });
+    req.onupgradeneeded = (e) => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains('appState')) db.createObjectStore('appState');
+    };
+    req.onsuccess = () => {
+      const db = req.result;
+      try {
+        const tx = db.transaction(['appState'], 'readonly');
+        const r = tx.objectStore('appState').get('current');
+        r.onsuccess = () => {
+          const v = r.result;
+          if (!v || !v.json) { resolve({ exists: false, data: {} }); return; }
+          try {
+            resolve({ exists: true, ts: v.ts, data: JSON.parse(v.json) });
+          } catch (e) {
+            resolve({ exists: false, data: {}, error: e.message });
+          }
+        };
+        r.onerror = () => resolve({ exists: false, data: {}, error: r.error?.message });
+      } catch (e) {
+        resolve({ exists: false, data: {}, error: e.message });
+      }
+    };
+  });
+}
+
+async function readCloud() {
+  const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}');
+  const ep = cfg.endpoint || DEFAULT_ENDPOINT;
+  const ak = cfg.apiKey || DEFAULT_API_KEY;
+  const url = `${ep}?key=${encodeURIComponent(ak)}&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=diagnostic`;
+  try {
+    const r = await fetch(url);
+    if (!r.ok) return { ok: false, status: r.status, error: 'HTTP ' + r.status };
+    const d = await r.json();
+    if (!d.ok) return { ok: false, error: d.error || 'GAS error' };
+    return {
+      ok: true,
+      ts: d.server_time,
+      data: {
+        records: (d.records || []).filter(x => String(x.deleted) !== '1'),
+        praises: (d.praises || []).filter(x => String(x.deleted) !== '1'),
+        evaluations: (d.evaluations || []).filter(x => String(x.deleted) !== '1'),
+        abaRecords: (d.abaRecords || []).filter(x => String(x.deleted) !== '1'),
+        ketebureRecords: (d.ketebureRecords || []).filter(x => String(x.deleted) !== '1'),
+        seatingSnapshots: (d.seatingSnapshots || d.seating || []).filter(x => String(x.deleted) !== '1')
+      }
+    };
+  } catch (e) {
+    return { ok: false, error: e.message };
+  }
+}
+
+async function readSW() {
+  if (!navigator.serviceWorker) return { count: 0 };
+  const regs = await navigator.serviceWorker.getRegistrations();
+  return {
+    count: regs.length,
+    active: regs.map(r => r.active?.scriptURL || r.installing?.scriptURL || '(none)').join(' / '),
+    cacheNames: (await caches.keys()).join(', ')
+  };
+}
+
+function setStatus(cellId, kind, text) {
+  const el = document.getElementById(cellId);
+  el.innerHTML = '<span class="status ' + kind + '">' + text + '</span>';
+}
+
+function setText(id, txt) { document.getElementById(id).textContent = txt; }
+
+function maskKey(k) {
+  if (!k) return '(未設定)';
+  if (k.length <= 8) return '****';
+  return k.slice(0, 4) + '****' + k.slice(-4);
+}
+
+let _lastReport = {};
+
+async function refresh() {
+  document.getElementById('cell-local-count').textContent = '…';
+  document.getElementById('cell-idb-count').textContent = '…';
+  document.getElementById('cell-cloud-count').textContent = '…';
+
+  const [local, idb, cloud, sw] = await Promise.all([
+    readLocal(), readIdb(), readCloud(), readSW()
+  ]);
+
+  const localCounts = counts(local.data);
+  const idbCounts = counts(idb.data);
+  const cloudCounts = cloud.ok ? counts(cloud.data) : null;
+
+  // Layer 1
+  setText('cell-local-count', totalOf(localCounts));
+  setText('cell-local-ts', '(localStorage は時刻保存なし)');
+  setStatus('cell-local-status', local.exists ? 'ok' : 'err', local.exists ? '存在' : '空/エラー');
+
+  // Layer 2
+  setText('cell-idb-count', totalOf(idbCounts));
+  setText('cell-idb-ts', idb.ts ? new Date(idb.ts).toLocaleString('ja-JP') : '(未保存)');
+  setStatus('cell-idb-status', idb.exists ? 'ok' : 'warn', idb.exists ? '存在' : '空');
+
+  // Layer 3
+  if (cloud.ok) {
+    setText('cell-cloud-count', totalOf(cloudCounts));
+    setText('cell-cloud-ts', cloud.ts ? new Date(cloud.ts).toLocaleString('ja-JP') : '');
+    setStatus('cell-cloud-status', 'ok', '到達OK');
+  } else {
+    setText('cell-cloud-count', '失敗');
+    setText('cell-cloud-ts', '');
+    setStatus('cell-cloud-status', 'err', cloud.error || 'fail');
+  }
+
+  // 全体バッジ
+  const overall = document.getElementById('overallBadge');
+  if (cloud.ok && local.exists && idb.exists) {
+    const localT = totalOf(localCounts), idbT = totalOf(idbCounts), cloudT = totalOf(cloudCounts);
+    const maxT = Math.max(localT, idbT, cloudT);
+    const minT = Math.min(localT, idbT, cloudT);
+    if (maxT - minT >= 5) {
+      overall.innerHTML = '<span class="status warn">⚠ 3層に件数差あり (' + minT + '〜' + maxT + ')</span>';
+    } else {
+      overall.innerHTML = '<span class="status ok">✅ 3層整合 (' + maxT + '件)</span>';
+    }
+  } else {
+    overall.innerHTML = '<span class="status err">⚠ いずれかの層に到達失敗</span>';
+  }
+
+  // 設定
+  const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}');
+  setText('cfg-enabled', String(cfg.enabled));
+  setText('cfg-auto', String(cfg.autoSync));
+  setText('cfg-endpoint', cfg.endpoint || '(未設定)');
+  setText('cfg-key', maskKey(cfg.apiKey));
+  setText('cfg-lastpull', localStorage.getItem(LAST_PULL_KEY) || '(未実行)');
+  setText('cfg-deviceid', localStorage.getItem(DEVICE_ID_KEY) || '(未割当)');
+  let queueLen = 0;
+  try { queueLen = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]').length; } catch (_) {}
+  setText('cfg-queue', queueLen + '件' + (queueLen > 0 ? ' ⚠ 未送信あり' : ''));
+
+  // SW
+  setText('sw-count', sw.count);
+  setText('sw-active', sw.active || '(なし)');
+  setText('sw-cache', sw.cacheNames || '(なし)');
+
+  // 種別ごと
+  const tb = document.getElementById('typeBody');
+  tb.innerHTML = '';
+  const types = [
+    ['交友関係', 'records'],
+    ['ほめ', 'praises'],
+    ['評価', 'evaluations'],
+    ['ABA', 'abaRecords'],
+    ['けテぶれ', 'ketebureRecords'],
+    ['席替え', 'seatingSnapshots'],
+  ];
+  for (const [label, key] of types) {
+    const lc = localCounts[key] || 0;
+    const ic = idbCounts[key] || 0;
+    const cc = cloudCounts ? (cloudCounts[key] || 0) : '?';
+    let st = '<span class="status ok">一致</span>';
+    if (cloudCounts) {
+      const max = Math.max(lc, ic, cc);
+      const min = Math.min(lc, ic, cc);
+      if (max - min >= 3) st = '<span class="status warn">差' + (max-min) + '件</span>';
+      if (max === 0) st = '<span class="status">―</span>';
+    } else {
+      st = '<span class="status err">クラウド不明</span>';
+    }
+    tb.insertAdjacentHTML('beforeend',
+      `<tr><td>${label}</td><td>${lc}</td><td>${ic}</td><td>${cc}</td><td>${st}</td></tr>`);
+  }
+
+  // レポート文字列
+  _lastReport = {
+    timestamp: new Date().toISOString(),
+    local: { exists: local.exists, counts: localCounts, total: totalOf(localCounts), error: local.error },
+    idb: { exists: idb.exists, ts: idb.ts, counts: idbCounts, total: totalOf(idbCounts), error: idb.error },
+    cloud: { ok: cloud.ok, ts: cloud.ts, counts: cloudCounts, total: cloudCounts ? totalOf(cloudCounts) : null, error: cloud.error },
+    config: {
+      enabled: cfg.enabled, autoSync: cfg.autoSync,
+      endpoint: cfg.endpoint, apiKeyMasked: maskKey(cfg.apiKey),
+      lastPull: localStorage.getItem(LAST_PULL_KEY),
+      deviceId: localStorage.getItem(DEVICE_ID_KEY),
+      pendingQueue: queueLen
+    },
+    sw: sw,
+    location: { href: location.href, origin: location.origin },
+    userAgent: navigator.userAgent
+  };
+  document.getElementById('reportArea').textContent = JSON.stringify(_lastReport, null, 2);
+}
+
+document.getElementById('refreshBtn').onclick = refresh;
+document.getElementById('copyReportBtn').onclick = async () => {
+  try {
+    await navigator.clipboard.writeText(JSON.stringify(_lastReport, null, 2));
+    document.getElementById('copyReportBtn').textContent = '✓ コピー完了';
+    setTimeout(() => { document.getElementById('copyReportBtn').textContent = '📋 全文コピー'; }, 1500);
+  } catch (e) {
+    alert('コピー失敗: ' + e.message + '\n手動で全選択してコピーしてください');
+  }
+};
+document.getElementById('forceRestoreBtn').onclick = async () => {
+  const out = document.getElementById('restoreOut');
+  out.innerHTML = '<span class="warn">クラウドから取得中…</span>';
+  try {
+    const cloud = await readCloud();
+    if (!cloud.ok) { out.innerHTML = '<span class="err">クラウド取得失敗: ' + cloud.error + '</span>'; return; }
+    const local = await readLocal();
+    const data = local.data || {};
+    if (!Array.isArray(data.records)) data.records = [];
+    if (!Array.isArray(data.praises)) data.praises = [];
+    if (!Array.isArray(data.evaluations)) data.evaluations = [];
+    if (!Array.isArray(data.abaRecords)) data.abaRecords = [];
+    if (!Array.isArray(data.ketebureRecords)) data.ketebureRecords = [];
+    if (!Array.isArray(data.seatingSnapshots)) data.seatingSnapshots = [];
+
+    const beforeTotal = totalOf(counts(data));
+    const ts = new Date().toISOString().replace(/[:.]/g, '-');
+    try { localStorage.setItem('interaction-pre-recovery-' + ts, JSON.stringify(data)); } catch(_) {}
+
+    function mergeArr(localArr, cloudArr) {
+      const ids = new Set(localArr.map(x => x && x.id).filter(Boolean));
+      let added = 0;
+      for (const item of (cloudArr || [])) {
+        if (!item || !item.id) continue;
+        if (ids.has(item.id)) continue;
+        localArr.push(item);
+        ids.add(item.id);
+        added++;
+      }
+      return added;
+    }
+    let added = 0;
+    added += mergeArr(data.records, cloud.data.records);
+    added += mergeArr(data.praises, cloud.data.praises);
+    added += mergeArr(data.evaluations, cloud.data.evaluations);
+    added += mergeArr(data.abaRecords, cloud.data.abaRecords);
+    added += mergeArr(data.ketebureRecords, cloud.data.ketebureRecords);
+    added += mergeArr(data.seatingSnapshots, cloud.data.seatingSnapshots);
+
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.removeItem(LAST_PULL_KEY);
+    const afterTotal = totalOf(counts(data));
+    out.innerHTML = '<span class="ok">✅ 復元完了。' + beforeTotal + ' → ' + afterTotal + '件 (+' + added + ')</span>';
+    setTimeout(refresh, 200);
+  } catch (e) {
+    out.innerHTML = '<span class="err">エラー: ' + e.message + '</span>';
+  }
+};
+
+refresh();
+</script>
+</body>
+</html>

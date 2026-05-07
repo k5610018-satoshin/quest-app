@@ -277,7 +277,8 @@ function renderSyncUI() {
     <div class="sync-row" style="margin-top:12px; padding:10px; background:#fff8e6; border:1px solid #f5b042; border-radius:6px;">
       <div style="flex:1">
         <button id="syncEmergencyRestoreBtn" style="background:#d9534f;color:white;border:1px solid #d9534f;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🆘 クラウドから緊急復元</button>
-        <div class="muted small" style="margin-top:4px">ローカルから記録が消えた場合、クラウドGASから全件取得して復元します（既存ローカルは保持・不足分のみ追加するので非破壊）</div>
+        <a href="diagnostic.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#6c757d;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">📊 診断レポート</a>
+        <div class="muted small" style="margin-top:4px">緊急復元: 記録が消えた時にクラウドから全件取り直し / 診断レポート: 3層(ローカル・IDB・クラウド)の件数や同期設定を一覧表示</div>
       </div>
     </div>
     <div class="sync-status-row">

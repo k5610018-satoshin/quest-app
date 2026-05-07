@@ -7,7 +7,7 @@
  *  - HTML: NetworkFirst with cache fallback
  * ========================================================================== */
 
-const CACHE_VERSION = 'v20260507d';
+const CACHE_VERSION = 'v20260507e';
 const CACHE_NAME = 'interaction-app-' + CACHE_VERSION;
 
 const STATIC_FILES = [
