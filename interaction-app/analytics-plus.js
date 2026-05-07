@@ -124,7 +124,14 @@ function _collectAllObservations() {
   }
   for (const a of (st.abaRecords || [])) {
     if (a && a.date && a.studentId != null) events.push({ date: a.date, studentId: a.studentId });
-    if (a && a.date && a.targetStudentId != null) events.push({ date: a.date, studentId: a.targetStudentId });
+    // 新: targetStudentIds[] / 旧: targetStudentId(単数) 両対応
+    if (a && a.date) {
+      if (Array.isArray(a.targetStudentIds)) {
+        for (const tid of a.targetStudentIds) events.push({ date: a.date, studentId: tid });
+      } else if (a.targetStudentId != null) {
+        events.push({ date: a.date, studentId: a.targetStudentId });
+      }
+    }
   }
   return events;
 }

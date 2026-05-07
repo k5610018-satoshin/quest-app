@@ -65,7 +65,7 @@ const state = {
   records: [],
   praises: [],         // [{id, studentId, content, date, timestamp, scene?, deviceId?}]
   evaluations: [],     // [{id, studentId, subjectId, unitId, viewpoint, grade, scale, date, timestamp, deviceId?}]
-  abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], targetStudentId, antecedent, consequence, response}]
+  abaRecords: [],      // [{id, studentId, date, timestamp, slot, subject, behaviors[], targetStudentIds[], antecedent, consequence, response}] (旧データの targetStudentId(単数) も読込互換)
   ketebureRecords: [], // [{id, studentId, date, timestamp, type:'shukudai'|'seikatsu', rating:'A'|'B'|'C', aspects:[], notes}] (旧データの ◎/○/△ も読込互換)
   seatingSnapshots: [],// [{id, date, label, groups: [[ids],...]}]
   subjects: (window.EVAL_DATA && window.EVAL_DATA.subjects) || [],
@@ -344,6 +344,16 @@ function _serializePendingUI() {
     if (ui.praiseTargetIds instanceof Set && ui.praiseTargetIds.size > 0) {
       out.praiseTargetIds = [...ui.praiseTargetIds];
     }
+    // ABA の保留中Setも保存（行動・相手・天気）
+    if (ui.abaBehaviors instanceof Set && ui.abaBehaviors.size > 0) {
+      out.abaBehaviors = [...ui.abaBehaviors];
+    }
+    if (ui.abaPartnerIds instanceof Set && ui.abaPartnerIds.size > 0) {
+      out.abaPartnerIds = [...ui.abaPartnerIds];
+    }
+    if (ui.abaWeathers instanceof Set && ui.abaWeathers.size > 0) {
+      out.abaWeathers = [...ui.abaWeathers];
+    }
     // 保留中の自由記述・評価値・観点モード等もリロードで消えると痛いので保存
     if (ui.ketebureRating) out.ketebureRating = ui.ketebureRating;
     if (ui.ketebureType) out.ketebureType = ui.ketebureType;
@@ -352,6 +362,10 @@ function _serializePendingUI() {
       out.evalEvidences = ui.evalEvidences;
       if (ui.evalEvidenceFocus) out.evalEvidenceFocus = ui.evalEvidenceFocus;
     }
+    if (ui.abaTargetId) out.abaTargetId = ui.abaTargetId;
+    if (ui.abaSlot) out.abaSlot = ui.abaSlot;
+    if (ui.abaSubjectId) out.abaSubjectId = ui.abaSubjectId;
+    if (ui.abaOtherText) out.abaOtherText = ui.abaOtherText;
   } catch (_) {}
   return out;
 }
@@ -375,6 +389,9 @@ function _restorePendingUI(pending) {
     if (Array.isArray(pending.praiseTargetIds)) {
       state.ui.praiseTargetIds = new Set(pending.praiseTargetIds);
     }
+    if (Array.isArray(pending.abaBehaviors)) state.ui.abaBehaviors = new Set(pending.abaBehaviors);
+    if (Array.isArray(pending.abaPartnerIds)) state.ui.abaPartnerIds = new Set(pending.abaPartnerIds);
+    if (Array.isArray(pending.abaWeathers)) state.ui.abaWeathers = new Set(pending.abaWeathers);
     if (pending.ketebureRating) state.ui.ketebureRating = pending.ketebureRating;
     if (pending.ketebureType) state.ui.ketebureType = pending.ketebureType;
     if (pending.evalActiveGrade) state.ui.evalActiveGrade = pending.evalActiveGrade;
@@ -382,6 +399,10 @@ function _restorePendingUI(pending) {
       state.ui.evalEvidences = pending.evalEvidences;
       if (pending.evalEvidenceFocus) state.ui.evalEvidenceFocus = pending.evalEvidenceFocus;
     }
+    if (pending.abaTargetId) state.ui.abaTargetId = pending.abaTargetId;
+    if (pending.abaSlot) state.ui.abaSlot = pending.abaSlot;
+    if (pending.abaSubjectId) state.ui.abaSubjectId = pending.abaSubjectId;
+    if (pending.abaOtherText) state.ui.abaOtherText = pending.abaOtherText;
   } catch (e) {
     console.warn('[restorePendingUI] failed to restore:', e);
   }
@@ -389,7 +410,7 @@ function _restorePendingUI(pending) {
 
 // 開発用: state.ui に新しい Map/Set を追加した時に自動で警告（serializeに追加し忘れ検出）
 function _checkPendingUIDrift() {
-  const known = new Set(['ketSelected','evalSelected','ketebureAspects','praiseSelectedTags','praiseTargetIds']);
+  const known = new Set(['ketSelected','evalSelected','ketebureAspects','praiseSelectedTags','praiseTargetIds','abaBehaviors','abaPartnerIds','abaWeathers']);
   for (const k in state.ui) {
     const v = state.ui[k];
     if ((v instanceof Map || v instanceof Set) && v.size > 0 && !known.has(k)) {
@@ -534,7 +555,16 @@ function normalizeAba(a) {
     try { date = new Date(timestamp).toISOString().slice(0, 10); }
     catch { date = todayISO(); }
   }
-  const targetStudentId = parseInt(a.targetStudentId);
+  // 相手児童: 過去データ targetStudentId(単数) と新形式 targetStudentIds(配列) を統合
+  let targetStudentIds = [];
+  if (Array.isArray(a.targetStudentIds)) {
+    targetStudentIds = a.targetStudentIds.map(x => parseInt(x)).filter(x => x && x > 0);
+  } else if (a.targetStudentId) {
+    const t = parseInt(a.targetStudentId);
+    if (t && t > 0) targetStudentIds = [t];
+  }
+  // 重複除去・対象児童と同じIDは除外
+  targetStudentIds = [...new Set(targetStudentIds)].filter(t => t !== studentId);
   return {
     id: a.id || uuid(),
     studentId,
@@ -544,7 +574,9 @@ function normalizeAba(a) {
     subject: a.subject || '',
     weather: typeof a.weather === 'string' ? a.weather : '',
     behaviors,
-    targetStudentId: (targetStudentId && targetStudentId > 0) ? targetStudentId : null,
+    // 後方互換: 単数フィールドも残す（最初の1人）。新フィールド targetStudentIds が正
+    targetStudentId: targetStudentIds.length > 0 ? targetStudentIds[0] : null,
+    targetStudentIds,
     antecedent: typeof a.antecedent === 'string' ? a.antecedent.slice(0, 500) : '',
     consequence: typeof a.consequence === 'string' ? a.consequence.slice(0, 500) : '',
     response: typeof a.response === 'string' ? a.response.slice(0, 500) : ''
@@ -5722,7 +5754,7 @@ function resetAbaAll() {
   state.ui.abaSlot = '';
   state.ui.abaSubjectId = '';
   state.ui.abaTargetId = null;
-  state.ui.abaPartnerId = null;
+  state.ui.abaPartnerIds = new Set();
   state.ui.abaBehaviors = new Set();
   state.ui.abaOtherText = '';
   document.querySelectorAll('#abaBehaviorGrid .aba-behavior-btn').forEach(b => {
@@ -5749,37 +5781,40 @@ function renderAbaTargetRow() {
   if (!row) return;
   const show = abaIsInterpersonal(state.ui.abaBehaviors);
   row.style.display = show ? '' : 'none';
-  if (!show) state.ui.abaPartnerId = null;
+  if (!show) state.ui.abaPartnerIds = new Set();
 }
 
 function renderAbaTargetGrid() {
   const grid = document.getElementById('abaTargetGrid');
   if (!grid) return;
   grid.innerHTML = '';
+  if (!state.ui.abaPartnerIds || !(state.ui.abaPartnerIds instanceof Set)) {
+    state.ui.abaPartnerIds = new Set();
+  }
   for (const s of state.students) {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'student-btn';
     btn.dataset.studentId = s.id;
-    btn.title = `${s.kana} (出席番号 ${s.id})`;
+    btn.title = `${s.kana} (出席番号 ${s.id}) - タップで複数選択可`;
     const num = document.createElement('span');
     num.className = 'num';
     num.textContent = s.id;
     btn.appendChild(num);
     btn.appendChild(document.createTextNode(s.name));
+    if (state.ui.abaPartnerIds.has(s.id)) btn.classList.add('active');
     btn.addEventListener('click', () => {
       // 対象児童と同じは選べない
       if (state.ui.abaTargetId && state.ui.abaTargetId === s.id) {
         showToast('対象児童と同じ児童は相手にできません', 'error');
         return;
       }
-      // トグル選択（単数）
-      if (state.ui.abaPartnerId === s.id) {
-        state.ui.abaPartnerId = null;
+      // 複数選択トグル
+      if (state.ui.abaPartnerIds.has(s.id)) {
+        state.ui.abaPartnerIds.delete(s.id);
         btn.classList.remove('active');
       } else {
-        state.ui.abaPartnerId = s.id;
-        grid.querySelectorAll('.student-btn').forEach(x => x.classList.remove('active'));
+        state.ui.abaPartnerIds.add(s.id);
         btn.classList.add('active');
       }
       updateAbaStatusBar();
@@ -5825,7 +5860,9 @@ function saveAbaRecord(opts) {
       ? [...state.ui.abaWeathers].join(',')
       : '',
     behaviors: [...state.ui.abaBehaviors],
-    targetStudentId: state.ui.abaPartnerId || null,
+    targetStudentIds: state.ui.abaPartnerIds && state.ui.abaPartnerIds.size > 0
+      ? [...state.ui.abaPartnerIds]
+      : [],
     antecedent: antWithOther,
     consequence: cons,
     response: resp
@@ -5841,7 +5878,7 @@ function saveAbaRecord(opts) {
   state.ui.abaBehaviors = new Set();
   state.ui.abaOtherText = '';
   state.ui.abaTargetId = null;
-  state.ui.abaPartnerId = null;
+  state.ui.abaPartnerIds = new Set();
   document.querySelectorAll('.aba-behavior-btn').forEach(b => {
     b.classList.remove('active');
     const beh = ABA_BEHAVIORS.find(x => x.id === b.dataset.behaviorId);

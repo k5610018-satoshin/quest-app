@@ -99,7 +99,12 @@ function refreshOverview() {
   for (const e of (state.evaluations || [])) updateSeen(e.studentId, e.date);
   for (const a of (abas || [])) {
     updateSeen(a.studentId, a.date);
-    if (a.targetStudentId) updateSeen(a.targetStudentId, a.date);
+    // 新形式 targetStudentIds[] と旧形式 targetStudentId(単数) どちらも対応
+    if (Array.isArray(a.targetStudentIds)) {
+      for (const tid of a.targetStudentIds) updateSeen(tid, a.date);
+    } else if (a.targetStudentId) {
+      updateSeen(a.targetStudentId, a.date);
+    }
   }
   for (const k of (state.ketebureRecords || [])) updateSeen(k.studentId, k.date);
   const longUnseen = studs
