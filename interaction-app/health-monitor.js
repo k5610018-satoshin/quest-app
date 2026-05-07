@@ -58,29 +58,73 @@ async function idbCounts() {
 
 // クラウド件数: 設定タブの info レスポンスを使う（軽量）
 // GAS info レスポンスのフィールド名: total_rows / praise_rows / eval_rows / aba_rows / ketebure_rows
-let _cloudCountCache = { ts: 0, data: null };
-async function cloudCounts(opts) {
-  // 同時呼び出し抑制 + 30秒キャッシュ（バー更新は1分間隔なので問題なし）
-  const force = opts && opts.force;
-  if (!force && _cloudCountCache.data && (Date.now() - _cloudCountCache.ts) < 30000) {
-    return _cloudCountCache.data;
-  }
+//
+// マルチタブ抑制方針:
+//  1) インスタンス内で 60秒 メモリキャッシュ
+//  2) localStorage 共有キャッシュ (interactionApp_cloudCountsCache) で全タブが共有 (TTL 60秒)
+//  3) 進行中の Promise を保持して同タブ内重複呼び出しを抑制
+//  4) タブ復帰直後 (visibilitychange→true から3秒以内) はキャッシュのみ返す
+const CLOUD_CACHE_KEY = 'interactionApp_cloudCountsCache';
+const CLOUD_CACHE_TTL_MS = 60 * 1000;
+let _cloudInflight = null;
+let _lastVisibilityChange = 0;
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) _lastVisibilityChange = Date.now();
+});
+
+function _readCloudCache() {
   try {
-    if (typeof window.getSheetInfo !== 'function') return null;
-    const info = await window.getSheetInfo();
-    if (!info) return null;
-    const result = {
-      records: info.total_rows || 0,
-      praises: info.praise_rows || 0,
-      evaluations: info.eval_rows || 0,
-      aba: info.aba_rows || 0,
-      ketebure: info.ketebure_rows || 0,
-    };
-    _cloudCountCache = { ts: Date.now(), data: result };
-    return result;
-  } catch (_) {
-    return null;
+    const raw = localStorage.getItem(CLOUD_CACHE_KEY);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (!obj || !obj.ts || !obj.data) return null;
+    if (Date.now() - obj.ts > CLOUD_CACHE_TTL_MS) return null;
+    return obj.data;
+  } catch (e) { console.debug('[health] cloudCache read:', e.message); return null; }
+}
+
+function _writeCloudCache(data) {
+  try {
+    localStorage.setItem(CLOUD_CACHE_KEY, JSON.stringify({ ts: Date.now(), data }));
+  } catch (e) { console.debug('[health] cloudCache write:', e.message); }
+}
+
+async function cloudCounts(opts) {
+  const force = opts && opts.force;
+  // (1) localStorage 共有キャッシュ（マルチタブで共有）
+  if (!force) {
+    const cached = _readCloudCache();
+    if (cached) return cached;
+    // (4) タブ復帰直後3秒はネット呼び出し回避（複数タブ復帰時のバースト防止）
+    if (Date.now() - _lastVisibilityChange < 3000) {
+      return cached || null;
+    }
   }
+  // (3) 進行中 Promise を返す
+  if (_cloudInflight) return _cloudInflight;
+
+  _cloudInflight = (async () => {
+    try {
+      if (typeof window.getSheetInfo !== 'function') return null;
+      const info = await window.getSheetInfo();
+      if (!info) return null;
+      const result = {
+        records: info.total_rows || 0,
+        praises: info.praise_rows || 0,
+        evaluations: info.eval_rows || 0,
+        aba: info.aba_rows || 0,
+        ketebure: info.ketebure_rows || 0,
+      };
+      _writeCloudCache(result);
+      return result;
+    } catch (e) {
+      console.debug('[health] cloudCounts fetch:', e.message);
+      return null;
+    } finally {
+      _cloudInflight = null;
+    }
+  })();
+  return _cloudInflight;
 }
 
 function pendingCount() {
@@ -372,7 +416,21 @@ function startupAutoDiagnose() {
       // 初回起動 or 未設定 → setup-gas.html へ誘導
       setTimeout(() => {
         if (confirm('クラウド同期がまだ設定されていません。\n\nセットアップウィザードを開きますか？\n（記録はローカル保存だけでも使えますが、クラウド同期で他端末との共有・バックアップが可能になります）')) {
-          window.open('setup-gas.html', '_blank');
+          // ポップアップブロック検出: window.open が null を返したら直接遷移
+          let win = null;
+          try { win = window.open('setup-gas.html', '_blank'); } catch (e) { console.warn('[startup] window.open error:', e); }
+          if (!win || win.closed || typeof win.closed === 'undefined') {
+            // ポップアップブロック → 案内表示 + 1クリックで遷移
+            showToast?.('⚠ ポップアップがブロックされました。同タブでセットアップを開きます', 'error');
+            setTimeout(() => {
+              if (confirm('ブラウザのポップアップ設定を確認するか、同じタブでセットアップを開きますか？\n（OK = 同タブで開く / キャンセル = 設定タブへ）')) {
+                location.href = 'setup-gas.html';
+              } else {
+                // 設定タブへ
+                document.querySelector('.tab-btn[data-tab="settings"]')?.click();
+              }
+            }, 1500);
+          }
         }
       }, 2000);
     } else if (cfg.endpoint && !/^https:\/\/script\.google\.com\//.test(cfg.endpoint)) {

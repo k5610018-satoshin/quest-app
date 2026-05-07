@@ -49,6 +49,10 @@ function initCloudSync() {
         if (typeof showToast === 'function') {
           showToast(`☁️ クラウドから ${afterTotal}件 を自動復元しました`, 'success');
         }
+      }
+      // 件数差が出た or 削除/更新があった可能性 → どちらにせよ refresh して画面に反映
+      // (件数増 / 件数減 / 件数同じだが内容更新 のいずれもUI更新が必要)
+      if (afterTotal !== beforeTotal || (typeof window._needsRefreshAfterPull === 'function' && window._needsRefreshAfterPull())) {
         if (typeof refreshAll === 'function') refreshAll();
       }
     }).catch(err => console.warn('[sync] 起動時pull失敗:', err.message));
