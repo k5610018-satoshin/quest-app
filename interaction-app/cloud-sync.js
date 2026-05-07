@@ -68,13 +68,23 @@ function initCloudSync() {
 
   // タブ復帰時に自動pull (別作業から戻った時に最新化)
   // 連発を防ぐため最低60秒の間隔をあける
+  // 順序: 未送信を先にflushしてからpull（自タブの編集がpullで戻されないよう）
   let _lastVisibilityPull = 0;
-  document.addEventListener('visibilitychange', () => {
+  document.addEventListener('visibilitychange', async () => {
     if (document.hidden) return;
     if (!syncConfig.enabled || !navigator.onLine) return;
     if (Date.now() - _lastVisibilityPull < 60 * 1000) return;
     _lastVisibilityPull = Date.now();
-    pullFromGas().catch(err => console.warn('[sync] visibility pull失敗:', err.message));
+    try {
+      await flushPendingQueue();
+    } catch (err) {
+      console.warn('[sync] visibility flush失敗:', err.message);
+    }
+    try {
+      await pullFromGas();
+    } catch (err) {
+      console.warn('[sync] visibility pull失敗:', err.message);
+    }
   });
 }
 
@@ -150,13 +160,33 @@ function computePullSince(opts) {
 }
 
 // マルチタブ防衛: 別タブが少ない件数でlocalStorageを上書きしようとしたら自タブで再保存
+// 件数だけでなく ID集合 と 最大timestamp も照合し、「同件数だが内容が古い」ケースも検出
+function _collectIds(stateLike) {
+  const arrs = [
+    stateLike.records, stateLike.praises, stateLike.evaluations,
+    stateLike.abaRecords, stateLike.ketebureRecords
+  ];
+  const ids = new Set();
+  let maxTs = '';
+  let total = 0;
+  for (const arr of arrs) {
+    if (!Array.isArray(arr)) continue;
+    total += arr.length;
+    for (const x of arr) {
+      if (x && x.id) ids.add(x.id);
+      const ts = x && (x.edited_at || x.timestamp);
+      if (ts && String(ts) > maxTs) maxTs = String(ts);
+    }
+  }
+  return { ids, maxTs, total };
+}
+
 function installStorageWatcher() {
   const KEY = 'interactionApp_v1';
   let _lastDefenseTime = 0;
   window.addEventListener('storage', (e) => {
     if (e.key !== KEY) return;
     if (!e.newValue) {
-      // 別タブが削除した
       console.warn('[multi-tab] 別タブが localStorage を削除');
       if (window.state && typeof saveState === 'function') {
         if (sumLocalRecords() > 0) {
@@ -170,26 +200,44 @@ function installStorageWatcher() {
     }
     try {
       const other = JSON.parse(e.newValue);
-      const myTotal = sumLocalRecords();
-      const otherTotal = ((other.records && other.records.length) || 0) +
-                         ((other.praises && other.praises.length) || 0) +
-                         ((other.evaluations && other.evaluations.length) || 0) +
-                         ((other.abaRecords && other.abaRecords.length) || 0) +
-                         ((other.ketebureRecords && other.ketebureRecords.length) || 0);
-      // 別タブが現タブより5件以上少ない → 古い state での誤上書きと判断
-      if (myTotal > otherTotal + 5) {
-        // 連続発火を防ぐ（3秒以内なら無視）
-        if (Date.now() - _lastDefenseTime < 3000) return;
-        _lastDefenseTime = Date.now();
-        console.warn('[multi-tab] 別タブが少ない件数で上書き', { myTotal, otherTotal });
-        if (typeof saveState === 'function') {
-          saveState(); // 自分のstateで再書き込み
-          if (typeof showToast === 'function') {
-            showToast(`⚠ 他のタブが古いデータで上書きを試みました → このタブの ${myTotal}件 を保護`, 'error');
-          }
+      if (!window.state) return;
+      const mine = _collectIds(window.state);
+      const theirs = _collectIds(other);
+
+      // 防衛発動条件:
+      //  (a) 自タブの方が件数が5件以上多い (従来ロジック)
+      //  (b) 自タブのID集合に「相手に無いID」が3件以上ある（同件数で内容差し替えを検出）
+      //  (c) 自タブの最大timestamp が相手より新しい AND 自タブにしか無いIDがある
+      let missingFromOther = 0;
+      for (const id of mine.ids) if (!theirs.ids.has(id)) missingFromOther++;
+      const myTsNewer = mine.maxTs && mine.maxTs > theirs.maxTs;
+      const reasonA = mine.total > theirs.total + 5;
+      const reasonB = missingFromOther >= 3;
+      const reasonC = myTsNewer && missingFromOther > 0;
+
+      if (!reasonA && !reasonB && !reasonC) return;
+
+      // 連続発火を防ぐ（3秒以内なら無視）
+      if (Date.now() - _lastDefenseTime < 3000) return;
+      _lastDefenseTime = Date.now();
+      console.warn('[multi-tab] 防衛発動', {
+        reason: reasonA ? 'count' : (reasonB ? 'idDiff' : 'tsNewer'),
+        myTotal: mine.total, otherTotal: theirs.total,
+        myMaxTs: mine.maxTs, otherMaxTs: theirs.maxTs,
+        missingFromOther
+      });
+      if (typeof saveState === 'function') {
+        saveState();
+        if (typeof showToast === 'function') {
+          const detail = reasonA ? `件数差(${mine.total}→${theirs.total})`
+                       : reasonB ? `${missingFromOther}件のIDが消えそう`
+                       : '内容が古い';
+          showToast(`⚠ 他タブが古いデータで上書き(${detail}) → ${mine.total}件を保護`, 'error');
         }
       }
-    } catch (_) {}
+    } catch (e) {
+      console.warn('[multi-tab] storage event 処理エラー:', e.message);
+    }
   });
 }
 
@@ -939,7 +987,8 @@ async function pushAllRecords() {
 
 function addToPendingQueue(op) {
   let queue = loadPendingQueue();
-  queue.push({ ...op, queuedAt: new Date().toISOString() });
+  const wrapped = _ensureQid({ ...op, queuedAt: new Date().toISOString() });
+  queue.push(wrapped);
   // 最大200件まで
   if (queue.length > 200) queue = queue.slice(-200);
   localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(queue));
@@ -951,33 +1000,61 @@ function loadPendingQueue() {
   } catch (_) { return []; }
 }
 
+// 各 op に一意な _qid を付与（キュー内での識別子）
+function _ensureQid(op) {
+  if (!op._qid) op._qid = 'q-' + Date.now().toString(36) + '-' + Math.floor(Math.random() * 1e6).toString(36);
+  return op;
+}
+
+// 成功した op を queue から1件だけ取り除く（クラッシュ耐性）
+function _removeFromQueue(qid) {
+  try {
+    const q = loadPendingQueue();
+    const filtered = q.filter(x => x._qid !== qid);
+    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(filtered));
+  } catch (_) {}
+}
+
 async function flushPendingQueue() {
   if (!checkSyncReady() || !navigator.onLine) return;
   let queue = loadPendingQueue();
   if (queue.length === 0) return;
-  const toSend = queue;
-  // キューを先にクリア（楽観的）
-  localStorage.removeItem(PENDING_QUEUE_KEY);
-  let failed = [];
-  for (const op of toSend) {
+  // 全 op に _qid を付与（既存にも付ける）して書き戻す → クラッシュしてもキューは保持される
+  let needRewrite = false;
+  for (const op of queue) {
+    if (!op._qid) { _ensureQid(op); needRewrite = true; }
+  }
+  if (needRewrite) {
+    try { localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(queue)); } catch (_) {}
+  }
+
+  let succeeded = 0;
+  let failed = 0;
+  for (const op of queue) {
+    // _qid と内部キー以外を送信
+    const payload = { ...op, deviceId: _deviceId };
+    delete payload._qid;
     try {
       const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-        body: JSON.stringify({ ...op, deviceId: _deviceId })
+        body: JSON.stringify(payload)
       });
       const data = await res.json();
       if (!data.ok) throw new Error(data.error);
+      // 成功したら即座にキューから削除（途中クラッシュしても残りは次回再試行）
+      _removeFromQueue(op._qid);
+      succeeded++;
     } catch (err) {
-      failed.push(op);
+      failed++;
+      console.warn('[flush] op失敗:', op._qid, err.message);
+      // 失敗時はそのままキューに残す（_removeFromQueue を呼ばない）
     }
   }
-  if (failed.length > 0) {
-    // 失敗分は再キュー
-    localStorage.setItem(PENDING_QUEUE_KEY, JSON.stringify(failed));
-    showSyncStatus(`${failed.length}件の送信に失敗（自動再試行）`, true);
-  } else if (toSend.length > 0) {
-    showSyncStatus(`${toSend.length}件の保留済みデータを送信しました`);
+  if (failed > 0) {
+    showSyncStatus(`${failed}件の送信に失敗（自動再試行・キューに保持）`, true);
+  } else if (succeeded > 0) {
+    showSyncStatus(`${succeeded}件の保留済みデータを送信しました`);
   }
 }
 

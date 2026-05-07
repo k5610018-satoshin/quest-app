@@ -1716,22 +1716,53 @@ function takeWeeklyBackup() {
   var lock = LockService.getScriptLock();
   if (!lock.tryLock(60000)) {
     Logger.log('takeWeeklyBackup: lock timeout');
+    _notifyBackupFailure('Lock timeout (別処理が60秒以上継続)');
     return null;
   }
   try {
     var props = PropertiesService.getScriptProperties();
     var ssId = props.getProperty('SHEET_ID');
-    if (!ssId) { Logger.log('takeWeeklyBackup: SHEET_ID missing'); return null; }
-    var src = DriveApp.getFileById(ssId);
-    var folder = getOrCreateBackupFolder();
-    var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd_HHmm');
-    var copyName = 'BU_' + stamp;
-    var copy = src.makeCopy(copyName, folder);
-    Logger.log('weekly backup: ' + copy.getId());
-    pruneOldBackups(folder, 12);
-    return { ok: true, fileId: copy.getId(), name: copyName, url: copy.getUrl() };
+    if (!ssId) {
+      Logger.log('takeWeeklyBackup: SHEET_ID missing');
+      _notifyBackupFailure('Script Properties に SHEET_ID が設定されていません');
+      return null;
+    }
+    try {
+      var src = DriveApp.getFileById(ssId);
+      var folder = getOrCreateBackupFolder();
+      var stamp = Utilities.formatDate(new Date(), 'Asia/Tokyo', 'yyyy-MM-dd_HHmm');
+      var copyName = 'BU_' + stamp;
+      var copy = src.makeCopy(copyName, folder);
+      Logger.log('weekly backup: ' + copy.getId());
+      pruneOldBackups(folder, 12);
+      return { ok: true, fileId: copy.getId(), name: copyName, url: copy.getUrl() };
+    } catch (e) {
+      // Drive 権限不足 / quota / makeCopy 失敗 等
+      Logger.log('takeWeeklyBackup error: ' + e.message + '\n' + e.stack);
+      _notifyBackupFailure('週次バックアップ失敗: ' + e.message);
+      return { ok: false, error: e.message };
+    }
   } finally {
     try { lock.releaseLock(); } catch (_) {}
+  }
+}
+
+// バックアップ失敗時のメール通知（snapshot側と対称性を持たせる）
+function _notifyBackupFailure(reason) {
+  try {
+    var email = Session.getActiveUser().getEmail();
+    if (!email) return;
+    MailApp.sendEmail({
+      to: email,
+      subject: '[担任記録アプリ] 週次バックアップ失敗',
+      body: '週次 Drive バックアップが失敗しました。\n\n'
+          + '理由: ' + reason + '\n\n'
+          + '時刻: ' + new Date().toISOString() + '\n'
+          + 'GAS Editor: https://script.google.com/home/projects\n'
+          + '対処: Drive権限/Apps Script quota/SHEET_ID 設定 を確認してください。'
+    });
+  } catch (e) {
+    Logger.log('_notifyBackupFailure mail send error: ' + e.message);
   }
 }
 

@@ -52,7 +52,7 @@ async function idbCounts() {
     if (typeof window.idbGetCounts === 'function') {
       return await window.idbGetCounts();
     }
-  } catch (_) {}
+  } catch (e) { console.debug('[health] idbCounts:', e.message); }
   return null;
 }
 
@@ -126,9 +126,12 @@ async function refreshHealthBar() {
   if (idb) {
     const iT = totalOf(idb);
     let level = null;
-    const diff = lT - iT;
+    const diff = lT - iT; // 正: L1 > L2（IDB書き込み未追従）/ 負: L1 < L2（ローカル消失でIDBから復元待ち）
     if (Math.abs(diff) > Math.max(5, lT * 0.1)) level = 'warn';
+    // L1 > L2 大乖離 = IDB書き込み失敗中の可能性 → danger
     if (diff > Math.max(10, lT * 0.2)) level = 'danger';
+    // L2 > L1 大乖離 = ローカル消失中、起動直後のidbCheckAndRestore待ち
+    if (diff < -Math.max(10, iT * 0.2)) level = 'danger';
     setPill('shL2', `L2:${iT}`, level);
   } else {
     setPill('shL2', 'L2:?', null);
@@ -213,6 +216,8 @@ function evaluateAndAlert(snap) {
     showToast(`⚠ 未送信キューが ${ageMin}分以上滞留しています。ネットワーク・GAS設定を確認してください`, 'error');
   }
   _lastSnapshot = snap;
+  // 永続化（再起動後も20%減検知が動くように）
+  try { localStorage.setItem('interactionApp_healthSnapshot', JSON.stringify(snap)); } catch (_) {}
 }
 
 // ===== A3: 診断レポートモーダル =====
@@ -437,12 +442,22 @@ window.runChromeDiagnostic = runChromeDiagnostic;
 
 // ===== 初期化 =====
 function startMonitoring() {
+  // 起動前回のsnapshotを復元（A2改良: 再起動後も20%減検知）
+  if (!_lastSnapshot) {
+    try {
+      const raw = localStorage.getItem('interactionApp_healthSnapshot');
+      if (raw) _lastSnapshot = JSON.parse(raw);
+    } catch (_) {}
+  }
+
   refreshHealthBar();
-  if (_ticker) clearInterval(_ticker);
-  _ticker = setInterval(() => {
-    if (document.hidden) return; // 非表示タブでは無駄に動かさない
+  // グローバルに ticker を保持（モジュール再ロード時の clearInterval 漏れ防止）
+  if (window._healthMonitorTicker) clearInterval(window._healthMonitorTicker);
+  window._healthMonitorTicker = setInterval(() => {
+    if (document.hidden) return;
     refreshHealthBar();
   }, REFRESH_INTERVAL_MS);
+  _ticker = window._healthMonitorTicker;
 
   // ヘッダクリックで診断モーダル
   const bar = document.getElementById('storageHealthBar');
