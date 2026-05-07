@@ -277,8 +277,11 @@ function renderSyncUI() {
     <div class="sync-row" style="margin-top:12px; padding:10px; background:#fff8e6; border:1px solid #f5b042; border-radius:6px;">
       <div style="flex:1">
         <button id="syncEmergencyRestoreBtn" style="background:#d9534f;color:white;border:1px solid #d9534f;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🆘 クラウドから緊急復元</button>
-        <a href="diagnostic.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#6c757d;color:white;text-decoration:none;border-radius:6px;font-weight:bold;">📊 診断レポート</a>
-        <div class="muted small" style="margin-top:4px">緊急復元: 記録が消えた時にクラウドから全件取り直し / 診断レポート: 3層(ローカル・IDB・クラウド)の件数や同期設定を一覧表示</div>
+        <button id="syncOpenDiagModalBtn" style="margin-left:8px;background:#6c757d;color:white;border:1px solid #6c757d;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">📊 診断レポート (アプリ内)</button>
+        <button id="syncRunChromeDiagBtn" style="margin-left:8px;background:#5a9fd4;color:white;border:1px solid #5a9fd4;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🔍 同期診断＆コピー</button>
+        <a href="diagnostic.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#fff;color:#6c757d;text-decoration:none;border:1px solid #6c757d;border-radius:6px;">📄 詳細ページ</a>
+        <a href="recovery.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#fff;color:#d9534f;text-decoration:none;border:1px solid #d9534f;border-radius:6px;">🆘 復旧ツール</a>
+        <div class="muted small" style="margin-top:4px">緊急復元: 記録が消えた時にクラウドから全件取り直し / 診断レポート: 3層件数を1画面集約 / 同期診断: 設定値+pull試行結果をクリップボードにコピー</div>
       </div>
     </div>
     <div class="sync-status-row">
@@ -300,6 +303,18 @@ function bindSyncEvents() {
     } else if (e.target.id === 'syncEmergencyRestoreBtn') {
       saveSyncInputs();
       emergencyRestoreFromGas();
+    } else if (e.target.id === 'syncOpenDiagModalBtn') {
+      if (typeof window.openDiagnosticModal === 'function') {
+        window.openDiagnosticModal();
+      } else {
+        showToast?.('診断モジュール読み込み中', 'error');
+      }
+    } else if (e.target.id === 'syncRunChromeDiagBtn') {
+      if (typeof window.runChromeDiagnostic === 'function') {
+        window.runChromeDiagnostic();
+      } else {
+        showToast?.('診断モジュール読み込み中', 'error');
+      }
     }
   });
 
