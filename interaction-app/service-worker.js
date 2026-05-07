@@ -7,7 +7,7 @@
  *  - HTML: NetworkFirst with cache fallback
  * ========================================================================== */
 
-const CACHE_VERSION = 'v20260507c';
+const CACHE_VERSION = 'v20260507d';
 const CACHE_NAME = 'interaction-app-' + CACHE_VERSION;
 
 const STATIC_FILES = [
@@ -18,6 +18,7 @@ const STATIC_FILES = [
   './students.js',
   './eval-data.js',
   './eval-data-extra.js',
+  './idb-storage.js',
   './app.js',
   './cloud-sync.js',
   './analytics-plus.js',

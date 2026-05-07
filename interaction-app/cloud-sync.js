@@ -65,6 +65,17 @@ function initCloudSync() {
     showSyncStatus('オンライン復帰');
     flushPendingQueue();
   });
+
+  // タブ復帰時に自動pull (別作業から戻った時に最新化)
+  // 連発を防ぐため最低60秒の間隔をあける
+  let _lastVisibilityPull = 0;
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden) return;
+    if (!syncConfig.enabled || !navigator.onLine) return;
+    if (Date.now() - _lastVisibilityPull < 60 * 1000) return;
+    _lastVisibilityPull = Date.now();
+    pullFromGas().catch(err => console.warn('[sync] visibility pull失敗:', err.message));
+  });
 }
 
 // ===== ローカル状態ヘルパー =====
@@ -93,9 +104,10 @@ function getOldestLocalTimestamp() {
 }
 
 // since 計算を安全側に倒す
-//  - ローカル全件0件 → 2000-01-01から全取得
-//  - LAST_PULL_KEY が ローカル最古より新しい(矛盾) → 1日広く巻き戻す
 //  - opts.fullPull → 強制全取得
+//  - ローカル全件0件 → 2000-01-01から全取得
+//  - 日が変わってからの初回起動 → 全件取得 (別端末で日中に編集された分の取りこぼし防止)
+//  - LAST_PULL_KEY が ローカル最古より新しい(矛盾) → 1日広く巻き戻す
 function computePullSince(opts) {
   const FALLBACK = '2000-01-01T00:00:00.000Z';
   if (opts && opts.fullPull) {
@@ -107,8 +119,21 @@ function computePullSince(opts) {
     return FALLBACK;
   }
   const lastPull = localStorage.getItem(LAST_PULL_KEY);
+  if (!lastPull) {
+    console.log('[sync] lastPull未設定 → 全件取得');
+    return FALLBACK;
+  }
+  // 日が変わったら必ず全件取得（別端末の今日分を確実に拾う）
+  try {
+    const today = new Date().toISOString().slice(0, 10);
+    const lastDay = String(lastPull).slice(0, 10);
+    if (today !== lastDay) {
+      console.log('[sync] 日付変更を検出 → 全件取得:', { today, lastDay });
+      return FALLBACK;
+    }
+  } catch (_) {}
   const oldest = getOldestLocalTimestamp();
-  if (oldest && lastPull && lastPull > oldest) {
+  if (oldest && lastPull > oldest) {
     // ローカルにlastPullより古いレコードがある = lastPullが何らかの理由で進みすぎている
     // 1日巻き戻して安全側で再取得
     try {
@@ -121,7 +146,7 @@ function computePullSince(opts) {
       return FALLBACK;
     }
   }
-  return lastPull || FALLBACK;
+  return lastPull;
 }
 
 // マルチタブ防衛: 別タブが少ない件数でlocalStorageを上書きしようとしたら自タブで再保存
@@ -342,19 +367,53 @@ async function syncNow() {
 // 緊急復元: ローカル記録が消失したケース向け。
 // LAST_PULL_KEYをクリアしてクラウドから全件取得 → mergeArray()で
 // 既存ローカルレコードは保持されるので非破壊（同IDはtimestamp比較で更新のみ）。
+// 編集モード中チェック・syncConfig.enabled は緊急時なのでバイパス。
 async function emergencyRestoreFromGas() {
-  if (!checkSyncReady()) return;
+  // checkSyncReady を簡易版で再実装（緊急時、設定が壊れていても endpoint/apiKey があれば実行）
+  if (!syncConfig.endpoint || !syncConfig.apiKey) {
+    if (typeof showToast === 'function') showToast('GAS接続情報が未入力。設定タブで入力してください', 'error');
+    return;
+  }
   const before = sumLocalRecords();
   if (!confirm(
       `クラウド(GAS)から全件取得してローカルに復元します。\n\n` +
       `現在のローカル件数: ${before}件\n` +
       `（既存ローカルは保持、クラウドにあって不足している分のみ追加します）\n\n` +
       `続行しますか？`)) return;
+
+  // 編集モードフラグを強制クリア（緊急復元優先）
+  if (window.state && window.state.ui && window.state.ui.editingRecordId) {
+    console.log('[emergency] 編集モードフラグを解除');
+    window.state.ui.editingRecordId = null;
+  }
+  // 同期が無効化されていても緊急時は強制有効化
+  if (!syncConfig.enabled) {
+    console.log('[emergency] 同期無効を強制有効化');
+    syncConfig.enabled = true;
+    saveSyncConfig();
+  }
+
   showSyncStatus('クラウドから緊急復元中…');
   try {
+    // 直接fetchして検証（pullFromGasが失敗するケースに備える）
+    const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=2000-01-01T00:00:00.000Z&deviceId=${encodeURIComponent(_deviceId || 'emergency')}&dataType=all`;
+    console.log('[emergency] verifying GAS endpoint:', url);
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status + ' (GASに到達できないか、エンドポイントが間違っている可能性)');
+    const cloudData = await res.json();
+    if (!cloudData.ok) throw new Error('GAS応答エラー: ' + (cloudData.error || 'unknown'));
+    console.log('[emergency] cloud counts:', {
+      records: (cloudData.records || []).length,
+      praises: (cloudData.praises || []).length,
+      evaluations: (cloudData.evaluations || []).length,
+      abaRecords: (cloudData.abaRecords || []).length,
+      ketebureRecords: (cloudData.ketebureRecords || []).length
+    });
+
     // LAST_PULL_KEY をリセット → since=2000-01-01 で全件取得
     localStorage.removeItem(LAST_PULL_KEY);
     await pullFromGas({ fullPull: true });
+
     const after = sumLocalRecords();
     const diff = after - before;
     showSyncStatus(`緊急復元完了: ${before} → ${after}件 (+${diff})`);
@@ -362,22 +421,36 @@ async function emergencyRestoreFromGas() {
     if (typeof showToast === 'function') {
       if (diff > 0) {
         showToast(`☁️ クラウドから ${diff}件 を復元しました（合計 ${after}件）`, 'success');
+      } else if (after === 0) {
+        showToast(`⚠ クラウドにも記録がありません。GAS設定の確認が必要です`, 'error');
       } else {
         showToast(`クラウドとローカルは既に一致しています（${after}件）`, 'success');
       }
     }
   } catch (err) {
+    console.error('[emergency] failed:', err);
     showSyncStatus('緊急復元失敗: ' + err.message, true);
-    if (typeof showToast === 'function') showToast('緊急復元失敗: ' + err.message, 'error');
+    if (typeof showToast === 'function') {
+      showToast('緊急復元失敗: ' + err.message, 'error');
+    }
+    alert('緊急復元失敗:\n\n' + err.message + '\n\n詳細はF12 → Console を確認してください。');
   }
 }
 
 async function pullFromGas(opts) {
-  if (!checkSyncReady()) return;
+  // 緊急/全件モード(opts.fullPull)はsyncConfig無効でも実行する
+  if (opts && opts.fullPull) {
+    if (!syncConfig.endpoint || !syncConfig.apiKey) return;
+  } else {
+    if (!checkSyncReady()) return;
+  }
   // 編集モード中はpullを延期（編集中レコードがpull先で上書きされるリスク回避）
-  if (window.state && window.state.ui && window.state.ui.editingRecordId) {
-    console.warn('[sync] 編集モード中のためpullを延期');
-    return;
+  // ただし opts.fullPull (緊急復元) は編集中でも実行
+  if (!(opts && opts.fullPull)) {
+    if (window.state && window.state.ui && window.state.ui.editingRecordId) {
+      console.warn('[sync] 編集モード中のためpullを延期');
+      return;
+    }
   }
   // since計算を安全側に倒す（computePullSinceがローカル状態を見て決定）
   const since = computePullSince(opts);

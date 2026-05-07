@@ -140,15 +140,47 @@ python C:/Users/K5610/scripts/interaction_sync.py merge a.json b.json
 - **localStorage破損**: バックアップキー `interactionApp_v1_backup` から復旧可能（F12コンソールで `localStorage.setItem('interactionApp_v1', localStorage.getItem('interactionApp_v1_backup'))` → リロード）
 - **動作確認済ブラウザ**: Microsoft Edge 推奨 / Chrome 可 / Firefox 未確認
 
-## データ消失防止の仕組み（v20260507b以降）
+## データ消失防止の仕組み（v20260507d以降）
 
-| 仕組み | 動作 |
-|--------|------|
-| 起動時自動復元 | ローカル0件 + クラウドに記録ありを検知すると自動で全件pull |
-| 安全な`since`計算 | `lastPull`がローカル最古より進みすぎていたら1日広く巻き戻して取得 |
-| マルチタブ防衛 | 別タブが少ない件数で上書きを試みたら、現タブで再保存して保護 |
-| 縮小検知バックアップ | 件数が10%以上減ると `interaction-shrink-log-*` に元データを退避 |
-| 30分ローテションSnapshot | `interaction-snap-0`〜`-9`に過去状態を保存（最大10世代） |
-| クラウド同期 | 全レコード(records/praises/evaluations/aba/ketebure)を都度GASへpush |
-| 🆘 緊急復元ボタン | 設定タブ常設、ワンクリックで全件再取得 |
-| recovery.html | アプリと同じディレクトリの独立復旧ツール |
+### 多層ストレージ（3層冗長化）
+
+| 層 | 場所 | 容量 | 永続性 |
+|----|------|------|-------|
+| L1 | localStorage `interactionApp_v1` | 5-10MB | ブラウザクリアで消える |
+| L2 | IndexedDB `interactionApp/appState` | ディスクの数十% | クリア対象だが優先度低 |
+| L3 | クラウドGAS スプレッドシート | 無制限 | 完全独立 |
+
+各層は saveState 時に同時書き込み。起動時は L1→L2→L3 の順で照合し、不足分を自動補完。
+
+### 自動復旧トリガー
+
+| トリガー | 動作 |
+|---------|------|
+| 起動時、ローカル0件 | 自動でクラウドから全件pull |
+| 起動時、ローカル < IndexedDB +5件 | IDBから不足分を補完 |
+| 起動時、日付が変わっている | 念のため全件pull (別端末の今日分を確実に取得) |
+| タブ復帰時(visibilitychange) | 60秒間隔で自動pull |
+| `lastPull`矛盾検出 | 1日広く巻き戻して取得 |
+| 別タブが少ない件数で上書き試行 | 自タブで再保存して保護 |
+
+### 履歴的バックアップ
+
+| 仕組み | 場所 | 動作 |
+|-------|------|-----|
+| 縮小検知ログ | localStorage `interaction-shrink-log-*` | 件数10%以上減で元データを退避 (最大3世代) |
+| 30分ローテSnapshot | localStorage `interaction-snap-0`〜`-9` | 30分ごとに10世代ローテーション |
+| BACKUP_KEY | localStorage `interactionApp_v1_backup` | 直前の保存内容を保持 |
+
+### ユーザー操作で復旧
+
+| 入口 | 用途 |
+|------|------|
+| 設定タブ → 🆘 クラウドから緊急復元 | 1クリックで全件再取得 (非破壊マージ) |
+| `recovery.html` (同ディレクトリ) | 独立した復旧ツール (Step1現状確認→Step2クラウド取得→Step3マージ) |
+
+### 配布版での扱い
+
+`config.js` の `mode: 'distribution'` で配布する場合:
+- 各先生は `setup-gas.html` でGoogle Apps ScriptとSpreadsheetを自前で構築
+- アプリは個人運用と同じ多層ストレージで動作
+- API Key は GAS Script Properties で保護
