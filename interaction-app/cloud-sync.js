@@ -36,10 +36,22 @@ function initCloudSync() {
   loadSyncConfig();
   renderSyncUI();
   bindSyncEvents();
+  installStorageWatcher();
 
   if (syncConfig.enabled && syncConfig.endpoint) {
-    // 起動時に差分pull
-    pullFromGas().catch(err => console.warn('[sync] 起動時pull失敗:', err.message));
+    // 起動時pull: ローカルが空なら全件取得モードで取りに行く（pullFromGas内で自動判定）
+    const beforeTotal = sumLocalRecords();
+    pullFromGas().then(() => {
+      const afterTotal = sumLocalRecords();
+      // ローカル0件から復元できた場合 → 強い通知（データ消失からの自動復旧シナリオ）
+      if (beforeTotal === 0 && afterTotal > 0) {
+        showSyncStatus(`☁️ クラウドから ${afterTotal}件 を自動復元`);
+        if (typeof showToast === 'function') {
+          showToast(`☁️ クラウドから ${afterTotal}件 を自動復元しました`, 'success');
+        }
+        if (typeof refreshAll === 'function') refreshAll();
+      }
+    }).catch(err => console.warn('[sync] 起動時pull失敗:', err.message));
     // 起動時に名簿をpush（ビューシートが児童名解決に使う）
     setTimeout(() => pushRosterToGas().catch(() => {}), 3000);
   }
@@ -52,6 +64,107 @@ function initCloudSync() {
   window.addEventListener('online', () => {
     showSyncStatus('オンライン復帰');
     flushPendingQueue();
+  });
+}
+
+// ===== ローカル状態ヘルパー =====
+
+function sumLocalRecords() {
+  if (!window.state) return 0;
+  return ((state.records && state.records.length) || 0) +
+         ((state.praises && state.praises.length) || 0) +
+         ((state.evaluations && state.evaluations.length) || 0) +
+         ((state.abaRecords && state.abaRecords.length) || 0) +
+         ((state.ketebureRecords && state.ketebureRecords.length) || 0);
+}
+
+function getOldestLocalTimestamp() {
+  if (!window.state) return null;
+  const arrs = [state.records, state.praises, state.evaluations, state.abaRecords, state.ketebureRecords];
+  let oldest = null;
+  for (const arr of arrs) {
+    if (!Array.isArray(arr)) continue;
+    for (const x of arr) {
+      const ts = x && (x.timestamp || x.edited_at || x.date);
+      if (ts && (!oldest || String(ts) < String(oldest))) oldest = String(ts);
+    }
+  }
+  return oldest;
+}
+
+// since 計算を安全側に倒す
+//  - ローカル全件0件 → 2000-01-01から全取得
+//  - LAST_PULL_KEY が ローカル最古より新しい(矛盾) → 1日広く巻き戻す
+//  - opts.fullPull → 強制全取得
+function computePullSince(opts) {
+  const FALLBACK = '2000-01-01T00:00:00.000Z';
+  if (opts && opts.fullPull) {
+    console.log('[sync] 全件取得モード (force)');
+    return FALLBACK;
+  }
+  if (sumLocalRecords() === 0) {
+    console.log('[sync] ローカル空 → 全件取得');
+    return FALLBACK;
+  }
+  const lastPull = localStorage.getItem(LAST_PULL_KEY);
+  const oldest = getOldestLocalTimestamp();
+  if (oldest && lastPull && lastPull > oldest) {
+    // ローカルにlastPullより古いレコードがある = lastPullが何らかの理由で進みすぎている
+    // 1日巻き戻して安全側で再取得
+    try {
+      const d = new Date(oldest);
+      d.setUTCDate(d.getUTCDate() - 1);
+      const safe = d.toISOString();
+      console.warn('[sync] lastPull矛盾を検出 → 安全側に巻き戻し:', { lastPull, oldest, safe });
+      return safe;
+    } catch (_) {
+      return FALLBACK;
+    }
+  }
+  return lastPull || FALLBACK;
+}
+
+// マルチタブ防衛: 別タブが少ない件数でlocalStorageを上書きしようとしたら自タブで再保存
+function installStorageWatcher() {
+  const KEY = 'interactionApp_v1';
+  let _lastDefenseTime = 0;
+  window.addEventListener('storage', (e) => {
+    if (e.key !== KEY) return;
+    if (!e.newValue) {
+      // 別タブが削除した
+      console.warn('[multi-tab] 別タブが localStorage を削除');
+      if (window.state && typeof saveState === 'function') {
+        if (sumLocalRecords() > 0) {
+          saveState();
+          if (typeof showToast === 'function') {
+            showToast('⚠ 別タブがデータを削除 → このタブから再保存しました', 'error');
+          }
+        }
+      }
+      return;
+    }
+    try {
+      const other = JSON.parse(e.newValue);
+      const myTotal = sumLocalRecords();
+      const otherTotal = ((other.records && other.records.length) || 0) +
+                         ((other.praises && other.praises.length) || 0) +
+                         ((other.evaluations && other.evaluations.length) || 0) +
+                         ((other.abaRecords && other.abaRecords.length) || 0) +
+                         ((other.ketebureRecords && other.ketebureRecords.length) || 0);
+      // 別タブが現タブより5件以上少ない → 古い state での誤上書きと判断
+      if (myTotal > otherTotal + 5) {
+        // 連続発火を防ぐ（3秒以内なら無視）
+        if (Date.now() - _lastDefenseTime < 3000) return;
+        _lastDefenseTime = Date.now();
+        console.warn('[multi-tab] 別タブが少ない件数で上書き', { myTotal, otherTotal });
+        if (typeof saveState === 'function') {
+          saveState(); // 自分のstateで再書き込み
+          if (typeof showToast === 'function') {
+            showToast(`⚠ 他のタブが古いデータで上書きを試みました → このタブの ${myTotal}件 を保護`, 'error');
+          }
+        }
+      }
+    } catch (_) {}
   });
 }
 
@@ -136,6 +249,12 @@ function renderSyncUI() {
       <button class="primary" id="syncNowBtn">今すぐ同期</button>
       <button class="ghost" id="syncPushAllBtn" title="ローカルの全記録をGASへ送る（初回移行用）">全件アップロード</button>
     </div>
+    <div class="sync-row" style="margin-top:12px; padding:10px; background:#fff8e6; border:1px solid #f5b042; border-radius:6px;">
+      <div style="flex:1">
+        <button id="syncEmergencyRestoreBtn" style="background:#d9534f;color:white;border:1px solid #d9534f;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🆘 クラウドから緊急復元</button>
+        <div class="muted small" style="margin-top:4px">ローカルから記録が消えた場合、クラウドGASから全件取得して復元します（既存ローカルは保持・不足分のみ追加するので非破壊）</div>
+      </div>
+    </div>
     <div class="sync-status-row">
       <span class="muted small">最終同期: <span id="syncLastPullTime">${lastPullText}</span></span>
       <span id="syncStatusBadge" class="sync-badge"></span>
@@ -152,6 +271,9 @@ function bindSyncEvents() {
     } else if (e.target.id === 'syncPushAllBtn') {
       saveSyncInputs();
       pushAllRecords();
+    } else if (e.target.id === 'syncEmergencyRestoreBtn') {
+      saveSyncInputs();
+      emergencyRestoreFromGas();
     }
   });
 
@@ -217,14 +339,48 @@ async function syncNow() {
   }
 }
 
-async function pullFromGas() {
+// 緊急復元: ローカル記録が消失したケース向け。
+// LAST_PULL_KEYをクリアしてクラウドから全件取得 → mergeArray()で
+// 既存ローカルレコードは保持されるので非破壊（同IDはtimestamp比較で更新のみ）。
+async function emergencyRestoreFromGas() {
+  if (!checkSyncReady()) return;
+  const before = sumLocalRecords();
+  if (!confirm(
+      `クラウド(GAS)から全件取得してローカルに復元します。\n\n` +
+      `現在のローカル件数: ${before}件\n` +
+      `（既存ローカルは保持、クラウドにあって不足している分のみ追加します）\n\n` +
+      `続行しますか？`)) return;
+  showSyncStatus('クラウドから緊急復元中…');
+  try {
+    // LAST_PULL_KEY をリセット → since=2000-01-01 で全件取得
+    localStorage.removeItem(LAST_PULL_KEY);
+    await pullFromGas({ fullPull: true });
+    const after = sumLocalRecords();
+    const diff = after - before;
+    showSyncStatus(`緊急復元完了: ${before} → ${after}件 (+${diff})`);
+    if (typeof refreshAll === 'function') refreshAll();
+    if (typeof showToast === 'function') {
+      if (diff > 0) {
+        showToast(`☁️ クラウドから ${diff}件 を復元しました（合計 ${after}件）`, 'success');
+      } else {
+        showToast(`クラウドとローカルは既に一致しています（${after}件）`, 'success');
+      }
+    }
+  } catch (err) {
+    showSyncStatus('緊急復元失敗: ' + err.message, true);
+    if (typeof showToast === 'function') showToast('緊急復元失敗: ' + err.message, 'error');
+  }
+}
+
+async function pullFromGas(opts) {
   if (!checkSyncReady()) return;
   // 編集モード中はpullを延期（編集中レコードがpull先で上書きされるリスク回避）
   if (window.state && window.state.ui && window.state.ui.editingRecordId) {
     console.warn('[sync] 編集モード中のためpullを延期');
     return;
   }
-  const since = localStorage.getItem(LAST_PULL_KEY) || '2000-01-01T00:00:00.000Z';
+  // since計算を安全側に倒す（computePullSinceがローカル状態を見て決定）
+  const since = computePullSince(opts);
   // dataType=all で records, praises, evaluations, aba を一括取得
   const url = `${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}&since=${encodeURIComponent(since)}&deviceId=${encodeURIComponent(_deviceId)}&dataType=all`;
 

@@ -132,6 +132,23 @@ python C:/Users/K5610/scripts/interaction_sync.py merge a.json b.json
 
 ## 困ったとき
 
+- **今日の記録が突然消えた / ローカルが空っぽ**:
+  - **自動**: アプリを開き直すと、起動時にクラウドGASから全件取得され「☁️ クラウドから N件を自動復元しました」とトースト表示される（v20260507b〜）
+  - **手動**: 設定タブ → クラウド同期セクション → **🆘 クラウドから緊急復元** ボタンで全件再取得（既存ローカルは保持・非破壊マージ）
+  - **最終手段**: `recovery.html` をブラウザで開く（Step1で現状確認 → Step2でGAS取得 → Step3でマージ）
 - **画面が真っ白**: F12 → Console タブでエラー確認 → 設定タブのバックアップから復元
 - **localStorage破損**: バックアップキー `interactionApp_v1_backup` から復旧可能（F12コンソールで `localStorage.setItem('interactionApp_v1', localStorage.getItem('interactionApp_v1_backup'))` → リロード）
 - **動作確認済ブラウザ**: Microsoft Edge 推奨 / Chrome 可 / Firefox 未確認
+
+## データ消失防止の仕組み（v20260507b以降）
+
+| 仕組み | 動作 |
+|--------|------|
+| 起動時自動復元 | ローカル0件 + クラウドに記録ありを検知すると自動で全件pull |
+| 安全な`since`計算 | `lastPull`がローカル最古より進みすぎていたら1日広く巻き戻して取得 |
+| マルチタブ防衛 | 別タブが少ない件数で上書きを試みたら、現タブで再保存して保護 |
+| 縮小検知バックアップ | 件数が10%以上減ると `interaction-shrink-log-*` に元データを退避 |
+| 30分ローテションSnapshot | `interaction-snap-0`〜`-9`に過去状態を保存（最大10世代） |
+| クラウド同期 | 全レコード(records/praises/evaluations/aba/ketebure)を都度GASへpush |
+| 🆘 緊急復元ボタン | 設定タブ常設、ワンクリックで全件再取得 |
+| recovery.html | アプリと同じディレクトリの独立復旧ツール |

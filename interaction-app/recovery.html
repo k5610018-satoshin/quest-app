@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>担任記録アプリ 復旧ツール</title>
+<style>
+  body { font-family: 'メイリオ', system-ui, sans-serif; max-width: 760px; margin: 24px auto; padding: 0 16px; color: #222; }
+  h1 { font-size: 20px; }
+  .card { border: 1px solid #ccc; border-radius: 8px; padding: 16px; margin: 12px 0; background: #fafafa; }
+  button { font-size: 16px; padding: 10px 18px; border-radius: 6px; border: 1px solid #4a90e2; background: #4a90e2; color: white; cursor: pointer; }
+  button:hover { background: #357abd; }
+  button:disabled { background: #aaa; border-color: #aaa; cursor: not-allowed; }
+  .danger { background: #d9534f; border-color: #d9534f; }
+  .danger:hover { background: #b53b39; }
+  pre { background: #f4f4f4; padding: 10px; border-radius: 4px; max-height: 320px; overflow: auto; font-size: 12px; }
+  .row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 8px 0; }
+  .ok { color: #2a7; font-weight: bold; }
+  .err { color: #c33; font-weight: bold; }
+  .note { color: #666; font-size: 13px; }
+  .step { font-weight: bold; color: #357abd; margin-top: 12px; }
+</style>
+</head>
+<body>
+<h1>担任記録アプリ 復旧ツール</h1>
+<p class="note">このページは、ローカル(localStorage)から消えたデータをGASクラウドから完全復旧します。アプリと同じChromeで開いてください。</p>
+
+<div class="card">
+  <div class="step">Step 1: 現状を確認</div>
+  <button id="btnInspect">localStorageの現状を確認</button>
+  <pre id="inspectOut">未実行</pre>
+</div>
+
+<div class="card">
+  <div class="step">Step 2: クラウドから全件取得して照合</div>
+  <button id="btnFetch">GASから全期間データを取得</button>
+  <pre id="fetchOut">未実行</pre>
+</div>
+
+<div class="card">
+  <div class="step">Step 3: ローカルにマージ復元（既存データは保持・不足分を追加）</div>
+  <p class="note">先にStep1とStep2を実行してください。Step3は非破壊マージなので何度押しても安全です。</p>
+  <div class="row">
+    <button id="btnMerge" disabled>マージ復元を実行</button>
+    <button id="btnHardReplace" class="danger" disabled>クラウドの内容で完全置換 (ローカルが壊れている場合のみ)</button>
+  </div>
+  <pre id="mergeOut">未実行</pre>
+</div>
+
+<div class="card">
+  <div class="step">Step 4: アプリを開いて確認</div>
+  <p>復元後、<a href="file:///C:/Users/0248025/quest-app/interaction-app/index.html" target="_blank">担任記録アプリを開く</a> → 件数が戻っていることを確認してください。</p>
+</div>
+
+<script>
+const STORAGE_KEY = 'interactionApp_v1';
+const SYNC_STORAGE_KEY = 'interactionApp_gasSync';
+const LAST_PULL_KEY = 'interactionApp_lastPull';
+const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
+const DEFAULT_API_KEY  = 'cLgXe27Zo-2w7cfL';
+
+let cloudData = null;
+
+function counts(s) {
+  return {
+    records: (s.records||[]).length,
+    praises: (s.praises||[]).length,
+    evaluations: (s.evaluations||[]).length,
+    abaRecords: (s.abaRecords||[]).length,
+    ketebureRecords: (s.ketebureRecords||[]).length,
+    seatingSnapshots: (s.seatingSnapshots||[]).length,
+  };
+}
+
+function readLocal() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return { __error: e.message };
+  }
+}
+
+function todayCount(arr) {
+  const today = new Date().toISOString().slice(0, 10);
+  return (arr||[]).filter(x => {
+    const t = x && (x.timestamp || x.edited_at || x.date) || '';
+    return String(t).startsWith(today);
+  }).length;
+}
+
+document.getElementById('btnInspect').onclick = () => {
+  const local = readLocal();
+  const lastPull = localStorage.getItem(LAST_PULL_KEY);
+  const sync = localStorage.getItem(SYNC_STORAGE_KEY);
+  const snaps = [];
+  for (let i = 0; i < 10; i++) {
+    const k = 'interaction-snap-' + i;
+    const v = localStorage.getItem(k);
+    if (v) {
+      try {
+        const w = JSON.parse(v);
+        const d = JSON.parse(w.data);
+        snaps.push({ key: k, ts: w.ts, counts: counts(d), todayPraises: todayCount(d.praises), todayEvals: todayCount(d.evaluations) });
+      } catch (_) { snaps.push({ key: k, error: 'parse fail' }); }
+    }
+  }
+  const shrinkLogs = [];
+  for (let i = 0; i < localStorage.length; i++) {
+    const k = localStorage.key(i);
+    if (k && k.startsWith('interaction-shrink-log-')) {
+      try {
+        const w = JSON.parse(localStorage.getItem(k));
+        const d = JSON.parse(w.data);
+        shrinkLogs.push({ key: k, ts: w.ts, reason: w.reason, counts: counts(d) });
+      } catch (_) {}
+    }
+  }
+  const out = {
+    'localStorageの担任記録データ件数': counts(local),
+    '今日(2026-05-07)の件数': {
+      records: todayCount(local.records),
+      praises: todayCount(local.praises),
+      evaluations: todayCount(local.evaluations),
+      abaRecords: todayCount(local.abaRecords),
+    },
+    'lastPull': lastPull,
+    '同期設定': sync ? JSON.parse(sync) : null,
+    'スナップショット(自動バックアップ最新10件)': snaps.sort((a,b)=>(b.ts||'').localeCompare(a.ts||'')),
+    '縮小検知バックアップ': shrinkLogs,
+  };
+  document.getElementById('inspectOut').textContent = JSON.stringify(out, null, 2);
+};
+
+document.getElementById('btnFetch').onclick = async () => {
+  const out = document.getElementById('fetchOut');
+  out.textContent = 'GAS取得中…';
+  try {
+    const url = `${DEFAULT_ENDPOINT}?key=${encodeURIComponent(DEFAULT_API_KEY)}&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=recovery-tool`;
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    cloudData = await res.json();
+    if (!cloudData.ok) throw new Error(cloudData.error || 'GAS error');
+    const summary = {
+      'クラウド全件': counts(cloudData),
+      '今日(2026-05-07)の件数': {
+        records: todayCount(cloudData.records),
+        praises: todayCount(cloudData.praises),
+        evaluations: todayCount(cloudData.evaluations),
+        abaRecords: todayCount(cloudData.abaRecords),
+      },
+      'server_time': cloudData.server_time,
+    };
+    out.innerHTML = '<span class="ok">✅ 取得成功</span>\n' + JSON.stringify(summary, null, 2);
+    document.getElementById('btnMerge').disabled = false;
+    document.getElementById('btnHardReplace').disabled = false;
+  } catch (e) {
+    out.innerHTML = '<span class="err">❌ 取得失敗: ' + e.message + '</span>';
+  }
+};
+
+function normalizeRecord(x) { return x; }
+
+function mergeArr(localArr, pulledArr) {
+  if (!Array.isArray(localArr)) localArr = [];
+  if (!Array.isArray(pulledArr)) return { arr: localArr, added: 0, updated: 0, deleted: 0 };
+  const idx = new Map(localArr.map((x, i) => [x.id, i]));
+  let added = 0, updated = 0, deleted = 0;
+  for (const item of pulledArr) {
+    if (!item || !item.id) continue;
+    const localPos = idx.get(item.id);
+    if (String(item.deleted) === '1') {
+      // 削除フラグはマージ復元では無視（既存ローカルを尊重）
+      continue;
+    }
+    if (localPos === undefined) {
+      localArr.push(item);
+      idx.set(item.id, localArr.length - 1);
+      added++;
+    } else {
+      const localTs = localArr[localPos].edited_at || localArr[localPos].timestamp || '';
+      const pulledTs = item.edited_at || item.timestamp || '';
+      if (pulledTs && pulledTs > localTs) {
+        localArr[localPos] = item;
+        updated++;
+      }
+    }
+  }
+  return { arr: localArr, added, updated, deleted };
+}
+
+function parseEvidences(arr) {
+  if (!Array.isArray(arr)) return arr;
+  for (const e of arr) {
+    if (typeof e.evidences === 'string' && e.evidences) {
+      try { e.evidences = JSON.parse(e.evidences); } catch (_) { e.evidences = []; }
+    }
+    if (!Array.isArray(e.evidences)) e.evidences = [];
+  }
+  return arr;
+}
+
+function parseAbaBehaviors(arr) {
+  if (!Array.isArray(arr)) return arr;
+  for (const r of arr) {
+    if (typeof r.behaviors === 'string' && r.behaviors) {
+      try { r.behaviors = JSON.parse(r.behaviors); } catch (_) { r.behaviors = [r.behaviors]; }
+    }
+  }
+  return arr;
+}
+
+function parseKetAspects(arr) {
+  if (!Array.isArray(arr)) return arr;
+  for (const k of arr) {
+    if (typeof k.aspects === 'string' && k.aspects) {
+      try { k.aspects = JSON.parse(k.aspects); } catch (_) { k.aspects = []; }
+    }
+    if (!Array.isArray(k.aspects)) k.aspects = [];
+  }
+  return arr;
+}
+
+function parseSeatGroups(arr) {
+  if (!Array.isArray(arr)) return arr;
+  for (const s of arr) {
+    if (typeof s.groups === 'string') { try { s.groups = JSON.parse(s.groups); } catch (_) { s.groups = []; } }
+    else if (typeof s.groups_json === 'string') { try { s.groups = JSON.parse(s.groups_json); } catch (_) { s.groups = []; } }
+  }
+  return arr;
+}
+
+document.getElementById('btnMerge').onclick = () => {
+  if (!cloudData) { alert('先にStep2を実行してください'); return; }
+  const out = document.getElementById('mergeOut');
+  // 復元前バックアップ
+  const before = readLocal();
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  try { localStorage.setItem('interaction-pre-recovery-' + ts, JSON.stringify(before)); } catch (_) {}
+
+  const data = before;
+  if (!Array.isArray(data.records)) data.records = [];
+  if (!Array.isArray(data.praises)) data.praises = [];
+  if (!Array.isArray(data.evaluations)) data.evaluations = [];
+  if (!Array.isArray(data.abaRecords)) data.abaRecords = [];
+  if (!Array.isArray(data.ketebureRecords)) data.ketebureRecords = [];
+  if (!Array.isArray(data.seatingSnapshots)) data.seatingSnapshots = [];
+
+  const r1 = mergeArr(data.records, cloudData.records || []);
+  const r2 = mergeArr(data.praises, cloudData.praises || []);
+  const r3 = mergeArr(data.evaluations, parseEvidences(cloudData.evaluations || []));
+  const r4 = mergeArr(data.abaRecords, parseAbaBehaviors(cloudData.abaRecords || []));
+  const r5 = mergeArr(data.ketebureRecords, parseKetAspects(cloudData.ketebureRecords || []));
+
+  // seatingSnapshots は ID重複追加せず追加のみ
+  const existSeat = new Set(data.seatingSnapshots.map(s => s.id));
+  let seatAdded = 0;
+  for (const s of parseSeatGroups(cloudData.seatingSnapshots || cloudData.seating || [])) {
+    if (!s || !s.id) continue;
+    if (String(s.deleted) === '1') continue;
+    if (existSeat.has(s.id)) continue;
+    if (!Array.isArray(s.groups)) continue;
+    data.seatingSnapshots.push({ id: s.id, date: s.date||'', label: s.label||'', groups: s.groups, deviceId: s.deviceId||'' });
+    seatAdded++;
+  }
+
+  data.records = r1.arr;
+  data.praises = r2.arr;
+  data.evaluations = r3.arr;
+  data.abaRecords = r4.arr;
+  data.ketebureRecords = r5.arr;
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    // lastPull をリセット → 次回起動時のpullで漏れがないように
+    localStorage.removeItem(LAST_PULL_KEY);
+    out.innerHTML = '<span class="ok">✅ マージ復元完了</span>\n' + JSON.stringify({
+      added: { records: r1.added, praises: r2.added, evaluations: r3.added, abaRecords: r4.added, ketebureRecords: r5.added, seating: seatAdded },
+      updated: { records: r1.updated, praises: r2.updated, evaluations: r3.updated, abaRecords: r4.updated, ketebureRecords: r5.updated },
+      'マージ後のローカル件数': counts(data),
+      '復元前のスナップショット': 'interaction-pre-recovery-' + ts,
+    }, null, 2);
+  } catch (e) {
+    out.innerHTML = '<span class="err">❌ 書き込み失敗: ' + e.message + '</span>';
+  }
+};
+
+document.getElementById('btnHardReplace').onclick = () => {
+  if (!cloudData) { alert('先にStep2を実行してください'); return; }
+  if (!confirm('ローカルをクラウドの内容で完全置換します。続行しますか？\n(現在のローカルは別キーにバックアップされます)')) return;
+  const out = document.getElementById('mergeOut');
+  const before = readLocal();
+  const ts = new Date().toISOString().replace(/[:.]/g, '-');
+  try { localStorage.setItem('interaction-pre-recovery-' + ts, JSON.stringify(before)); } catch (_) {}
+
+  const data = {
+    records: cloudData.records || [],
+    praises: cloudData.praises || [],
+    evaluations: parseEvidences(cloudData.evaluations || []),
+    abaRecords: parseAbaBehaviors(cloudData.abaRecords || []),
+    ketebureRecords: parseKetAspects(cloudData.ketebureRecords || []),
+    seatingSnapshots: parseSeatGroups(cloudData.seatingSnapshots || cloudData.seating || []).filter(s => Array.isArray(s.groups)),
+    settings: before.settings || {},
+    events: before.events || [],
+    attributes: before.attributes || {},
+  };
+
+  // クラウドの削除フラグを反映
+  data.records = data.records.filter(x => String(x.deleted) !== '1');
+  data.praises = data.praises.filter(x => String(x.deleted) !== '1');
+  data.evaluations = data.evaluations.filter(x => String(x.deleted) !== '1');
+  data.abaRecords = data.abaRecords.filter(x => String(x.deleted) !== '1');
+  data.ketebureRecords = data.ketebureRecords.filter(x => String(x.deleted) !== '1');
+
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+    localStorage.removeItem(LAST_PULL_KEY);
+    out.innerHTML = '<span class="ok">✅ 完全置換完了</span>\n' + JSON.stringify({
+      'ローカル件数': counts(data),
+      '復元前バックアップ': 'interaction-pre-recovery-' + ts,
+    }, null, 2);
+  } catch (e) {
+    out.innerHTML = '<span class="err">❌ 書き込み失敗: ' + e.message + '</span>';
+  }
+};
+</script>
+</body>
+</html>
