@@ -139,7 +139,17 @@ function quickSetup() {
 
 /** SEATING_SHEET 系の互換ヘルパー（quickSetup から呼ぶ用） */
 function getOrCreateSheetByName_(name, cols) {
-  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  // Web App (standalone) からは getActiveSpreadsheet が null になるので
+  // SHEET_ID 設定済みなら openById、未設定なら getActive をフォールバック
+  var props = PropertiesService.getScriptProperties();
+  var ssId = props.getProperty('SHEET_ID');
+  var ss = null;
+  if (ssId) {
+    try { ss = SpreadsheetApp.openById(ssId); } catch (_) { ss = null; }
+  }
+  if (!ss) {
+    try { ss = SpreadsheetApp.getActiveSpreadsheet(); } catch (_) { ss = null; }
+  }
   if (!ss) return null;
   var sheet = ss.getSheetByName(name);
   if (!sheet) {
@@ -206,6 +216,45 @@ function handlePost(e) {
     }
     var stats = rebuildAllViews();
     return { ok: true, action: 'views_rebuilt', stats: stats };
+  }
+
+  // ===== 自動バックアップ系の操作 (リモートで Time-driven Trigger を作成・解除) =====
+  // {dataType:'admin', action:'install_auto_backups'} → B2+B3 をまとめて有効化
+  // {dataType:'admin', action:'snapshot_now'}        → 即座に1回 snapshot
+  // {dataType:'admin', action:'backup_now'}          → 即座に1回 Drive backup
+  // {dataType:'admin', action:'list_triggers'}       → 現在のトリガー一覧
+  // {dataType:'admin', action:'uninstall_auto_backups'} → 全トリガー削除
+  if (dataType === 'admin') {
+    if (action === 'install_auto_backups') {
+      var s1 = installDailySnapshotTrigger();
+      var s2 = installWeeklyBackupTrigger();
+      var firstSnap = takeDailySnapshot();
+      return { ok: true, action: 'auto_backups_installed', snapshot_trigger: s1, backup_trigger: s2, first_snapshot: firstSnap };
+    }
+    if (action === 'snapshot_now') {
+      var snap = takeDailySnapshot();
+      return { ok: true, action: 'snapshot_taken', result: snap };
+    }
+    if (action === 'backup_now') {
+      var bu = takeWeeklyBackup();
+      return { ok: true, action: 'backup_taken', result: bu };
+    }
+    if (action === 'list_triggers') {
+      var triggers = ScriptApp.getProjectTriggers().map(function(t) {
+        return {
+          handler: t.getHandlerFunction(),
+          type: String(t.getEventType()),
+          uniqueId: t.getUniqueId()
+        };
+      });
+      return { ok: true, action: 'triggers_listed', triggers: triggers };
+    }
+    if (action === 'uninstall_auto_backups') {
+      var u1 = uninstallDailySnapshotTrigger();
+      var u2 = uninstallWeeklyBackupTrigger();
+      return { ok: true, action: 'auto_backups_uninstalled', daily: u1, weekly: u2 };
+    }
+    throw new Error('Unknown admin action: ' + action);
   }
 
   // ===== 席替えスナップショット =====

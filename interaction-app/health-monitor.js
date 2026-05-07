@@ -493,10 +493,125 @@ async function runChromeDiagnostic() {
   return text;
 }
 
+// ===== 自動バックアップ有効化（リモートPOSTで GAS trigger 作成を試行） =====
+// 既に有効化済かをチェックし、未有効なら install_auto_backups を試みる。
+// scope 不足エラーなら GAS Editor を開く誘導モーダルを表示。
+const AUTO_BACKUP_FLAG_KEY = 'interactionApp_autoBackupSetup';
+const GAS_SCRIPT_EDITOR_URL = 'https://script.google.com/d/1ThCRpKVirUsUxOtsgN0CKLxijqeUNVzmT5SQm6j2hvl2y-sCfYgXpkK-/edit';
+
+async function _gasAdminPost(action, extra) {
+  const cfg = (() => {
+    try { return JSON.parse(localStorage.getItem('interactionApp_gasSync') || '{}'); }
+    catch { return {}; }
+  })();
+  if (!cfg.endpoint || !cfg.apiKey) throw new Error('GAS未設定');
+  const body = Object.assign({ action: action, dataType: 'admin', key: cfg.apiKey }, extra || {});
+  const res = await fetch(`${cfg.endpoint}?key=${encodeURIComponent(cfg.apiKey)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body),
+    redirect: 'follow'
+  });
+  const data = await res.json();
+  if (!data.ok) throw new Error(data.error || 'GAS error');
+  return data;
+}
+
+async function setupAutoBackupsRemote(opts) {
+  opts = opts || {};
+  // すでに有効化済ならスキップ
+  if (!opts.force && localStorage.getItem(AUTO_BACKUP_FLAG_KEY)) return { ok: true, skipped: true };
+  try {
+    const r = await _gasAdminPost('install_auto_backups');
+    localStorage.setItem(AUTO_BACKUP_FLAG_KEY, new Date().toISOString());
+    if (typeof showToast === 'function') {
+      showToast('✅ 自動バックアップ(日次snapshot+週次Drive BU)を有効化しました', 'success');
+    }
+    return r;
+  } catch (e) {
+    const isPermErr = /権限|Authorization|script\.scriptapp|drive|send_mail|permission/i.test(e.message);
+    if (isPermErr && !opts.silent) {
+      _showOAuthGuideModal();
+    }
+    return { ok: false, error: e.message, needsAuth: isPermErr };
+  }
+}
+
+async function listAutoBackupTriggers() {
+  return _gasAdminPost('list_triggers');
+}
+
+function _showOAuthGuideModal() {
+  if (document.getElementById('oauthGuideModal')) return;
+  const html = `
+    <div class="modal-backdrop" id="oauthGuideModal" style="display:flex;">
+      <div class="modal" style="width:560px;max-width:95vw;">
+        <div class="modal-header" style="padding:10px 14px;border-bottom:1px solid #ddd;">
+          <h3 style="margin:0;font-size:16px;">🛡 自動バックアップ有効化（30秒・1度だけ）</h3>
+        </div>
+        <div class="modal-body" style="padding:14px;font-size:13px;line-height:1.6;">
+          <p>毎日のsnapshot+毎週のDriveバックアップを有効化するには、Googleの認証が1回だけ必要です。</p>
+          <ol style="margin:8px 0 12px 18px;padding:0;">
+            <li>下のボタンで <b>GASエディタ</b> を開く（新しいタブ）</li>
+            <li>関数選択ドロップダウン（上部）で <b>setupAllAutoBackups</b> を選ぶ</li>
+            <li><b>「実行」</b>ボタンを押す → OAuth ダイアログで <b>「許可」</b></li>
+            <li>「OK」アラートが出たらこのタブに戻り、<b>下の「再試行」</b>を押す</li>
+          </ol>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
+            <a href="${GAS_SCRIPT_EDITOR_URL}" target="_blank" class="primary" style="padding:8px 14px;background:#1976d2;color:white;text-decoration:none;border-radius:4px;">📝 GASエディタを開く</a>
+            <button class="ghost" id="oauthRetryBtn" style="padding:8px 14px;">🔁 再試行（戻ってから）</button>
+            <button class="ghost" id="oauthSkipBtn" style="padding:8px 14px;">後で</button>
+          </div>
+          <div id="oauthGuideMsg" class="muted small" style="margin-top:10px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+  const wrap = document.createElement('div');
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap.firstElementChild);
+
+  const close = () => document.getElementById('oauthGuideModal')?.remove();
+  document.getElementById('oauthSkipBtn').onclick = close;
+  document.getElementById('oauthRetryBtn').onclick = async () => {
+    const msgEl = document.getElementById('oauthGuideMsg');
+    if (msgEl) msgEl.textContent = '⏳ 再試行中…';
+    const r = await setupAutoBackupsRemote({ force: true, silent: true });
+    if (r && r.ok) {
+      if (msgEl) msgEl.innerHTML = '<b style="color:#2e7d32;">✓ 有効化成功！</b>';
+      setTimeout(close, 1500);
+    } else {
+      if (msgEl) msgEl.innerHTML = '<b style="color:#c62828;">まだ承認されていません: ' + (r && r.error || '?') + '</b>';
+    }
+  };
+}
+
+// 起動時1度だけ試行（成功すれば flag が立って次回はスキップ）
+async function tryAutoBackupSetupAtStartup() {
+  // 個人版・syncConfig.enabled・未セットアップ の3条件がそろった時のみ
+  try {
+    const cfg = JSON.parse(localStorage.getItem('interactionApp_gasSync') || '{}');
+    if (!cfg.enabled || !cfg.endpoint || !cfg.apiKey) return;
+    if (localStorage.getItem(AUTO_BACKUP_FLAG_KEY)) return;
+    // silent試行（失敗してもモーダル出さない・ボタンクリックを待つ）
+    const r = await setupAutoBackupsRemote({ silent: true });
+    if (r && r.ok) {
+      console.log('[health] 自動バックアップが起動時に有効化されました');
+    } else if (r && r.needsAuth) {
+      console.log('[health] 自動バックアップ未有効化（OAuth承認必要）。設定タブから手動で有効化可');
+    }
+  } catch (e) {
+    console.debug('[health] auto backup startup attempt:', e.message);
+  }
+}
+
 // 公開
 window.openDiagnosticModal = openDiagnosticModal;
 window.refreshHealthBar = refreshHealthBar;
 window.runChromeDiagnostic = runChromeDiagnostic;
+window.setupAutoBackupsRemote = setupAutoBackupsRemote;
+window.listAutoBackupTriggers = listAutoBackupTriggers;
+window.showAutoBackupGuide = _showOAuthGuideModal;
 
 // ===== 初期化 =====
 function startMonitoring() {
@@ -526,6 +641,9 @@ function startMonitoring() {
 
   // 起動時自動診断
   startupAutoDiagnose();
+
+  // 起動時に自動バックアップ有効化を試行（既に有効ならスキップ・失敗ならモーダル出さない）
+  setTimeout(() => tryAutoBackupSetupAtStartup(), 5000);
 }
 
 // app.js の init() の後に呼ぶ。DOMContentLoaded を待たないと state 未定義

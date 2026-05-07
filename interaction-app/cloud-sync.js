@@ -331,9 +331,10 @@ function renderSyncUI() {
         <button id="syncEmergencyRestoreBtn" style="background:#d9534f;color:white;border:1px solid #d9534f;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🆘 クラウドから緊急復元</button>
         <button id="syncOpenDiagModalBtn" style="margin-left:8px;background:#6c757d;color:white;border:1px solid #6c757d;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">📊 診断レポート (アプリ内)</button>
         <button id="syncRunChromeDiagBtn" style="margin-left:8px;background:#5a9fd4;color:white;border:1px solid #5a9fd4;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🔍 同期診断＆コピー</button>
+        <button id="syncEnableAutoBackupBtn" style="margin-left:8px;background:#27ae60;color:white;border:1px solid #27ae60;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🛡 自動バックアップ有効化</button>
         <a href="diagnostic.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#fff;color:#6c757d;text-decoration:none;border:1px solid #6c757d;border-radius:6px;">📄 詳細ページ</a>
         <a href="recovery.html" target="_blank" style="margin-left:8px;display:inline-block;padding:8px 14px;background:#fff;color:#d9534f;text-decoration:none;border:1px solid #d9534f;border-radius:6px;">🆘 復旧ツール</a>
-        <div class="muted small" style="margin-top:4px">緊急復元: 記録が消えた時にクラウドから全件取り直し / 診断レポート: 3層件数を1画面集約 / 同期診断: 設定値+pull試行結果をクリップボードにコピー</div>
+        <div class="muted small" style="margin-top:4px">緊急復元: 記録が消えた時にクラウドから全件取り直し / 診断レポート: 3層件数を1画面集約 / 同期診断: 設定値+pull試行結果をクリップボードにコピー / 自動バックアップ: 毎日snapshot+毎週Drive copy</div>
       </div>
     </div>
     <div class="sync-status-row">
@@ -345,7 +346,7 @@ function renderSyncUI() {
 }
 
 function bindSyncEvents() {
-  document.addEventListener('click', e => {
+  document.addEventListener('click', async e => {
     if (e.target.id === 'syncNowBtn') {
       saveSyncInputs();
       syncNow();
@@ -366,6 +367,28 @@ function bindSyncEvents() {
         window.runChromeDiagnostic();
       } else {
         showToast?.('診断モジュール読み込み中', 'error');
+      }
+    } else if (e.target.id === 'syncEnableAutoBackupBtn') {
+      // ボタンを一時無効化
+      e.target.disabled = true;
+      const orig = e.target.textContent;
+      e.target.textContent = '⏳ 試行中…';
+      try {
+        if (typeof window.setupAutoBackupsRemote !== 'function') {
+          showToast?.('診断モジュール読み込み中', 'error');
+          return;
+        }
+        const r = await window.setupAutoBackupsRemote({ force: true });
+        if (r && r.ok) {
+          showToast?.('✅ 自動バックアップを有効化しました（毎日snapshot+毎週Drive BU）', 'success');
+        } else if (r && r.needsAuth) {
+          // _showOAuthGuideModal が既に表示されている
+        } else {
+          showToast?.('有効化失敗: ' + (r && r.error || '?'), 'error');
+        }
+      } finally {
+        e.target.disabled = false;
+        e.target.textContent = orig;
       }
     }
   });
