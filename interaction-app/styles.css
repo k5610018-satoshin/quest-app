@@ -3216,28 +3216,34 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   background: #fff;
   box-shadow: 0 0 0 2px rgba(74,144,226,0.15);
 }
-/* タグエリア: 4列グリッド（24個 / 4 = 6行） */
+/* タグエリア: 3列×4行（12個・絞り込み済） — 保存ボタンが下に追いやられないよう */
 #praiseRecordView .praise-quick-tags {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 3px;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 4px;
   margin-bottom: 6px;
   width: 100%;
 }
 #praiseRecordView .praise-tag-btn {
-  padding: 5px 3px;
-  font-size: 11px;
+  padding: 7px 4px;
+  font-size: 12px;
   white-space: nowrap;
   text-align: center;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* 保存・クリアボタン行 */
+/* 保存・クリアボタン行: sticky で常に表示（万一タグが増えても隠れない安全装置） */
 #praiseRecordView .praise-action-row {
   display: flex;
   gap: 6px;
-  margin-top: 4px;
+  margin-top: 6px;
+  position: sticky;
+  bottom: 0;
+  background: #fff;
+  padding: 4px 0 2px;
+  z-index: 3;
+  border-top: 1px solid rgba(0,0,0,0.06);
 }
 #praiseRecordView .praise-action-row #savePraiseBtn {
   flex: 1;
@@ -3254,6 +3260,10 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   margin-bottom: 6px;
   min-width: 0;
   overflow: hidden;
+}
+/* タグカードだけは sticky 動作のため overflow を visible に */
+#praiseRecordView .side-panel .praise-tag-card {
+  overflow: visible;
 }
 #praiseRecordView .side-panel .praise-tag-card h3 {
   font-size: 12px;
