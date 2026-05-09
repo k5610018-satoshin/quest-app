@@ -5,6 +5,9 @@
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
+/* hidden 属性を CSS の display ルールより優先させる（修正：モーダルが常時表示される問題） */
+[hidden] { display: none !important; }
+
 html, body {
   height: 100%;
   font-family: "UD デジタル 教科書体 N-R", "BIZ UDPGothic", "メイリオ", -apple-system, BlinkMacSystemFont, sans-serif;
