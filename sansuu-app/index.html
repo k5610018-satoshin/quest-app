@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#3B7DD8">
+<title>算数 自由進度</title>
+<link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<!-- ============================================================ -->
+<!-- 1) 番号ログイン画面 (showLogin/hideLogin で切替) -->
+<!-- ============================================================ -->
+<div id="loginScreen" class="login-screen">
+  <h1>5年4組　算数　自由進度</h1>
+  <p class="login-prompt">出席番号をえらんでね</p>
+  <div id="numberGrid" class="number-grid"></div>
+  <p style="margin-top:24px;font-size:13px;color:#888;">
+    うまく動かないとき：<a href="?reset=1" style="color:#3B7DD8;">リセットしてやり直す</a>
+  </p>
+</div>
+
+<!-- ============================================================ -->
+<!-- 2) メインアプリ (ログイン後に表示) -->
+<!-- ============================================================ -->
+<div id="mainApp" class="main-app" hidden>
+
+  <!-- ヘッダ：単元情報・進度・現在地 -->
+  <header class="app-header">
+    <div class="header-left">
+      <button class="logout-btn" id="logoutBtn" title="番号えらびに戻る">←</button>
+      <span class="student-badge" id="studentBadge">No.--</span>
+      <select class="unit-select" id="unitSelect" aria-label="単元を選ぶ"></select>
+    </div>
+    <div class="header-right">
+      <span class="progress-summary" id="progressSummary">◎0 ○0 △0</span>
+      <span class="progress-bar-mini">
+        <span class="progress-bar-fill" id="progressBarFill" style="width:0%"></span>
+      </span>
+      <span class="sync-badge" id="syncBadge" title="同期状態">☁</span>
+    </div>
+  </header>
+
+  <!-- タブナビ -->
+  <nav class="tabs" id="tabNav">
+    <button class="tab-btn active" data-tab="manual">📖 手引き</button>
+    <button class="tab-btn" data-tab="today">📅 きょう</button>
+    <button class="tab-btn" data-tab="reflect">📝 振り返り</button>
+  </nav>
+
+  <!-- ====================================================== -->
+  <!-- タブ1：手引き（ガイダンス） -->
+  <!-- ====================================================== -->
+  <section class="tab-content active" data-tab-content="manual">
+    <div class="manual-header">
+      <h2 class="unit-name" id="manualUnitName">単元名</h2>
+      <p class="unit-meta">
+        <span id="manualUnitHours">--時間</span>
+        <span id="manualUnitPages">--</span>
+      </p>
+    </div>
+
+    <div class="level-tabs btn-grp" data-target="manualLevel">
+      <button type="button" data-value="basic" class="active">基本</button>
+      <button type="button" data-value="applied">応用</button>
+      <button type="button" data-value="challenge">チャレンジ</button>
+    </div>
+    <input type="hidden" id="manualLevel" value="basic">
+
+    <ul class="item-list" id="manualItemList">
+      <!-- 動的生成 -->
+    </ul>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- タブ2：きょう（ホーム＝カレンダー＋カード） -->
+  <!-- ====================================================== -->
+  <section class="tab-content" data-tab-content="today">
+    <div class="today-header">
+      <button class="date-nav" id="dateNavPrev">◀</button>
+      <span class="today-label" id="todayLabel">きょう</span>
+      <button class="date-nav" id="dateNavNext">▶</button>
+    </div>
+
+    <div class="day-cards" id="dayCards">
+      <!-- 動的生成：今日±2日の5枚 -->
+    </div>
+  </section>
+
+  <!-- ====================================================== -->
+  <!-- タブ3：振り返り -->
+  <!-- ====================================================== -->
+  <section class="tab-content" data-tab-content="reflect">
+    <h2 class="section-title">きょうの ふりかえり</h2>
+
+    <div class="reflect-form">
+      <div class="form-row">
+        <label>取り組んだ項目</label>
+        <select id="reflectItem" aria-label="どの項目をやった？"></select>
+      </div>
+
+      <div class="form-row">
+        <label>できぐあい</label>
+        <div class="status-grp btn-grp" data-target="reflectStatus">
+          <button type="button" data-value="A" class="status-a">◎ ばっちり</button>
+          <button type="button" data-value="B" class="status-b">○ できた</button>
+          <button type="button" data-value="C" class="status-c">△ もう一回</button>
+        </div>
+        <input type="hidden" id="reflectStatus" value="">
+      </div>
+
+      <div class="form-row">
+        <label>なぜそうなった？（あてはまるものぜんぶ）</label>
+        <div class="reason-grp" id="reasonTags">
+          <button type="button" data-value="集中できた">集中できた</button>
+          <button type="button" data-value="作戦どおりにできた">作戦どおりにできた</button>
+          <button type="button" data-value="友達と話せた">友達と話せた</button>
+          <button type="button" data-value="ヒントが効いた">ヒントが効いた</button>
+          <button type="button" data-value="時間が足りない">時間が足りない</button>
+          <button type="button" data-value="むずかしかった">むずかしかった</button>
+          <button type="button" data-value="ちがう作戦が必要">ちがう作戦が必要</button>
+          <button type="button" data-value="集中できなかった">集中できなかった</button>
+        </div>
+        <input type="text" id="reflectReasonFree" class="free-input" placeholder="自分のことばで（あれば）">
+      </div>
+
+      <div class="form-row">
+        <label>つぎ どうする？</label>
+        <div class="strategy-grp btn-grp" data-target="reflectStrategy">
+          <button type="button" data-value="もう一回">もう一回</button>
+          <button type="button" data-value="新しい作戦">新しい作戦</button>
+          <button type="button" data-value="次にすすむ">次にすすむ</button>
+          <button type="button" data-value="教えてもらう">教えてもらう</button>
+        </div>
+        <input type="hidden" id="reflectStrategy" value="">
+        <input type="text" id="reflectStrategyFree" class="free-input" placeholder="作戦を書いてみよう（あれば）">
+      </div>
+
+      <div class="form-row submit-row">
+        <button class="submit-btn" id="submitReflectBtn">📝 きろくする</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- フッタ：上位層対応の常設導線 -->
+  <footer class="action-footer">
+    <button class="action-btn" data-action="help">❓ ヘルプ</button>
+    <button class="action-btn" data-action="teach">👫 教えに行く</button>
+    <button class="action-btn" data-action="self_problem">★ 自作問題</button>
+    <button class="action-btn" data-action="strategy_text">✏ 攻略文</button>
+  </footer>
+
+  <!-- トースト -->
+  <div id="toast" class="toast" hidden></div>
+
+  <!-- ヘルプモーダル -->
+  <div id="helpModal" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <span>こまったときは…</span>
+        <button class="close-btn" id="helpCloseBtn">×</button>
+      </header>
+      <div class="modal-body">
+        <ol class="help-steps" id="helpStepsList"></ol>
+        <div class="help-ask">
+          <p>それでもこまったら：</p>
+          <button class="ask-teacher-btn" id="askTeacherBtn">🙋 先生に質問</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 教えに行く モーダル -->
+  <div id="teachModal" class="modal" hidden>
+    <div class="modal-content">
+      <header class="modal-header">
+        <span>👫 教えに行く</span>
+        <button class="close-btn" id="teachCloseBtn">×</button>
+      </header>
+      <div class="modal-body">
+        <p>だれに教えた？（番号をタップ）</p>
+        <div id="teachTargetGrid" class="number-grid"></div>
+        <p style="margin-top:12px;">なにを教えた？</p>
+        <input type="text" id="teachContent" class="free-input" placeholder="例：小数のかけ算のふでざんのコツ">
+        <div class="submit-row">
+          <button class="submit-btn" id="teachSubmitBtn">きろくする</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="data/unit_master.js"></script>
+<script src="data/prompts.js"></script>
+<script src="cloud-sync.js"></script>
+<script src="idb-storage.js"></script>
+<script src="app.js"></script>
+</body>
+</html>

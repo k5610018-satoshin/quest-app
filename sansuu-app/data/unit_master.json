@@ -1,0 +1,280 @@
+{
+  "schema_version": "1.0",
+  "generated_at": "2026-05-08",
+  "source": "啓林館「わくわく算数5」 / 名古屋市教育課程 第5学年 算数科 年間指導計画",
+  "grade": 5,
+  "subject": "sansuu",
+  "annual_hours": 175,
+  "term_hours": { "term1": 65, "term2": 70, "term3": 40 },
+  "units": [
+    {
+      "unit_id": "sansuu-5-01-seisuu-shousuu",
+      "order": 1,
+      "term": 1,
+      "name": "整数と小数",
+      "hours": 5,
+      "textbook_pages": "p.10-21",
+      "items": [
+        { "item_id": "01-1", "label": "10倍・100倍・1000倍と1/10・1/100", "level": "basic", "page": "p.12-14" },
+        { "item_id": "01-2", "label": "小数を整数の何倍で表す", "level": "basic", "page": "p.15-17" },
+        { "item_id": "01-3", "label": "小数のしくみのまとめ", "level": "applied", "page": "p.18-19" },
+        { "item_id": "01-4", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.20-21" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-02-taiseki",
+      "order": 2,
+      "term": 1,
+      "name": "体積",
+      "hours": 10,
+      "textbook_pages": "p.22-39",
+      "items": [
+        { "item_id": "02-1", "label": "直方体・立方体の体積", "level": "basic", "page": "p.24-27" },
+        { "item_id": "02-2", "label": "体積の単位（cm³, m³）", "level": "basic", "page": "p.28-30" },
+        { "item_id": "02-3", "label": "いろいろな立体の体積", "level": "applied", "page": "p.31-33" },
+        { "item_id": "02-4", "label": "容積", "level": "applied", "page": "p.34-36" },
+        { "item_id": "02-5", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.37-39" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-03-hirei",
+      "order": 3,
+      "term": 1,
+      "name": "比例",
+      "hours": 2,
+      "textbook_pages": "p.40-43",
+      "items": [
+        { "item_id": "03-1", "label": "比例の意味", "level": "basic", "page": "p.40-41" },
+        { "item_id": "03-2", "label": "比例の表で考える", "level": "applied", "page": "p.42-43" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-04-shousuu-kakezan",
+      "order": 4,
+      "term": 1,
+      "name": "小数のかけ算",
+      "hours": 13,
+      "textbook_pages": "p.44-65",
+      "items": [
+        { "item_id": "04-1", "label": "整数×小数のしかた", "level": "basic", "page": "p.46-49" },
+        { "item_id": "04-2", "label": "小数×小数のしくみ", "level": "basic", "page": "p.50-54" },
+        { "item_id": "04-3", "label": "小数のかけ算の筆算", "level": "basic", "page": "p.55-57" },
+        { "item_id": "04-4", "label": "計算のきまり（交換・結合・分配）", "level": "applied", "page": "p.58-60" },
+        { "item_id": "04-5", "label": "場面と式（小数倍の意味）", "level": "applied", "page": "p.61-63" },
+        { "item_id": "04-6", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.64-65" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-05-shousuu-warizan",
+      "order": 5,
+      "term": 1,
+      "name": "小数のわり算",
+      "hours": 16,
+      "textbook_pages": "p.66-91",
+      "items": [
+        { "item_id": "05-1", "label": "整数÷小数のしかた", "level": "basic", "page": "p.68-71" },
+        { "item_id": "05-2", "label": "小数÷小数のしくみ", "level": "basic", "page": "p.72-76" },
+        { "item_id": "05-3", "label": "小数のわり算の筆算", "level": "basic", "page": "p.77-80" },
+        { "item_id": "05-4", "label": "あまりのあるわり算", "level": "applied", "page": "p.81-83" },
+        { "item_id": "05-5", "label": "商を概数で求める", "level": "applied", "page": "p.84-86" },
+        { "item_id": "05-6", "label": "場面と式（割合的な見方）", "level": "applied", "page": "p.87-89" },
+        { "item_id": "05-7", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.90-91" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-06-goudou-zukei",
+      "order": 6,
+      "term": 1,
+      "name": "合同な図形",
+      "hours": 13,
+      "textbook_pages": "p.92-115",
+      "items": [
+        { "item_id": "06-1", "label": "合同な図形の意味と対応", "level": "basic", "page": "p.94-97" },
+        { "item_id": "06-2", "label": "合同条件（3辺・2辺と間の角・1辺と両端の角）", "level": "basic", "page": "p.98-101" },
+        { "item_id": "06-3", "label": "合同な三角形のかき方", "level": "basic", "page": "p.102-105" },
+        { "item_id": "06-4", "label": "三角形の3つの角の和", "level": "applied", "page": "p.106-108" },
+        { "item_id": "06-5", "label": "四角形の4つの角の和", "level": "applied", "page": "p.109-111" },
+        { "item_id": "06-6", "label": "多角形の角の和", "level": "applied", "page": "p.112-113" },
+        { "item_id": "06-7", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.114-115" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-07-seisuu",
+      "order": 7,
+      "term": 2,
+      "name": "整数（偶数と奇数、倍数と約数）",
+      "hours": 11,
+      "textbook_pages": "p.118-137",
+      "items": [
+        { "item_id": "07-1", "label": "偶数と奇数", "level": "basic", "page": "p.120-122" },
+        { "item_id": "07-2", "label": "倍数と公倍数", "level": "basic", "page": "p.123-126" },
+        { "item_id": "07-3", "label": "最小公倍数の求め方", "level": "basic", "page": "p.127-129" },
+        { "item_id": "07-4", "label": "約数と公約数", "level": "applied", "page": "p.130-132" },
+        { "item_id": "07-5", "label": "最大公約数の求め方", "level": "applied", "page": "p.133-135" },
+        { "item_id": "07-6", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.136-137" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-08-bunsuu1",
+      "order": 8,
+      "term": 2,
+      "name": "分数（1）— 分数のたし算とひき算",
+      "hours": 10,
+      "textbook_pages": "p.138-155",
+      "items": [
+        { "item_id": "08-1", "label": "分数のしくみと大きさ", "level": "basic", "page": "p.140-142" },
+        { "item_id": "08-2", "label": "大きさの等しい分数", "level": "basic", "page": "p.143-145" },
+        { "item_id": "08-3", "label": "約分", "level": "basic", "page": "p.146-148" },
+        { "item_id": "08-4", "label": "通分", "level": "basic", "page": "p.149-151" },
+        { "item_id": "08-5", "label": "異分母のたし算とひき算", "level": "applied", "page": "p.152-154" },
+        { "item_id": "08-6", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.155" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-09-menseki",
+      "order": 9,
+      "term": 2,
+      "name": "面積（多角形の面積）",
+      "hours": 14,
+      "textbook_pages": "p.158-181",
+      "items": [
+        { "item_id": "09-1", "label": "平行四辺形の面積", "level": "basic", "page": "p.160-164" },
+        { "item_id": "09-2", "label": "三角形の面積", "level": "basic", "page": "p.165-168" },
+        { "item_id": "09-3", "label": "台形の面積", "level": "applied", "page": "p.169-171" },
+        { "item_id": "09-4", "label": "ひし形の面積", "level": "applied", "page": "p.172-174" },
+        { "item_id": "09-5", "label": "いろいろな多角形の面積", "level": "applied", "page": "p.175-177" },
+        { "item_id": "09-6", "label": "高さが図形の外にある場合", "level": "applied", "page": "p.178-179" },
+        { "item_id": "09-7", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.180-181" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-10-heikin",
+      "order": 10,
+      "term": 2,
+      "name": "平均とその利用",
+      "hours": 7,
+      "textbook_pages": "p.182-193",
+      "items": [
+        { "item_id": "10-1", "label": "平均の意味と求め方", "level": "basic", "page": "p.184-186" },
+        { "item_id": "10-2", "label": "0を含むときの平均", "level": "basic", "page": "p.187-188" },
+        { "item_id": "10-3", "label": "平均から全体・部分を求める", "level": "applied", "page": "p.189-191" },
+        { "item_id": "10-4", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.192-193" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-11-tan-ryou",
+      "order": 11,
+      "term": 2,
+      "name": "単位量あたりの大きさ",
+      "hours": 4,
+      "textbook_pages": "p.194-201",
+      "items": [
+        { "item_id": "11-1", "label": "混みぐあいの比べ方", "level": "basic", "page": "p.194-196" },
+        { "item_id": "11-2", "label": "単位量あたりの大きさ・人口密度", "level": "basic", "page": "p.197-199" },
+        { "item_id": "11-3", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.200-201" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-12-bunsuu2",
+      "order": 12,
+      "term": 2,
+      "name": "分数（2）— 分数×整数、分数÷整数",
+      "hours": 6,
+      "textbook_pages": "p.202-211",
+      "items": [
+        { "item_id": "12-1", "label": "分数×整数のしかた", "level": "basic", "page": "p.204-206" },
+        { "item_id": "12-2", "label": "分数÷整数のしかた", "level": "basic", "page": "p.207-209" },
+        { "item_id": "12-3", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.210-211" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-13-wariai",
+      "order": 13,
+      "term": 2,
+      "name": "割合",
+      "hours": 10,
+      "textbook_pages": "p.214-233",
+      "items": [
+        { "item_id": "13-1", "label": "割合の意味（もとにする量・比べる量）", "level": "basic", "page": "p.216-219" },
+        { "item_id": "13-2", "label": "比べる量を求める", "level": "basic", "page": "p.220-222" },
+        { "item_id": "13-3", "label": "もとにする量を求める", "level": "applied", "page": "p.223-225" },
+        { "item_id": "13-4", "label": "百分率", "level": "applied", "page": "p.226-228" },
+        { "item_id": "13-5", "label": "歩合", "level": "applied", "page": "p.229-230" },
+        { "item_id": "13-6", "label": "場面と式（割合の3用法）", "level": "applied", "page": "p.231-232" },
+        { "item_id": "13-7", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.233" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-14-en-tagaku",
+      "order": 14,
+      "term": 3,
+      "name": "円と正多角形",
+      "hours": 8,
+      "textbook_pages": "p.236-251",
+      "items": [
+        { "item_id": "14-1", "label": "正多角形の特徴と作図", "level": "basic", "page": "p.238-241" },
+        { "item_id": "14-2", "label": "円周率", "level": "basic", "page": "p.242-244" },
+        { "item_id": "14-3", "label": "円周の長さ", "level": "basic", "page": "p.245-247" },
+        { "item_id": "14-4", "label": "直径と円周の関係", "level": "applied", "page": "p.248-249" },
+        { "item_id": "14-5", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.250-251" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-15-graph",
+      "order": 15,
+      "term": 3,
+      "name": "割合のグラフ（帯グラフと円グラフ）",
+      "hours": 6,
+      "textbook_pages": "p.252-263",
+      "items": [
+        { "item_id": "15-1", "label": "帯グラフの読み方とかき方", "level": "basic", "page": "p.252-255" },
+        { "item_id": "15-2", "label": "円グラフの読み方とかき方", "level": "basic", "page": "p.256-258" },
+        { "item_id": "15-3", "label": "帯グラフ・円グラフを使って考える", "level": "applied", "page": "p.259-261" },
+        { "item_id": "15-4", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.262-263" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-16-kakuchu-enchu",
+      "order": 16,
+      "term": 3,
+      "name": "角柱と円柱",
+      "hours": 7,
+      "textbook_pages": "p.266-277",
+      "items": [
+        { "item_id": "16-1", "label": "角柱・円柱の意味と特徴", "level": "basic", "page": "p.266-269" },
+        { "item_id": "16-2", "label": "見取り図のかき方", "level": "basic", "page": "p.270-271" },
+        { "item_id": "16-3", "label": "角柱の展開図", "level": "applied", "page": "p.272-273" },
+        { "item_id": "16-4", "label": "円柱の展開図", "level": "applied", "page": "p.274-275" },
+        { "item_id": "16-5", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.276-277" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-17-hayasa",
+      "order": 17,
+      "term": 3,
+      "name": "速さ",
+      "hours": 7,
+      "textbook_pages": "p.278-289",
+      "items": [
+        { "item_id": "17-1", "label": "速さの比べ方", "level": "basic", "page": "p.278-280" },
+        { "item_id": "17-2", "label": "速さを求める（速さ＝道のり÷時間）", "level": "basic", "page": "p.281-283" },
+        { "item_id": "17-3", "label": "道のりを求める", "level": "applied", "page": "p.284-285" },
+        { "item_id": "17-4", "label": "時間を求める", "level": "applied", "page": "p.286-287" },
+        { "item_id": "17-5", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.288-289" }
+      ]
+    },
+    {
+      "unit_id": "sansuu-5-18-kawarikata",
+      "order": 18,
+      "term": 3,
+      "name": "変わり方",
+      "hours": 3,
+      "textbook_pages": "p.290-295",
+      "items": [
+        { "item_id": "18-1", "label": "表で変わり方を調べる", "level": "basic", "page": "p.290-292" },
+        { "item_id": "18-2", "label": "式で表してきまりを見つける", "level": "applied", "page": "p.293-294" },
+        { "item_id": "18-3", "label": "たしかめよう／力をつけよう", "level": "challenge", "page": "p.295" }
+      ]
+    }
+  ]
+}

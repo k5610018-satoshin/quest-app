@@ -1,0 +1,21 @@
+# Supabase / API keys（プロジェクトごとに）
+**/supabase/.env
+**/.env
+**/.env.local
+
+# GAS clasp（必要に応じて）
+**/.clasp-credentials.json
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+*.swp
+.vscode/
+
+# Office ロックファイル
+~$*.pptx
+~$*.docx
+~$*.xlsx
+
+# Logs
+*.log

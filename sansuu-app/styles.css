@@ -1,0 +1,592 @@
+/* ============================================================
+   算数 自由進度学習アプリ — スタイル
+   設計原則: スクロール禁止、1画面完結、ボタン大きめ、btn-grp流儀
+   ============================================================ */
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  font-family: "UD デジタル 教科書体 N-R", "BIZ UDPGothic", "メイリオ", -apple-system, BlinkMacSystemFont, sans-serif;
+  font-size: 18px;
+  line-height: 1.5;
+  background: #F5F8FC;
+  color: #222;
+  overflow: hidden;
+  -webkit-text-size-adjust: 100%;
+}
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+  border: none;
+  background: none;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none;
+}
+
+select, input[type="text"] {
+  font-family: inherit;
+  font-size: inherit;
+  padding: 8px 12px;
+  border: 2px solid #BBD3EC;
+  border-radius: 8px;
+  background: white;
+}
+
+/* ============================================================
+   1) 番号ログイン画面
+   ============================================================ */
+.login-screen {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: linear-gradient(135deg, #D9E5F7 0%, #F5F8FC 100%);
+}
+
+.login-screen h1 {
+  font-size: 32px;
+  margin-bottom: 8px;
+  color: #1F4E8B;
+}
+
+.login-prompt {
+  font-size: 22px;
+  color: #444;
+  margin-bottom: 32px;
+}
+
+.number-grid {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 10px;
+  max-width: 720px;
+  width: 100%;
+}
+
+.number-grid button {
+  aspect-ratio: 1;
+  font-size: 28px;
+  font-weight: bold;
+  background: white;
+  border: 3px solid #BBD3EC;
+  border-radius: 12px;
+  color: #1F4E8B;
+  transition: transform 0.05s, background 0.1s;
+}
+
+.number-grid button:hover { background: #E8F0FB; }
+.number-grid button:active { transform: scale(0.95); background: #BBD3EC; }
+
+/* ============================================================
+   2) メインアプリ
+   ============================================================ */
+.main-app {
+  height: 100vh;
+  display: grid;
+  grid-template-rows: auto auto 1fr auto;
+  grid-template-areas:
+    "header"
+    "tabs"
+    "content"
+    "footer";
+}
+
+/* --- ヘッダ --- */
+.app-header {
+  grid-area: header;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 16px;
+  background: #3B7DD8;
+  color: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.header-left, .header-right { display: flex; gap: 12px; align-items: center; }
+
+.logout-btn {
+  width: 36px;
+  height: 36px;
+  font-size: 22px;
+  color: white;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.15);
+}
+.logout-btn:hover { background: rgba(255, 255, 255, 0.3); }
+
+.student-badge {
+  font-size: 16px;
+  font-weight: bold;
+  padding: 6px 12px;
+  background: white;
+  color: #1F4E8B;
+  border-radius: 20px;
+}
+
+.unit-select {
+  font-size: 16px;
+  padding: 6px 10px;
+  background: white;
+  color: #1F4E8B;
+  border: none;
+  border-radius: 8px;
+  min-width: 200px;
+}
+
+.progress-summary { font-size: 14px; }
+
+.progress-bar-mini {
+  display: inline-block;
+  width: 120px;
+  height: 14px;
+  background: rgba(255, 255, 255, 0.3);
+  border-radius: 7px;
+  overflow: hidden;
+}
+.progress-bar-fill {
+  display: block;
+  height: 100%;
+  background: #FFD400;
+  transition: width 0.3s;
+}
+
+.sync-badge {
+  font-size: 16px;
+  padding: 4px 8px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.2);
+}
+.sync-badge.error { background: #FF6B6B; }
+.sync-badge.pending { background: #FFA94D; }
+
+/* --- タブ --- */
+.tabs {
+  grid-area: tabs;
+  display: flex;
+  background: white;
+  border-bottom: 2px solid #E0E8F2;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 14px 8px;
+  font-size: 18px;
+  color: #666;
+  border-bottom: 4px solid transparent;
+  transition: all 0.15s;
+}
+.tab-btn:hover { background: #F5F8FC; }
+.tab-btn.active {
+  color: #1F4E8B;
+  font-weight: bold;
+  border-bottom-color: #3B7DD8;
+  background: #F5F8FC;
+}
+
+/* --- メイン領域 --- */
+.tab-content {
+  grid-area: content;
+  display: none;
+  padding: 16px 24px;
+  overflow-y: auto;
+}
+.tab-content.active { display: block; }
+
+/* ============================================================
+   タブ1：手引き
+   ============================================================ */
+.manual-header {
+  margin-bottom: 16px;
+}
+.unit-name {
+  font-size: 24px;
+  color: #1F4E8B;
+  margin-bottom: 4px;
+}
+.unit-meta {
+  font-size: 14px;
+  color: #666;
+}
+
+.level-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.level-tabs button {
+  flex: 1;
+  padding: 12px;
+  font-size: 18px;
+  font-weight: bold;
+  background: white;
+  color: #666;
+  border: 2px solid #BBD3EC;
+  border-radius: 10px;
+}
+.level-tabs button.active {
+  background: #3B7DD8;
+  color: white;
+  border-color: #3B7DD8;
+}
+
+.item-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.item-row {
+  display: grid;
+  grid-template-columns: auto 1fr auto auto auto;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 16px;
+  background: white;
+  border: 2px solid #E0E8F2;
+  border-radius: 10px;
+}
+.item-row .item-id {
+  font-weight: bold;
+  color: #3B7DD8;
+  min-width: 36px;
+}
+.item-row .item-label {
+  font-size: 17px;
+}
+.item-row .item-page {
+  font-size: 13px;
+  color: #666;
+}
+.item-row .item-status {
+  font-size: 22px;
+  width: 32px;
+  text-align: center;
+}
+.item-row.status-a { background: #E6F7E6; }
+.item-row.status-b { background: #FFF8DC; }
+.item-row.status-c { background: #FFE4E1; }
+
+.item-row .icon-btn {
+  font-size: 18px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: #F0F4F9;
+}
+
+/* ============================================================
+   タブ2：きょう
+   ============================================================ */
+.today-header {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+.today-label {
+  font-size: 22px;
+  font-weight: bold;
+  color: #1F4E8B;
+}
+.date-nav {
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  background: white;
+  border: 2px solid #BBD3EC;
+  border-radius: 50%;
+  color: #3B7DD8;
+}
+
+.day-cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.day-card {
+  display: grid;
+  grid-template-columns: 80px 1fr auto;
+  gap: 16px;
+  align-items: center;
+  padding: 14px 18px;
+  background: white;
+  border-left: 6px solid #BBD3EC;
+  border-radius: 10px;
+  transition: transform 0.05s;
+}
+.day-card.today { border-left-color: #FFD400; background: #FFFBE6; }
+.day-card.future { opacity: 0.7; }
+.day-card:active { transform: scale(0.98); }
+
+.day-card .day-date {
+  font-weight: bold;
+  font-size: 16px;
+  color: #444;
+}
+.day-card .day-plan {
+  font-size: 17px;
+}
+.day-card .day-status .btn-grp {
+  display: flex;
+  gap: 6px;
+}
+.day-card .day-status button {
+  width: 36px;
+  height: 36px;
+  font-size: 18px;
+  background: white;
+  border: 2px solid #DDD;
+  border-radius: 6px;
+  color: #999;
+}
+.day-card .day-status button.active.status-a { background: #69C779; color: white; border-color: #69C779; }
+.day-card .day-status button.active.status-b { background: #FFD400; color: #444; border-color: #FFD400; }
+.day-card .day-status button.active.status-c { background: #FF6B6B; color: white; border-color: #FF6B6B; }
+
+/* ============================================================
+   タブ3：振り返り
+   ============================================================ */
+.section-title {
+  font-size: 22px;
+  color: #1F4E8B;
+  margin-bottom: 16px;
+}
+
+.reflect-form {
+  max-width: 720px;
+}
+.form-row {
+  margin-bottom: 16px;
+}
+.form-row label {
+  display: block;
+  font-weight: bold;
+  margin-bottom: 8px;
+  color: #444;
+}
+
+.btn-grp {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.btn-grp button {
+  padding: 12px 20px;
+  font-size: 17px;
+  background: white;
+  border: 2px solid #BBD3EC;
+  border-radius: 8px;
+  color: #444;
+}
+.btn-grp button:hover { background: #F0F4F9; }
+.btn-grp button.active {
+  background: #3B7DD8;
+  color: white;
+  border-color: #3B7DD8;
+}
+
+.status-grp button { font-size: 19px; padding: 14px 18px; }
+.status-grp button.active.status-a { background: #69C779; border-color: #69C779; }
+.status-grp button.active.status-b { background: #FFD400; color: #444; border-color: #FFD400; }
+.status-grp button.active.status-c { background: #FF6B6B; border-color: #FF6B6B; }
+
+.reason-grp {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.reason-grp button {
+  padding: 8px 14px;
+  font-size: 15px;
+  background: white;
+  border: 2px solid #DDD;
+  border-radius: 18px;
+  color: #555;
+}
+.reason-grp button.active {
+  background: #3B7DD8;
+  color: white;
+  border-color: #3B7DD8;
+}
+
+.free-input {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  font-size: 16px;
+}
+
+.submit-row { text-align: center; margin-top: 24px; }
+.submit-btn {
+  padding: 16px 48px;
+  font-size: 20px;
+  font-weight: bold;
+  background: #3B7DD8;
+  color: white;
+  border-radius: 12px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.15);
+}
+.submit-btn:hover { background: #2A5FA8; }
+.submit-btn:active { transform: translateY(1px); }
+.submit-btn:disabled { background: #ccc; cursor: not-allowed; }
+
+/* ============================================================
+   フッタ：上位層対応
+   ============================================================ */
+.action-footer {
+  grid-area: footer;
+  display: flex;
+  gap: 8px;
+  padding: 8px 16px;
+  background: white;
+  border-top: 2px solid #E0E8F2;
+}
+.action-btn {
+  flex: 1;
+  padding: 10px 12px;
+  font-size: 14px;
+  background: #F5F8FC;
+  border: 2px solid #DDD;
+  border-radius: 8px;
+  color: #444;
+}
+.action-btn:hover { background: #E8F0FB; }
+.action-btn:active { background: #BBD3EC; }
+
+/* ============================================================
+   トースト
+   ============================================================ */
+.toast {
+  position: fixed;
+  bottom: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 24px;
+  background: rgba(50, 50, 50, 0.95);
+  color: white;
+  border-radius: 24px;
+  font-size: 16px;
+  z-index: 1000;
+  animation: toastIn 0.2s ease-out;
+}
+.toast.success { background: #4CAF50; }
+.toast.error { background: #F44336; }
+
+@keyframes toastIn {
+  from { transform: translate(-50%, 20px); opacity: 0; }
+  to { transform: translate(-50%, 0); opacity: 1; }
+}
+
+/* ============================================================
+   モーダル
+   ============================================================ */
+.modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 999;
+}
+.modal-content {
+  background: white;
+  border-radius: 12px;
+  width: 90%;
+  max-width: 560px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 18px;
+  background: #3B7DD8;
+  color: white;
+  font-size: 18px;
+  font-weight: bold;
+}
+.modal-header .close-btn {
+  width: 32px;
+  height: 32px;
+  font-size: 20px;
+  color: white;
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+.modal-body {
+  padding: 18px;
+  overflow-y: auto;
+}
+
+.help-steps {
+  list-style: none;
+  margin-bottom: 18px;
+}
+.help-steps li {
+  padding: 12px 14px;
+  margin-bottom: 8px;
+  background: #F5F8FC;
+  border-left: 4px solid #3B7DD8;
+  border-radius: 6px;
+}
+.help-steps li .help-icon { font-size: 20px; margin-right: 8px; }
+.help-steps li .help-label { font-weight: bold; font-size: 16px; }
+.help-steps li .help-detail { display: block; margin-top: 4px; font-size: 14px; color: #555; }
+
+.help-ask {
+  text-align: center;
+  padding: 14px;
+  background: #FFFBE6;
+  border-radius: 8px;
+}
+.help-ask p { margin-bottom: 8px; }
+.ask-teacher-btn {
+  padding: 12px 24px;
+  font-size: 17px;
+  font-weight: bold;
+  background: #FFA94D;
+  color: white;
+  border-radius: 10px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+.ask-teacher-btn:hover { background: #FF922B; }
+
+/* 教えに行く モーダル内の number-grid 上書き */
+#teachTargetGrid.number-grid {
+  grid-template-columns: repeat(7, 1fr);
+  gap: 6px;
+  max-width: 100%;
+}
+#teachTargetGrid.number-grid button {
+  font-size: 18px;
+  border: 2px solid #BBD3EC;
+}
+#teachTargetGrid.number-grid button.selected {
+  background: #3B7DD8;
+  color: white;
+  border-color: #3B7DD8;
+}
+
+/* ============================================================
+   レスポンシブ調整（縦持ちタブレット用）
+   ============================================================ */
+@media (max-width: 600px) {
+  html, body { font-size: 16px; }
+  .number-grid { grid-template-columns: repeat(5, 1fr); }
+  .number-grid button { font-size: 22px; }
+  .tab-btn { font-size: 14px; padding: 10px 4px; }
+  .day-card { grid-template-columns: 60px 1fr auto; gap: 8px; padding: 10px 12px; }
+  .header-right .progress-bar-mini { display: none; }
+  .unit-select { min-width: 140px; max-width: 180px; }
+}

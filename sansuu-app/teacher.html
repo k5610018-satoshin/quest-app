@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算数 自由進度 - 教師管理</title>
+<link rel="stylesheet" href="styles.css">
+<link rel="stylesheet" href="teacher.css">
+</head>
+<body class="teacher-body">
+
+<!-- ヘッダ -->
+<header class="t-header">
+  <div class="t-header-left">
+    <span class="t-title">📐 算数 自由進度 — 教師</span>
+    <select class="unit-select" id="tUnitSelect" aria-label="単元"></select>
+  </div>
+  <div class="t-header-center">
+    <div class="mode-toggle btn-grp" data-target="tMode">
+      <button type="button" data-value="live" class="active">👀 ライブ</button>
+      <button type="button" data-value="after">🌙 放課後</button>
+    </div>
+    <input type="hidden" id="tMode" value="live">
+  </div>
+  <div class="t-header-right">
+    <span class="alert-badge" id="alertBadge" hidden>🚨 <span id="alertCount">0</span></span>
+    <span class="sync-badge" id="tSyncBadge" title="同期状態">☁</span>
+    <span class="progress-counter" id="tProgressCounter">◎0 ○0 △0 / -</span>
+    <button class="t-refresh" id="tRefreshBtn" title="再読み込み">↻</button>
+  </div>
+</header>
+
+<!-- サイドメニュー＋メイン領域 -->
+<div class="t-layout">
+  <nav class="t-side">
+    <!-- ライブモード -->
+    <div class="side-group" data-mode="live">
+      <h3>👀 授業中</h3>
+      <button class="side-btn active" data-view="heatmap">📊 ヒートマップ</button>
+      <button class="side-btn" data-view="feed">📰 フィード</button>
+      <button class="side-btn" data-view="seat">🪑 座席表</button>
+      <button class="side-btn" data-view="alerts">🚨 アラート</button>
+    </div>
+    <!-- 放課後モード -->
+    <div class="side-group" data-mode="after" hidden>
+      <h3>🌙 放課後</h3>
+      <button class="side-btn active" data-view="matrix">📋 到達度マトリクス</button>
+      <button class="side-btn" data-view="growth">📈 伸びカード</button>
+      <button class="side-btn" data-view="supplement">🧩 補充候補</button>
+      <button class="side-btn" data-view="export">📤 エクスポート</button>
+      <button class="side-btn" data-view="unit_editor">📚 単元編集</button>
+    </div>
+  </nav>
+
+  <!-- ステータス選択ポップオーバー（セルクリック編集用） -->
+  <div id="statusPicker" class="status-picker" hidden>
+    <button data-pick="A" class="pick-a">◎</button>
+    <button data-pick="B" class="pick-b">○</button>
+    <button data-pick="C" class="pick-c">△</button>
+    <button data-pick="" class="pick-empty">・</button>
+    <button data-pick="cancel" class="pick-cancel">×</button>
+  </div>
+
+  <main class="t-main" id="tMain">
+    <!-- 各ビューが動的に挿入される -->
+  </main>
+
+  <!-- 児童詳細パネル（右ドロワ） -->
+  <aside class="t-detail-panel" id="tDetailPanel" hidden>
+    <header class="detail-header">
+      <span id="detailTitle">児童詳細</span>
+      <button class="close-btn" id="detailCloseBtn">×</button>
+    </header>
+    <div class="detail-body" id="detailBody"></div>
+    <footer class="detail-footer">
+      <button class="action-btn" id="pinBtn">📌 ピン</button>
+      <button class="action-btn" id="commentBtn">💬 コメント</button>
+      <button class="action-btn" id="aiSuggestBtn">🤖 声かけ案</button>
+    </footer>
+  </aside>
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="data/unit_master.js"></script>
+<script src="data/prompts.js"></script>
+<script src="cloud-sync.js"></script>
+<script src="idb-storage.js"></script>
+<script src="teacher.js"></script>
+</body>
+</html>

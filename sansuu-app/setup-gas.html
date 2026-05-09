@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>算数アプリ - GAS同期セットアップ</title>
+<style>
+  body {
+    font-family: "BIZ UDPGothic", "メイリオ", sans-serif;
+    max-width: 720px;
+    margin: 24px auto;
+    padding: 16px;
+    background: #F5F8FC;
+    color: #222;
+    line-height: 1.6;
+  }
+  h1 { color: #1F4E8B; }
+  .form-row { margin-bottom: 16px; }
+  label { display: block; font-weight: bold; margin-bottom: 4px; }
+  input[type="text"], input[type="url"] {
+    width: 100%;
+    padding: 10px;
+    font-size: 16px;
+    border: 2px solid #BBD3EC;
+    border-radius: 6px;
+    box-sizing: border-box;
+  }
+  button {
+    padding: 12px 24px;
+    font-size: 16px;
+    background: #3B7DD8;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+  }
+  button:hover { background: #2A5FA8; }
+  .status { margin-top: 12px; padding: 12px; border-radius: 6px; }
+  .status.ok { background: #E6F7E6; color: #2F7C2F; }
+  .status.err { background: #FFE4E1; color: #B00020; }
+  pre {
+    background: #FFF;
+    padding: 12px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 13px;
+  }
+</style>
+</head>
+<body>
+
+<h1>GAS同期セットアップ</h1>
+<p>このページはアプリ管理者（先生）専用です。児童は使いません。</p>
+
+<div class="form-row">
+  <label for="endpoint">GAS Web App エンドポイント</label>
+  <input type="url" id="endpoint" placeholder="https://script.google.com/macros/s/AKfy.../exec">
+</div>
+
+<div class="form-row">
+  <label for="apiKey">API Key（GAS_BRIDGE_API_KEY と同じ値）</label>
+  <input type="text" id="apiKey" placeholder="32文字程度のランダム文字列">
+</div>
+
+<div>
+  <button id="saveBtn">保存</button>
+  <button id="testBtn" style="background:#888;">接続テスト</button>
+  <button id="clearBtn" style="background:#888;">クリア</button>
+</div>
+
+<div id="status"></div>
+
+<h2>現在の設定</h2>
+<pre id="currentConfig">未設定</pre>
+
+<h2>未送信キュー</h2>
+<pre id="pendingQueue">なし</pre>
+
+<h2>セットアップ手順</h2>
+<ol>
+  <li>GASプロジェクト <code>gas-sansuu-bridge</code> をデプロイ（gas/ ディレクトリ参照）</li>
+  <li>Web App として「全員（匿名含む）」アクセス許可で公開 → エンドポイントURLを取得</li>
+  <li>Apps Script Properties で <code>SUPABASE_URL</code> / <code>SUPABASE_SERVICE_KEY</code> / <code>GAS_BRIDGE_API_KEY</code> / <code>SHEET_ID</code> を設定</li>
+  <li>このページに エンドポイント と API Key を入力 → 保存</li>
+  <li>接続テストでOKならアプリで自動同期される</li>
+</ol>
+
+<script>
+const endpointEl = document.getElementById('endpoint');
+const apiKeyEl = document.getElementById('apiKey');
+const statusEl = document.getElementById('status');
+const currentEl = document.getElementById('currentConfig');
+const pendingEl = document.getElementById('pendingQueue');
+
+function loadCurrent() {
+  try {
+    const c = JSON.parse(localStorage.getItem('sansuuApp_syncConfig') || '{}');
+    currentEl.textContent = JSON.stringify(c, null, 2);
+    if (c.endpoint) endpointEl.value = c.endpoint;
+    if (c.apiKey) apiKeyEl.value = c.apiKey;
+  } catch {}
+  try {
+    const p = JSON.parse(localStorage.getItem('sansuuApp_pendingQueue') || '[]');
+    pendingEl.textContent = p.length === 0 ? 'なし' : `${p.length} 件\n` + JSON.stringify(p.slice(0, 3), null, 2) + (p.length > 3 ? '\n...' : '');
+  } catch {}
+}
+
+function showStatus(msg, kind) {
+  statusEl.className = 'status ' + (kind || '');
+  statusEl.textContent = msg;
+}
+
+document.getElementById('saveBtn').addEventListener('click', () => {
+  const cfg = { endpoint: endpointEl.value.trim(), apiKey: apiKeyEl.value.trim() };
+  if (!cfg.endpoint || !cfg.apiKey) return showStatus('両方とも入力してください', 'err');
+  localStorage.setItem('sansuuApp_syncConfig', JSON.stringify(cfg));
+  showStatus('保存しました', 'ok');
+  loadCurrent();
+});
+
+document.getElementById('testBtn').addEventListener('click', async () => {
+  const cfg = JSON.parse(localStorage.getItem('sansuuApp_syncConfig') || '{}');
+  if (!cfg.endpoint || !cfg.apiKey) return showStatus('先に保存してください', 'err');
+  showStatus('接続中...');
+  try {
+    const url = new URL(cfg.endpoint);
+    url.searchParams.set('action', 'units');
+    url.searchParams.set('key', cfg.apiKey);
+    const res = await fetch(url.toString());
+    const json = await res.json();
+    if (json.ok) {
+      showStatus(`✓ 接続OK（units 取得 ${(json.data||[]).length} 件）`, 'ok');
+    } else {
+      showStatus('✗ サーバーエラー: ' + (json.error || 'unknown'), 'err');
+    }
+  } catch (err) {
+    showStatus('✗ 接続失敗: ' + err.message, 'err');
+  }
+});
+
+document.getElementById('clearBtn').addEventListener('click', () => {
+  if (!confirm('設定とキューをクリアしますか？')) return;
+  localStorage.removeItem('sansuuApp_syncConfig');
+  localStorage.removeItem('sansuuApp_pendingQueue');
+  endpointEl.value = '';
+  apiKeyEl.value = '';
+  showStatus('クリアしました', 'ok');
+  loadCurrent();
+});
+
+loadCurrent();
+</script>
+</body>
+</html>
