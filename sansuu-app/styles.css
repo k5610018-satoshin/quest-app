@@ -203,85 +203,241 @@ select, input[type="text"] {
 .tab-content.active { display: block; }
 
 /* ============================================================
-   タブ1：手引き
+   タブ1：進度表（樋口式 学習計画表）
    ============================================================ */
 .manual-header {
-  margin-bottom: 16px;
+  margin-bottom: 12px;
 }
 .unit-name {
-  font-size: 24px;
+  font-size: 22px;
   color: #1F4E8B;
   margin-bottom: 4px;
 }
 .unit-meta {
-  font-size: 14px;
-  color: #666;
-}
-
-.level-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.level-tabs button {
-  flex: 1;
-  padding: 12px;
-  font-size: 18px;
-  font-weight: bold;
-  background: white;
-  color: #666;
-  border: 2px solid #BBD3EC;
-  border-radius: 10px;
-}
-.level-tabs button.active {
-  background: #3B7DD8;
-  color: white;
-  border-color: #3B7DD8;
-}
-
-.item-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.item-row {
-  display: grid;
-  grid-template-columns: auto 1fr auto auto auto;
-  gap: 12px;
-  align-items: center;
-  padding: 12px 16px;
-  background: white;
-  border: 2px solid #E0E8F2;
-  border-radius: 10px;
-}
-.item-row .item-id {
-  font-weight: bold;
-  color: #3B7DD8;
-  min-width: 36px;
-}
-.item-row .item-label {
-  font-size: 17px;
-}
-.item-row .item-page {
   font-size: 13px;
   color: #666;
 }
-.item-row .item-status {
-  font-size: 22px;
-  width: 32px;
+
+.legend-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  margin-bottom: 12px;
+  padding: 8px 10px;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #E0E8F2;
+}
+.legend-bar span { white-space: nowrap; }
+.legend-x { color: #FF6B6B; }
+.legend-tri { color: #FFA94D; }
+.legend-circ { color: #B89E00; }
+.legend-dbl { color: #2F7C2F; }
+.legend-tc { color: #845EF7; }
+
+.progress-table-wrap {
+  overflow-x: auto;
+  background: white;
+  border-radius: 8px;
+  border: 1px solid #E0E8F2;
+  -webkit-overflow-scrolling: touch;
+}
+.progress-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 480px;
+  font-size: 14px;
+}
+.progress-table th, .progress-table td {
+  border: 1px solid #E0E8F2;
+  padding: 8px 6px;
+  text-align: center;
+  vertical-align: middle;
+}
+.progress-table thead th {
+  background: #1F4E8B;
+  color: white;
+  font-size: 12px;
+  font-weight: bold;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+.progress-table thead th.col-page {
+  text-align: left;
+  padding-left: 12px;
+  min-width: 130px;
+}
+.progress-table thead th.col-step {
+  width: 56px;
+  font-size: 13px;
+}
+.progress-table thead th.col-due {
+  width: 60px;
+}
+.progress-table thead th.col-cards {
+  width: 60px;
+}
+.progress-table tbody tr.level-applied td.cell-page-label { color: #1F4E8B; background: #F0F8FF; }
+.progress-table tbody tr.level-challenge td.cell-page-label { color: #845EF7; background: #F3F0FF; font-weight: bold; }
+
+.progress-table td.cell-page-label {
+  text-align: left;
+  padding: 8px 12px;
+  font-size: 14px;
+  font-weight: bold;
+  background: #F5F8FC;
+}
+.progress-table td.cell-page-label .page-no {
+  font-size: 12px;
+  color: #666;
+  display: block;
+  margin-top: 2px;
+  font-weight: normal;
+}
+.progress-table td.cell-due {
+  font-size: 12px;
+  color: #888;
+}
+.progress-table td.cell-step {
+  cursor: pointer;
+  font-size: 18px;
+  font-weight: bold;
+  background: #FFF;
+  transition: background 0.1s;
+}
+.progress-table td.cell-step:hover { background: #E8F0FB; }
+.progress-table td.cell-step.status-x { background: #FFE4E1; color: #FF6B6B; }
+.progress-table td.cell-step.status-tri { background: #FFF1E0; color: #FFA94D; }
+.progress-table td.cell-step.status-circ { background: #FFFBE6; color: #B89E00; }
+.progress-table td.cell-step.status-dbl { background: #E6F7E6; color: #2F7C2F; }
+.progress-table td.cell-step.empty { color: #BBB; }
+
+.progress-table td.cell-cards button {
+  padding: 4px 10px;
+  background: #845EF7;
+  color: white;
+  border-radius: 6px;
+  font-size: 12px;
+  border: none;
+  cursor: pointer;
+}
+.progress-table td.cell-cards button:hover { background: #6741D9; }
+.progress-table td.cell-cards button.no-cards {
+  background: #DDD;
+  color: #888;
+  cursor: not-allowed;
+}
+
+.progress-table tbody tr.teacher-check td.cell-page-label::before {
+  content: "⭐ ";
+  color: #845EF7;
+}
+
+/* === 4段階評価ピッカー === */
+.status-picker-modal { max-width: 460px; }
+.status-picker-context {
+  font-size: 16px;
+  color: #444;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: #F5F8FC;
+  border-left: 4px solid #3B7DD8;
+  border-radius: 4px;
+}
+.status-picker-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+.status-pick-btn {
+  padding: 18px 12px;
+  border: 3px solid #DDD;
+  border-radius: 12px;
+  background: white;
+  font-size: 17px;
+  font-weight: bold;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  transition: transform 0.05s;
+}
+.status-pick-btn:active { transform: scale(0.96); }
+.status-pick-btn .pick-icon { font-size: 36px; line-height: 1; }
+.status-pick-btn .pick-label { font-size: 14px; font-weight: normal; color: #555; }
+.status-pick-btn[data-pick="x"] { border-color: #FF6B6B; color: #FF6B6B; }
+.status-pick-btn[data-pick="tri"] { border-color: #FFA94D; color: #FFA94D; }
+.status-pick-btn[data-pick="circ"] { border-color: #FFD400; color: #B89E00; }
+.status-pick-btn[data-pick="dbl"] { border-color: #69C779; color: #2F7C2F; }
+.status-pick-btn[data-pick="x"]:hover { background: #FFE4E1; }
+.status-pick-btn[data-pick="tri"]:hover { background: #FFF1E0; }
+.status-pick-btn[data-pick="circ"]:hover { background: #FFFBE6; }
+.status-pick-btn[data-pick="dbl"]:hover { background: #E6F7E6; }
+.status-pick-btn.clear-btn { grid-column: 1 / -1; border-color: #BBB; color: #888; padding: 10px; font-size: 14px; }
+
+/* === カード学習モーダル === */
+.card-learning { max-width: 560px; }
+.card-progress {
+  text-align: center;
+  font-size: 14px;
+  color: #666;
+  margin-bottom: 12px;
+}
+.study-card {
+  perspective: 1000px;
+  margin-bottom: 16px;
+  min-height: 220px;
+  position: relative;
+}
+.study-card-face {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F5F8FC 100%);
+  border: 3px solid #BBD3EC;
+  border-radius: 14px;
+  padding: 24px;
+  min-height: 220px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
   text-align: center;
 }
-.item-row.status-a { background: #E6F7E6; }
-.item-row.status-b { background: #FFF8DC; }
-.item-row.status-c { background: #FFE4E1; }
-
-.item-row .icon-btn {
-  font-size: 18px;
-  padding: 6px 8px;
-  border-radius: 6px;
-  background: #F0F4F9;
+.study-card-face.back {
+  background: linear-gradient(135deg, #FFFBE6 0%, #FFF8DC 100%);
+  border-color: #FFD400;
 }
+.card-q { font-size: 22px; line-height: 1.6; margin-bottom: 16px; }
+.card-a { font-size: 22px; color: #1F4E8B; margin-bottom: 12px; }
+.card-hint { font-size: 14px; color: #666; margin-bottom: 16px; font-style: italic; }
+.card-flip-btn {
+  padding: 12px 24px;
+  background: #3B7DD8;
+  color: white;
+  border-radius: 8px;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+.card-self-eval { width: 100%; margin-top: 8px; }
+.card-self-eval p { margin-bottom: 8px; font-size: 14px; color: #444; }
+.card-nav {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+.card-nav button {
+  flex: 1;
+  padding: 10px;
+  background: white;
+  border: 2px solid #BBD3EC;
+  border-radius: 8px;
+  font-size: 14px;
+  cursor: pointer;
+  color: #1F4E8B;
+}
+.card-nav button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ============================================================
    タブ2：きょう
@@ -395,10 +551,11 @@ select, input[type="text"] {
   border-color: #3B7DD8;
 }
 
-.status-grp button { font-size: 19px; padding: 14px 18px; }
-.status-grp button.active.status-a { background: #69C779; border-color: #69C779; }
-.status-grp button.active.status-b { background: #FFD400; color: #444; border-color: #FFD400; }
-.status-grp button.active.status-c { background: #FF6B6B; border-color: #FF6B6B; }
+.status-grp button { font-size: 17px; padding: 14px 16px; flex: 1 1 calc(50% - 8px); }
+.status-grp button.active.status-dbl { background: #69C779; color: white; border-color: #69C779; }
+.status-grp button.active.status-circ { background: #FFD400; color: #444; border-color: #FFD400; }
+.status-grp button.active.status-tri { background: #FFA94D; color: white; border-color: #FFA94D; }
+.status-grp button.active.status-x-btn { background: #FF6B6B; color: white; border-color: #FF6B6B; }
 
 .reason-grp {
   display: flex;

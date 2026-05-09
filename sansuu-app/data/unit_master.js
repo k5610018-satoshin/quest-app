@@ -1,9 +1,9 @@
-// Auto-generated from unit_master.json; do not edit directly.
-// Edit via teacher.html unit editor view, or regenerate from .json.
+// Auto-generated v2 (Higuchi-style 進度表): do not edit directly.
+// Edit via teacher.html unit editor view.
 window.UNIT_MASTER = {
-  "schema_version": "1.0",
-  "generated_at": "2026-05-08",
-  "source": "啓林館「わくわく算数5」 / 名古屋市教育課程 第5学年 算数科 年間指導計画",
+  "schema_version": "2.0",
+  "generated_at": "2026-05-09",
+  "source": "啓林館「わくわく算数5」 / 樋口万太郎『その自由進度学習間違っていませんか』『自由進度の作り方×一斉指導の作り方』",
   "grade": 5,
   "subject": "sansuu",
   "annual_hours": 175,
@@ -12,6 +12,80 @@ window.UNIT_MASTER = {
     "term2": 70,
     "term3": 40
   },
+  "steps": [
+    {
+      "num": 1,
+      "label": "既習を思い出す",
+      "short": "想起",
+      "icon": "💭",
+      "desc": "前にならったことから「武器」をさがす"
+    },
+    {
+      "num": 2,
+      "label": "YES/NO課題",
+      "short": "Y/N",
+      "icon": "🤔",
+      "desc": "前の知識でかいけつできそう？"
+    },
+    {
+      "num": 3,
+      "label": "問題をとく",
+      "short": "とく",
+      "icon": "✏",
+      "desc": "自分のやり方でといてみる"
+    },
+    {
+      "num": 4,
+      "label": "まとめ",
+      "short": "まとめ",
+      "icon": "💡",
+      "desc": "わかったことを言葉にする（レアカード）"
+    },
+    {
+      "num": 5,
+      "label": "けんしょう",
+      "short": "けん証",
+      "icon": "🔄",
+      "desc": "数や条件をかえてもなりたつ？"
+    },
+    {
+      "num": 6,
+      "label": "ふりかえり",
+      "short": "ふり返り",
+      "icon": "📝",
+      "desc": "次にいかせることは？"
+    }
+  ],
+  "status_levels": [
+    {
+      "code": "x",
+      "label": "わからない",
+      "icon": "×",
+      "color": "#FF6B6B",
+      "value": 0
+    },
+    {
+      "code": "tri",
+      "label": "理解できた",
+      "icon": "△",
+      "color": "#FFA94D",
+      "value": 1
+    },
+    {
+      "code": "circ",
+      "label": "自力でとけた",
+      "icon": "○",
+      "color": "#FFD400",
+      "value": 2
+    },
+    {
+      "code": "dbl",
+      "label": "せつめいできた",
+      "icon": "◎",
+      "color": "#69C779",
+      "value": 3
+    }
+  ],
   "units": [
     {
       "unit_id": "sansuu-5-01-seisuu-shousuu",
@@ -20,30 +94,38 @@ window.UNIT_MASTER = {
       "name": "整数と小数",
       "hours": 5,
       "textbook_pages": "p.10-21",
-      "items": [
+      "pages": [
         {
-          "item_id": "01-1",
+          "page_id": "01-1",
           "label": "10倍・100倍・1000倍と1/10・1/100",
+          "page": "p.12-14",
           "level": "basic",
-          "page": "p.12-14"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "01-2",
+          "page_id": "01-2",
           "label": "小数を整数の何倍で表す",
+          "page": "p.15-17",
           "level": "basic",
-          "page": "p.15-17"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "01-3",
+          "page_id": "01-3",
           "label": "小数のしくみのまとめ",
+          "page": "p.18-19",
           "level": "applied",
-          "page": "p.18-19"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "01-4",
+          "page_id": "01-4",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.20-21",
           "level": "challenge",
-          "page": "p.20-21"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -54,36 +136,46 @@ window.UNIT_MASTER = {
       "name": "体積",
       "hours": 10,
       "textbook_pages": "p.22-39",
-      "items": [
+      "pages": [
         {
-          "item_id": "02-1",
+          "page_id": "02-1",
           "label": "直方体・立方体の体積",
+          "page": "p.24-27",
           "level": "basic",
-          "page": "p.24-27"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "02-2",
+          "page_id": "02-2",
           "label": "体積の単位（cm³, m³）",
+          "page": "p.28-30",
           "level": "basic",
-          "page": "p.28-30"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "02-3",
+          "page_id": "02-3",
           "label": "いろいろな立体の体積",
+          "page": "p.31-33",
           "level": "applied",
-          "page": "p.31-33"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "02-4",
+          "page_id": "02-4",
           "label": "容積",
+          "page": "p.34-36",
           "level": "applied",
-          "page": "p.34-36"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "02-5",
+          "page_id": "02-5",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.37-39",
           "level": "challenge",
-          "page": "p.37-39"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -94,18 +186,22 @@ window.UNIT_MASTER = {
       "name": "比例",
       "hours": 2,
       "textbook_pages": "p.40-43",
-      "items": [
+      "pages": [
         {
-          "item_id": "03-1",
+          "page_id": "03-1",
           "label": "比例の意味",
+          "page": "p.40-41",
           "level": "basic",
-          "page": "p.40-41"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "03-2",
+          "page_id": "03-2",
           "label": "比例の表で考える",
+          "page": "p.42-43",
           "level": "applied",
-          "page": "p.42-43"
+          "teacher_check": false,
+          "cards": []
         }
       ]
     },
@@ -116,42 +212,92 @@ window.UNIT_MASTER = {
       "name": "小数のかけ算",
       "hours": 13,
       "textbook_pages": "p.44-65",
-      "items": [
+      "pages": [
         {
-          "item_id": "04-1",
+          "page_id": "04-1",
           "label": "整数×小数のしかた",
+          "page": "p.46-49",
           "level": "basic",
-          "page": "p.46-49"
+          "teacher_check": false,
+          "cards": [
+            {
+              "id": "c1",
+              "q": "6 × 0.7 はどうやって計算する？",
+              "a": "6×7=42、それを0.1倍して 4.2",
+              "hint": "0.1の何個分？"
+            },
+            {
+              "id": "c2",
+              "q": "10 × 2.5 を計算しよう",
+              "a": "25",
+              "hint": "10倍は位が1つ上がる"
+            },
+            {
+              "id": "c3",
+              "q": "3 × 0.4 を式と図で説明しよう",
+              "a": "3×4=12、0.1倍で1.2。図は0.1×12個",
+              "hint": "0.1がいくつ集まる？"
+            }
+          ]
         },
         {
-          "item_id": "04-2",
+          "page_id": "04-2",
           "label": "小数×小数のしくみ",
+          "page": "p.50-54",
           "level": "basic",
-          "page": "p.50-54"
+          "teacher_check": false,
+          "cards": [
+            {
+              "id": "c1",
+              "q": "1.2 × 1.5 はどうやる？",
+              "a": "12×15=180、小数点を2つ左へ→1.80",
+              "hint": "整数として計算→小数点を戻す"
+            },
+            {
+              "id": "c2",
+              "q": "0.3 × 0.4 を計算",
+              "a": "3×4=12、小数点2つ→0.12",
+              "hint": "両方とも小数1けた"
+            },
+            {
+              "id": "c3",
+              "q": "なぜ小数点を移動するの？説明しよう",
+              "a": "小数を整数に直すために10倍ずつしたから",
+              "hint": "もとに戻すには？"
+            }
+          ]
         },
         {
-          "item_id": "04-3",
+          "page_id": "04-3",
           "label": "小数のかけ算の筆算",
+          "page": "p.55-57",
           "level": "basic",
-          "page": "p.55-57"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "04-4",
+          "page_id": "04-4",
           "label": "計算のきまり（交換・結合・分配）",
+          "page": "p.58-60",
           "level": "applied",
-          "page": "p.58-60"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "04-5",
+          "page_id": "04-5",
           "label": "場面と式（小数倍の意味）",
+          "page": "p.61-63",
           "level": "applied",
-          "page": "p.61-63"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "04-6",
+          "page_id": "04-6",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.64-65",
           "level": "challenge",
-          "page": "p.64-65"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -162,48 +308,62 @@ window.UNIT_MASTER = {
       "name": "小数のわり算",
       "hours": 16,
       "textbook_pages": "p.66-91",
-      "items": [
+      "pages": [
         {
-          "item_id": "05-1",
+          "page_id": "05-1",
           "label": "整数÷小数のしかた",
+          "page": "p.68-71",
           "level": "basic",
-          "page": "p.68-71"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-2",
+          "page_id": "05-2",
           "label": "小数÷小数のしくみ",
+          "page": "p.72-76",
           "level": "basic",
-          "page": "p.72-76"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-3",
+          "page_id": "05-3",
           "label": "小数のわり算の筆算",
+          "page": "p.77-80",
           "level": "basic",
-          "page": "p.77-80"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-4",
+          "page_id": "05-4",
           "label": "あまりのあるわり算",
+          "page": "p.81-83",
           "level": "applied",
-          "page": "p.81-83"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-5",
+          "page_id": "05-5",
           "label": "商を概数で求める",
+          "page": "p.84-86",
           "level": "applied",
-          "page": "p.84-86"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-6",
+          "page_id": "05-6",
           "label": "場面と式（割合的な見方）",
+          "page": "p.87-89",
           "level": "applied",
-          "page": "p.87-89"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "05-7",
+          "page_id": "05-7",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.90-91",
           "level": "challenge",
-          "page": "p.90-91"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -214,48 +374,62 @@ window.UNIT_MASTER = {
       "name": "合同な図形",
       "hours": 13,
       "textbook_pages": "p.92-115",
-      "items": [
+      "pages": [
         {
-          "item_id": "06-1",
+          "page_id": "06-1",
           "label": "合同な図形の意味と対応",
+          "page": "p.94-97",
           "level": "basic",
-          "page": "p.94-97"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-2",
+          "page_id": "06-2",
           "label": "合同条件（3辺・2辺と間の角・1辺と両端の角）",
+          "page": "p.98-101",
           "level": "basic",
-          "page": "p.98-101"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-3",
+          "page_id": "06-3",
           "label": "合同な三角形のかき方",
+          "page": "p.102-105",
           "level": "basic",
-          "page": "p.102-105"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-4",
+          "page_id": "06-4",
           "label": "三角形の3つの角の和",
+          "page": "p.106-108",
           "level": "applied",
-          "page": "p.106-108"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-5",
+          "page_id": "06-5",
           "label": "四角形の4つの角の和",
+          "page": "p.109-111",
           "level": "applied",
-          "page": "p.109-111"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-6",
+          "page_id": "06-6",
           "label": "多角形の角の和",
+          "page": "p.112-113",
           "level": "applied",
-          "page": "p.112-113"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "06-7",
+          "page_id": "06-7",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.114-115",
           "level": "challenge",
-          "page": "p.114-115"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -266,42 +440,54 @@ window.UNIT_MASTER = {
       "name": "整数（偶数と奇数、倍数と約数）",
       "hours": 11,
       "textbook_pages": "p.118-137",
-      "items": [
+      "pages": [
         {
-          "item_id": "07-1",
+          "page_id": "07-1",
           "label": "偶数と奇数",
+          "page": "p.120-122",
           "level": "basic",
-          "page": "p.120-122"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "07-2",
+          "page_id": "07-2",
           "label": "倍数と公倍数",
+          "page": "p.123-126",
           "level": "basic",
-          "page": "p.123-126"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "07-3",
+          "page_id": "07-3",
           "label": "最小公倍数の求め方",
+          "page": "p.127-129",
           "level": "basic",
-          "page": "p.127-129"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "07-4",
+          "page_id": "07-4",
           "label": "約数と公約数",
+          "page": "p.130-132",
           "level": "applied",
-          "page": "p.130-132"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "07-5",
+          "page_id": "07-5",
           "label": "最大公約数の求め方",
+          "page": "p.133-135",
           "level": "applied",
-          "page": "p.133-135"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "07-6",
+          "page_id": "07-6",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.136-137",
           "level": "challenge",
-          "page": "p.136-137"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -312,42 +498,54 @@ window.UNIT_MASTER = {
       "name": "分数（1）— 分数のたし算とひき算",
       "hours": 10,
       "textbook_pages": "p.138-155",
-      "items": [
+      "pages": [
         {
-          "item_id": "08-1",
+          "page_id": "08-1",
           "label": "分数のしくみと大きさ",
+          "page": "p.140-142",
           "level": "basic",
-          "page": "p.140-142"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "08-2",
+          "page_id": "08-2",
           "label": "大きさの等しい分数",
+          "page": "p.143-145",
           "level": "basic",
-          "page": "p.143-145"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "08-3",
+          "page_id": "08-3",
           "label": "約分",
+          "page": "p.146-148",
           "level": "basic",
-          "page": "p.146-148"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "08-4",
+          "page_id": "08-4",
           "label": "通分",
+          "page": "p.149-151",
           "level": "basic",
-          "page": "p.149-151"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "08-5",
+          "page_id": "08-5",
           "label": "異分母のたし算とひき算",
+          "page": "p.152-154",
           "level": "applied",
-          "page": "p.152-154"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "08-6",
+          "page_id": "08-6",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.155",
           "level": "challenge",
-          "page": "p.155"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -358,48 +556,62 @@ window.UNIT_MASTER = {
       "name": "面積（多角形の面積）",
       "hours": 14,
       "textbook_pages": "p.158-181",
-      "items": [
+      "pages": [
         {
-          "item_id": "09-1",
+          "page_id": "09-1",
           "label": "平行四辺形の面積",
+          "page": "p.160-164",
           "level": "basic",
-          "page": "p.160-164"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-2",
+          "page_id": "09-2",
           "label": "三角形の面積",
+          "page": "p.165-168",
           "level": "basic",
-          "page": "p.165-168"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-3",
+          "page_id": "09-3",
           "label": "台形の面積",
+          "page": "p.169-171",
           "level": "applied",
-          "page": "p.169-171"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-4",
+          "page_id": "09-4",
           "label": "ひし形の面積",
+          "page": "p.172-174",
           "level": "applied",
-          "page": "p.172-174"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-5",
+          "page_id": "09-5",
           "label": "いろいろな多角形の面積",
+          "page": "p.175-177",
           "level": "applied",
-          "page": "p.175-177"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-6",
+          "page_id": "09-6",
           "label": "高さが図形の外にある場合",
+          "page": "p.178-179",
           "level": "applied",
-          "page": "p.178-179"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "09-7",
+          "page_id": "09-7",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.180-181",
           "level": "challenge",
-          "page": "p.180-181"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -410,30 +622,38 @@ window.UNIT_MASTER = {
       "name": "平均とその利用",
       "hours": 7,
       "textbook_pages": "p.182-193",
-      "items": [
+      "pages": [
         {
-          "item_id": "10-1",
+          "page_id": "10-1",
           "label": "平均の意味と求め方",
+          "page": "p.184-186",
           "level": "basic",
-          "page": "p.184-186"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "10-2",
+          "page_id": "10-2",
           "label": "0を含むときの平均",
+          "page": "p.187-188",
           "level": "basic",
-          "page": "p.187-188"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "10-3",
+          "page_id": "10-3",
           "label": "平均から全体・部分を求める",
+          "page": "p.189-191",
           "level": "applied",
-          "page": "p.189-191"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "10-4",
+          "page_id": "10-4",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.192-193",
           "level": "challenge",
-          "page": "p.192-193"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -444,24 +664,30 @@ window.UNIT_MASTER = {
       "name": "単位量あたりの大きさ",
       "hours": 4,
       "textbook_pages": "p.194-201",
-      "items": [
+      "pages": [
         {
-          "item_id": "11-1",
+          "page_id": "11-1",
           "label": "混みぐあいの比べ方",
+          "page": "p.194-196",
           "level": "basic",
-          "page": "p.194-196"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "11-2",
+          "page_id": "11-2",
           "label": "単位量あたりの大きさ・人口密度",
+          "page": "p.197-199",
           "level": "basic",
-          "page": "p.197-199"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "11-3",
+          "page_id": "11-3",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.200-201",
           "level": "challenge",
-          "page": "p.200-201"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -472,24 +698,30 @@ window.UNIT_MASTER = {
       "name": "分数（2）— 分数×整数、分数÷整数",
       "hours": 6,
       "textbook_pages": "p.202-211",
-      "items": [
+      "pages": [
         {
-          "item_id": "12-1",
+          "page_id": "12-1",
           "label": "分数×整数のしかた",
+          "page": "p.204-206",
           "level": "basic",
-          "page": "p.204-206"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "12-2",
+          "page_id": "12-2",
           "label": "分数÷整数のしかた",
+          "page": "p.207-209",
           "level": "basic",
-          "page": "p.207-209"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "12-3",
+          "page_id": "12-3",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.210-211",
           "level": "challenge",
-          "page": "p.210-211"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -500,48 +732,62 @@ window.UNIT_MASTER = {
       "name": "割合",
       "hours": 10,
       "textbook_pages": "p.214-233",
-      "items": [
+      "pages": [
         {
-          "item_id": "13-1",
+          "page_id": "13-1",
           "label": "割合の意味（もとにする量・比べる量）",
+          "page": "p.216-219",
           "level": "basic",
-          "page": "p.216-219"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-2",
+          "page_id": "13-2",
           "label": "比べる量を求める",
+          "page": "p.220-222",
           "level": "basic",
-          "page": "p.220-222"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-3",
+          "page_id": "13-3",
           "label": "もとにする量を求める",
+          "page": "p.223-225",
           "level": "applied",
-          "page": "p.223-225"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-4",
+          "page_id": "13-4",
           "label": "百分率",
+          "page": "p.226-228",
           "level": "applied",
-          "page": "p.226-228"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-5",
+          "page_id": "13-5",
           "label": "歩合",
+          "page": "p.229-230",
           "level": "applied",
-          "page": "p.229-230"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-6",
+          "page_id": "13-6",
           "label": "場面と式（割合の3用法）",
+          "page": "p.231-232",
           "level": "applied",
-          "page": "p.231-232"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "13-7",
+          "page_id": "13-7",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.233",
           "level": "challenge",
-          "page": "p.233"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -552,36 +798,46 @@ window.UNIT_MASTER = {
       "name": "円と正多角形",
       "hours": 8,
       "textbook_pages": "p.236-251",
-      "items": [
+      "pages": [
         {
-          "item_id": "14-1",
+          "page_id": "14-1",
           "label": "正多角形の特徴と作図",
+          "page": "p.238-241",
           "level": "basic",
-          "page": "p.238-241"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "14-2",
+          "page_id": "14-2",
           "label": "円周率",
+          "page": "p.242-244",
           "level": "basic",
-          "page": "p.242-244"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "14-3",
+          "page_id": "14-3",
           "label": "円周の長さ",
+          "page": "p.245-247",
           "level": "basic",
-          "page": "p.245-247"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "14-4",
+          "page_id": "14-4",
           "label": "直径と円周の関係",
+          "page": "p.248-249",
           "level": "applied",
-          "page": "p.248-249"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "14-5",
+          "page_id": "14-5",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.250-251",
           "level": "challenge",
-          "page": "p.250-251"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -592,30 +848,38 @@ window.UNIT_MASTER = {
       "name": "割合のグラフ（帯グラフと円グラフ）",
       "hours": 6,
       "textbook_pages": "p.252-263",
-      "items": [
+      "pages": [
         {
-          "item_id": "15-1",
+          "page_id": "15-1",
           "label": "帯グラフの読み方とかき方",
+          "page": "p.252-255",
           "level": "basic",
-          "page": "p.252-255"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "15-2",
+          "page_id": "15-2",
           "label": "円グラフの読み方とかき方",
+          "page": "p.256-258",
           "level": "basic",
-          "page": "p.256-258"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "15-3",
+          "page_id": "15-3",
           "label": "帯グラフ・円グラフを使って考える",
+          "page": "p.259-261",
           "level": "applied",
-          "page": "p.259-261"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "15-4",
+          "page_id": "15-4",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.262-263",
           "level": "challenge",
-          "page": "p.262-263"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -626,36 +890,46 @@ window.UNIT_MASTER = {
       "name": "角柱と円柱",
       "hours": 7,
       "textbook_pages": "p.266-277",
-      "items": [
+      "pages": [
         {
-          "item_id": "16-1",
+          "page_id": "16-1",
           "label": "角柱・円柱の意味と特徴",
+          "page": "p.266-269",
           "level": "basic",
-          "page": "p.266-269"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "16-2",
+          "page_id": "16-2",
           "label": "見取り図のかき方",
+          "page": "p.270-271",
           "level": "basic",
-          "page": "p.270-271"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "16-3",
+          "page_id": "16-3",
           "label": "角柱の展開図",
+          "page": "p.272-273",
           "level": "applied",
-          "page": "p.272-273"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "16-4",
+          "page_id": "16-4",
           "label": "円柱の展開図",
+          "page": "p.274-275",
           "level": "applied",
-          "page": "p.274-275"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "16-5",
+          "page_id": "16-5",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.276-277",
           "level": "challenge",
-          "page": "p.276-277"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -666,36 +940,46 @@ window.UNIT_MASTER = {
       "name": "速さ",
       "hours": 7,
       "textbook_pages": "p.278-289",
-      "items": [
+      "pages": [
         {
-          "item_id": "17-1",
+          "page_id": "17-1",
           "label": "速さの比べ方",
+          "page": "p.278-280",
           "level": "basic",
-          "page": "p.278-280"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "17-2",
+          "page_id": "17-2",
           "label": "速さを求める（速さ＝道のり÷時間）",
+          "page": "p.281-283",
           "level": "basic",
-          "page": "p.281-283"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "17-3",
+          "page_id": "17-3",
           "label": "道のりを求める",
+          "page": "p.284-285",
           "level": "applied",
-          "page": "p.284-285"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "17-4",
+          "page_id": "17-4",
           "label": "時間を求める",
+          "page": "p.286-287",
           "level": "applied",
-          "page": "p.286-287"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "17-5",
+          "page_id": "17-5",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.288-289",
           "level": "challenge",
-          "page": "p.288-289"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     },
@@ -706,24 +990,30 @@ window.UNIT_MASTER = {
       "name": "変わり方",
       "hours": 3,
       "textbook_pages": "p.290-295",
-      "items": [
+      "pages": [
         {
-          "item_id": "18-1",
+          "page_id": "18-1",
           "label": "表で変わり方を調べる",
+          "page": "p.290-292",
           "level": "basic",
-          "page": "p.290-292"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "18-2",
+          "page_id": "18-2",
           "label": "式で表してきまりを見つける",
+          "page": "p.293-294",
           "level": "applied",
-          "page": "p.293-294"
+          "teacher_check": false,
+          "cards": []
         },
         {
-          "item_id": "18-3",
+          "page_id": "18-3",
           "label": "たしかめよう／力をつけよう",
+          "page": "p.295",
           "level": "challenge",
-          "page": "p.295"
+          "teacher_check": true,
+          "cards": []
         }
       ]
     }

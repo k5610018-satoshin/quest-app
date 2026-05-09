@@ -9,19 +9,26 @@
   // ----------------------------------------------------------------
   // State
   // ----------------------------------------------------------------
-  const STORAGE_KEY = 'sansuuApp_v1';
+  const STORAGE_KEY = 'sansuuApp_v2';   // v2: 樋口式進度表
   const DEVICE_ID = ensureDeviceId_();
   const CLASS_ID = '5-4-2026';
   const NUMBERS = Array.from({ length: 28 }, (_, i) => i + 1);
 
+  // status コード ⇄ 表示マッピング
+  const STATUS_CODE = { x: '×', tri: '△', circ: '○', dbl: '◎' };
+  const STATUS_RANK = { x: 0, tri: 1, circ: 2, dbl: 3 };
+
   const state = {
-    studentNumber: null,           // 1〜28
-    studentId: null,               // 'todasho-2026-5-4-01'
-    units: [],                     // unit_master.json の units 配列
+    studentNumber: null,
+    studentId: null,
+    units: [],                     // window.UNIT_MASTER.units (v2)
+    steps: [],                     // window.UNIT_MASTER.steps (6ステップ)
+    statusLevels: [],              // window.UNIT_MASTER.status_levels (4段階)
     selectedUnitId: null,
-    progressCache: {},             // { 'unit_id|item_id': latestRow }
+    progressCache: {},             // { '${pageId}|step${num}': { status, edited_at, ... } }
     currentTab: 'manual',
-    manualLevel: 'basic',
+    cardLearning: { pageId: null, idx: 0, cards: [] },
+    pendingPicker: null,           // {pageId, stepNum} 進度表でクリック中の対象
     reflectForm: {
       itemId: '',
       status: '',
@@ -74,7 +81,6 @@
       studentId: state.studentId,
       selectedUnitId: state.selectedUnitId,
       currentTab: state.currentTab,
-      manualLevel: state.manualLevel,
       ts: new Date().toISOString()
     };
     try {
@@ -91,7 +97,6 @@
       state.studentId = obj.studentId || null;
       state.selectedUnitId = obj.selectedUnitId || null;
       state.currentTab = obj.currentTab || 'manual';
-      state.manualLevel = obj.manualLevel || 'basic';
     } catch (err) { console.warn('loadState failed', err); }
   }
 
@@ -108,33 +113,21 @@
   // Unit Master の読み込み
   // ----------------------------------------------------------------
   async function loadUnitMaster_() {
-    // 優先1: window.UNIT_MASTER（unit_master.js から）
-    if (window.UNIT_MASTER && Array.isArray(window.UNIT_MASTER.units)) {
-      state.units = window.UNIT_MASTER.units;
+    if (window.UNIT_MASTER) {
+      state.units = window.UNIT_MASTER.units || [];
+      state.steps = window.UNIT_MASTER.steps || [];
+      state.statusLevels = window.UNIT_MASTER.status_levels || [];
       if (!state.selectedUnitId && state.units.length > 0) {
         state.selectedUnitId = state.units[0].unit_id;
       }
-      // 教師側で編集された上書きデータがあれば適用
+      // 教師側 overrides があれば適用
       try {
         const overrides = JSON.parse(localStorage.getItem('sansuuApp_unitOverrides') || '{}');
-        if (overrides.units) {
-          state.units = overrides.units;
-        }
+        if (overrides.units) state.units = overrides.units;
       } catch {}
       return;
     }
-    // 優先2: fetch（http(s):// での起動時のみ動く）
-    try {
-      const res = await fetch('data/unit_master.json', { cache: 'no-cache' });
-      const data = await res.json();
-      state.units = data.units || [];
-      if (!state.selectedUnitId && state.units.length > 0) {
-        state.selectedUnitId = state.units[0].unit_id;
-      }
-    } catch (err) {
-      console.error('loadUnitMaster failed', err);
-      console.warn('単元データの読み込み失敗。data/unit_master.js が読み込まれているか確認してください。');
-    }
+    console.error('window.UNIT_MASTER が読み込まれていません。data/unit_master.js を確認してください。');
   }
 
   function getCurrentUnit_() {
@@ -252,43 +245,217 @@
     document.getElementById('manualUnitName').textContent = u.name;
     document.getElementById('manualUnitHours').textContent = `${u.hours}時間`;
     document.getElementById('manualUnitPages').textContent = u.textbook_pages || '';
-    renderManualItemList_();
+    renderProgressTable_();
     renderProgressSummary_();
     renderDayCards_();
     renderReflectItemSelect_();
   }
 
   // ----------------------------------------------------------------
-  // 手引きタブ
+  // 進度表（樋口式 学習計画表）
   // ----------------------------------------------------------------
-  function renderManualItemList_() {
+  function renderProgressTable_() {
     const u = getCurrentUnit_();
-    if (!u) return;
-    const list = document.getElementById('manualItemList');
-    const filtered = u.items.filter(it => it.level === state.manualLevel);
-    list.innerHTML = '';
-    filtered.forEach(it => {
-      const li = document.createElement('li');
-      li.className = 'item-row';
-      const latest = state.progressCache[`${u.unit_id}|${it.item_id}`];
-      if (latest && latest.status) {
-        li.classList.add('status-' + latest.status.toLowerCase());
+    if (!u || !u.pages) return;
+    const head = document.getElementById('progressTableHead');
+    const body = document.getElementById('progressTableBody');
+    if (!head || !body) return;
+
+    // ヘッダ
+    let h = '<tr><th class="col-page">ページ・問題</th>';
+    state.steps.forEach(s => {
+      h += `<th class="col-step" title="${escapeHtml_(s.label)}">${s.icon}<br><span style="font-size:10px;">${escapeHtml_(s.short)}</span></th>`;
+    });
+    h += '<th class="col-cards">カード</th></tr>';
+    head.innerHTML = h;
+
+    // 各ページ行
+    body.innerHTML = '';
+    u.pages.forEach(p => {
+      const tr = document.createElement('tr');
+      tr.className = 'level-' + (p.level || 'basic') + (p.teacher_check ? ' teacher-check' : '');
+
+      // ページラベル
+      const labelTd = document.createElement('td');
+      labelTd.className = 'cell-page-label';
+      labelTd.innerHTML = `${escapeHtml_(p.label)}<span class="page-no">${escapeHtml_(p.page || '')}</span>`;
+      tr.appendChild(labelTd);
+
+      // 各ステップのセル
+      state.steps.forEach(s => {
+        const td = document.createElement('td');
+        const key = `${p.page_id}|step${s.num}`;
+        const rec = state.progressCache[key];
+        const statusCode = rec && rec.status ? rec.status : '';
+        td.className = 'cell-step ' + (statusCode ? 'status-' + statusCode : 'empty');
+        td.textContent = STATUS_CODE[statusCode] || '・';
+        td.dataset.pageId = p.page_id;
+        td.dataset.stepNum = s.num;
+        td.addEventListener('click', () => openStatusPicker_(p, s, statusCode));
+        tr.appendChild(td);
+      });
+
+      // カードボタン
+      const cardTd = document.createElement('td');
+      cardTd.className = 'cell-cards';
+      const hasCards = (p.cards || []).length > 0;
+      cardTd.innerHTML = `<button class="${hasCards ? '' : 'no-cards'}" ${hasCards ? '' : 'disabled'}>📇 ${(p.cards || []).length}枚</button>`;
+      if (hasCards) {
+        cardTd.querySelector('button').addEventListener('click', () => openCardLearning_(p));
       }
-      const statusMark = latest ? statusToMark_(latest.status) : '・';
-      li.innerHTML = `
-        <span class="item-id">${it.item_id}</span>
-        <span class="item-label">${escapeHtml_(it.label)}</span>
-        <span class="item-page">${escapeHtml_(it.page || '')}</span>
-        <span class="item-status">${statusMark}</span>
-        <button class="icon-btn" data-jump-reflect="${it.item_id}" title="この項目で振り返る">📝</button>
-      `;
-      list.appendChild(li);
+      tr.appendChild(cardTd);
+
+      body.appendChild(tr);
     });
   }
 
   function statusToMark_(s) {
-    return { A: '◎', B: '○', C: '△' }[s] || '・';
+    return STATUS_CODE[s] || '・';
   }
+
+  // ----------------------------------------------------------------
+  // 4段階評価ピッカー（樋口式 ×→△→○→◎）
+  // ----------------------------------------------------------------
+  function openStatusPicker_(page, step, currentCode) {
+    state.pendingPicker = { pageId: page.page_id, stepNum: step.num };
+    document.getElementById('statusPickerTitle').textContent =
+      `${page.label} — ${step.label}`;
+    document.getElementById('statusPickerContext').textContent =
+      `${step.icon} ${step.desc}`;
+    const grid = document.getElementById('statusPickerGrid');
+    grid.innerHTML = '';
+    state.statusLevels.forEach(lv => {
+      const btn = document.createElement('button');
+      btn.className = 'status-pick-btn';
+      btn.dataset.pick = lv.code;
+      btn.innerHTML = `<span class="pick-icon">${lv.icon}</span><span class="pick-label">${lv.label}</span>`;
+      if (lv.code === currentCode) btn.style.background = '#FFFBE6';
+      btn.addEventListener('click', () => {
+        recordStepStatus_(page.page_id, step.num, lv.code);
+        document.getElementById('statusPickerModal').hidden = true;
+      });
+      grid.appendChild(btn);
+    });
+    // クリアボタン
+    const clearBtn = document.createElement('button');
+    clearBtn.className = 'status-pick-btn clear-btn';
+    clearBtn.innerHTML = '・ まだ取り組んでいない';
+    clearBtn.addEventListener('click', () => {
+      clearStepStatus_(page.page_id, step.num);
+      document.getElementById('statusPickerModal').hidden = true;
+    });
+    grid.appendChild(clearBtn);
+    document.getElementById('statusPickerModal').hidden = false;
+  }
+
+  async function recordStepStatus_(pageId, stepNum, code) {
+    const u = getCurrentUnit_();
+    if (!u) return;
+    const ts = new Date().toISOString();
+    const data = {
+      student_id: state.studentId,
+      unit_id: u.unit_id,
+      item_id: `${pageId}-step${stepNum}`,
+      status: code,
+      reason: null,
+      next_strategy: null,
+      reason_tags: [],
+      strategy_tag: null,
+      device_id: DEVICE_ID,
+      created_at: ts,
+      edited_at: ts
+    };
+    state.progressCache[`${pageId}|step${stepNum}`] = data;
+    renderProgressTable_();
+    renderProgressSummary_();
+    try {
+      const result = await window.CloudSync.push('progress', 'insert', data);
+      if (result.ok) toast(`${STATUS_CODE[code]} を記録`, 'success');
+      else toast('オフライン：あとで同期', 'info');
+    } catch (err) {
+      console.warn('recordStepStatus failed', err);
+    }
+  }
+
+  function clearStepStatus_(pageId, stepNum) {
+    delete state.progressCache[`${pageId}|step${stepNum}`];
+    renderProgressTable_();
+    renderProgressSummary_();
+    toast('クリアしました（教師端末で再同期で復活します）', 'info');
+  }
+
+  // 閉じる
+  document.addEventListener('DOMContentLoaded', () => {
+    const closeBtn = document.getElementById('statusPickerCloseBtn');
+    if (closeBtn) closeBtn.addEventListener('click', () => {
+      document.getElementById('statusPickerModal').hidden = true;
+    });
+  });
+
+  // ----------------------------------------------------------------
+  // カード学習モード（1問1カード）
+  // ----------------------------------------------------------------
+  function openCardLearning_(page) {
+    if (!page.cards || page.cards.length === 0) {
+      toast('このページにはまだカードがありません', 'info');
+      return;
+    }
+    state.cardLearning = { pageId: page.page_id, idx: 0, cards: page.cards };
+    document.getElementById('cardLearningTitle').textContent = `📇 ${page.label}`;
+    showCard_(0);
+    document.getElementById('cardLearningModal').hidden = false;
+  }
+
+  function showCard_(idx) {
+    const cards = state.cardLearning.cards;
+    if (idx < 0 || idx >= cards.length) return;
+    state.cardLearning.idx = idx;
+    const card = cards[idx];
+    document.getElementById('cardProgress').textContent = `${idx + 1} / ${cards.length}`;
+    document.getElementById('cardQuestion').textContent = card.q;
+    document.getElementById('cardAnswer').textContent = card.a;
+    document.getElementById('cardHint').textContent = card.hint ? '💡 ' + card.hint : '';
+    document.getElementById('cardFront').hidden = false;
+    document.getElementById('cardBack').hidden = true;
+    document.getElementById('cardPrevBtn').disabled = idx === 0;
+    document.getElementById('cardNextBtn').disabled = idx === cards.length - 1;
+
+    // セルフチェック評価
+    const grid = document.getElementById('cardStatusGrid');
+    grid.innerHTML = '';
+    state.statusLevels.forEach(lv => {
+      const btn = document.createElement('button');
+      btn.className = 'status-pick-btn';
+      btn.dataset.pick = lv.code;
+      btn.innerHTML = `<span class="pick-icon">${lv.icon}</span><span class="pick-label">${lv.label}</span>`;
+      btn.addEventListener('click', async () => {
+        // ステップ3（問題解決）に評価を記録
+        await recordStepStatus_(state.cardLearning.pageId, 3, lv.code);
+        if (idx < cards.length - 1) showCard_(idx + 1);
+        else {
+          toast('全カード完了！', 'success');
+          document.getElementById('cardLearningModal').hidden = true;
+        }
+      });
+      grid.appendChild(btn);
+    });
+  }
+
+  document.addEventListener('DOMContentLoaded', () => {
+    const flip = document.getElementById('cardFlipBtn');
+    const close = document.getElementById('cardLearningCloseBtn');
+    const prev = document.getElementById('cardPrevBtn');
+    const next = document.getElementById('cardNextBtn');
+    if (flip) flip.addEventListener('click', () => {
+      document.getElementById('cardFront').hidden = true;
+      document.getElementById('cardBack').hidden = false;
+    });
+    if (close) close.addEventListener('click', () => {
+      document.getElementById('cardLearningModal').hidden = true;
+    });
+    if (prev) prev.addEventListener('click', () => showCard_(state.cardLearning.idx - 1));
+    if (next) next.addEventListener('click', () => showCard_(state.cardLearning.idx + 1));
+  });
 
   // ----------------------------------------------------------------
   // きょうタブ（今日±2日のカレンダー）
@@ -365,56 +532,49 @@
     // 送信
     document.getElementById('submitReflectBtn').addEventListener('click', submitReflect_);
 
-    // 手引きタブから振り返りへの遷移ボタン
-    document.getElementById('manualItemList').addEventListener('click', e => {
-      const btn = e.target.closest('[data-jump-reflect]');
-      if (!btn) return;
-      const itemId = btn.dataset.jumpReflect;
-      state.reflectForm.itemId = itemId;
-      showTab_('reflect');
-      document.getElementById('reflectItem').value = itemId;
-    });
   }
 
   function renderReflectItemSelect_() {
     const sel = document.getElementById('reflectItem');
     if (!sel) return;
     const u = getCurrentUnit_();
-    if (!u) return;
+    if (!u || !u.pages) return;
     sel.innerHTML = '';
-    u.items.forEach(it => {
+    u.pages.forEach(p => {
       const opt = document.createElement('option');
-      opt.value = it.item_id;
-      opt.textContent = `${it.item_id} ${it.label}`;
+      opt.value = p.page_id;
+      opt.textContent = `${p.label}（${p.page || ''}）`;
       sel.appendChild(opt);
     });
     if (state.reflectForm.itemId) sel.value = state.reflectForm.itemId;
   }
 
   async function submitReflect_() {
-    const itemId = document.getElementById('reflectItem').value;
+    const pageId = document.getElementById('reflectItem').value;
     const status = document.getElementById('reflectStatus').value;
-    if (!itemId || !status) {
-      toast('項目と できぐあい を選んでね', 'error');
+    if (!pageId || !status) {
+      toast('ページと できぐあい を選んでね', 'error');
       return;
     }
+    // 振り返りはステップ⑥（振り返り）の評価＋原因＋作戦として記録
+    const stepNum = 6;
+    const ts = new Date().toISOString();
     const data = {
       student_id: state.studentId,
       unit_id: state.selectedUnitId,
-      item_id: itemId,
+      item_id: `${pageId}-step${stepNum}`,
       status: status,
       reason_tags: Array.from(state.reflectForm.reasonTags),
       reason: state.reflectForm.reasonFree || null,
       strategy_tag: document.getElementById('reflectStrategy').value || null,
       next_strategy: state.reflectForm.strategyFree || null,
       device_id: DEVICE_ID,
-      created_at: new Date().toISOString(),
-      edited_at: new Date().toISOString()
+      created_at: ts,
+      edited_at: ts
     };
 
-    // ローカルキャッシュへ即時反映
-    state.progressCache[`${data.unit_id}|${data.item_id}`] = data;
-    renderManualItemList_();
+    state.progressCache[`${pageId}|step${stepNum}`] = data;
+    renderProgressTable_();
     renderProgressSummary_();
 
     // 同期
@@ -580,19 +740,18 @@
   // ----------------------------------------------------------------
   function renderProgressSummary_() {
     const u = getCurrentUnit_();
-    if (!u) return;
-    const total = u.items.length;
-    let a = 0, b = 0, c = 0;
-    u.items.forEach(it => {
-      const latest = state.progressCache[`${u.unit_id}|${it.item_id}`];
-      if (latest) {
-        if (latest.status === 'A') a++;
-        else if (latest.status === 'B') b++;
-        else if (latest.status === 'C') c++;
-      }
+    if (!u || !u.pages) return;
+    const total = u.pages.length * state.steps.length;
+    let cnt = { x: 0, tri: 0, circ: 0, dbl: 0 };
+    u.pages.forEach(p => {
+      state.steps.forEach(s => {
+        const rec = state.progressCache[`${p.page_id}|step${s.num}`];
+        if (rec && cnt[rec.status] !== undefined) cnt[rec.status]++;
+      });
     });
-    document.getElementById('progressSummary').textContent = `◎${a} ○${b} △${c}`;
-    const done = a + b + c;
+    document.getElementById('progressSummary').textContent =
+      `◎${cnt.dbl} ○${cnt.circ} △${cnt.tri} ×${cnt.x}`;
+    const done = cnt.tri + cnt.circ + cnt.dbl;
     const pct = total > 0 ? Math.round(done / total * 100) : 0;
     document.getElementById('progressBarFill').style.width = pct + '%';
   }
@@ -606,16 +765,18 @@
       const result = await window.CloudSync.pull('progress', { student_id: state.studentId });
       if (result.ok && Array.isArray(result.data)) {
         const filtered = result.data.filter(r => r.unit_id === state.selectedUnitId);
-        // 最新だけ抽出
+        // item_id = `${pageId}-step${num}` 形式 → progressCache キー `${pageId}|step${num}`
         const map = {};
         filtered.forEach(r => {
-          const key = `${r.unit_id}|${r.item_id}`;
-          if (!map[key] || (r.edited_at || '') > (map[key].edited_at || '')) {
-            map[key] = r;
+          const m = (r.item_id || '').match(/^(.+)-step(\d+)$/);
+          if (!m) return;
+          const cacheKey = `${m[1]}|step${m[2]}`;
+          if (!map[cacheKey] || (r.edited_at || '') > (map[cacheKey].edited_at || '')) {
+            map[cacheKey] = r;
           }
         });
         state.progressCache = Object.assign({}, state.progressCache, map);
-        renderManualItemList_();
+        renderProgressTable_();
         renderProgressSummary_();
         setSyncBadge_('ok');
       }
@@ -653,12 +814,7 @@
         btn.classList.add('active');
         const target = document.getElementById(targetId);
         if (target) target.value = btn.dataset.value;
-        // 特殊な反応
-        if (targetId === 'manualLevel') {
-          state.manualLevel = btn.dataset.value;
-          saveState_();
-          renderManualItemList_();
-        }
+        // 旧 manualLevel タブは削除済（v2: 進度表ベースに移行）
       });
     });
   }

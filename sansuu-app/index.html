@@ -51,7 +51,7 @@
   </nav>
 
   <!-- ====================================================== -->
-  <!-- タブ1：手引き（ガイダンス） -->
+  <!-- タブ1：進度表（樋口式 学習計画表） -->
   <!-- ====================================================== -->
   <section class="tab-content active" data-tab-content="manual">
     <div class="manual-header">
@@ -62,16 +62,20 @@
       </p>
     </div>
 
-    <div class="level-tabs btn-grp" data-target="manualLevel">
-      <button type="button" data-value="basic" class="active">基本</button>
-      <button type="button" data-value="applied">応用</button>
-      <button type="button" data-value="challenge">チャレンジ</button>
+    <div class="legend-bar">
+      <span class="legend-x">× わからない</span>
+      <span class="legend-tri">△ 理解できた</span>
+      <span class="legend-circ">○ 自力でとけた</span>
+      <span class="legend-dbl">◎ せつめいできた</span>
+      <span class="legend-tc">⭐ 先生にせつめい</span>
     </div>
-    <input type="hidden" id="manualLevel" value="basic">
 
-    <ul class="item-list" id="manualItemList">
-      <!-- 動的生成 -->
-    </ul>
+    <div class="progress-table-wrap">
+      <table class="progress-table" id="progressTable">
+        <thead id="progressTableHead"></thead>
+        <tbody id="progressTableBody"></tbody>
+      </table>
+    </div>
   </section>
 
   <!-- ====================================================== -->
@@ -97,16 +101,17 @@
 
     <div class="reflect-form">
       <div class="form-row">
-        <label>取り組んだ項目</label>
-        <select id="reflectItem" aria-label="どの項目をやった？"></select>
+        <label>取り組んだページ</label>
+        <select id="reflectItem" aria-label="どのページをやった？"></select>
       </div>
 
       <div class="form-row">
-        <label>できぐあい</label>
+        <label>どこまでできた？（樋口式 4段階）</label>
         <div class="status-grp btn-grp" data-target="reflectStatus">
-          <button type="button" data-value="A" class="status-a">◎ ばっちり</button>
-          <button type="button" data-value="B" class="status-b">○ できた</button>
-          <button type="button" data-value="C" class="status-c">△ もう一回</button>
+          <button type="button" data-value="dbl" class="status-dbl">◎ せつめいできた</button>
+          <button type="button" data-value="circ" class="status-circ">○ 自力でとけた</button>
+          <button type="button" data-value="tri" class="status-tri">△ 理解できた</button>
+          <button type="button" data-value="x" class="status-x-btn">× わからない</button>
         </div>
         <input type="hidden" id="reflectStatus" value="">
       </div>
@@ -167,6 +172,51 @@
         <div class="help-ask">
           <p>それでもこまったら：</p>
           <button class="ask-teacher-btn" id="askTeacherBtn">🙋 先生に質問</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4段階評価ピッカー -->
+  <div id="statusPickerModal" class="modal" hidden>
+    <div class="modal-content status-picker-modal">
+      <header class="modal-header">
+        <span id="statusPickerTitle">どこまでできた？</span>
+        <button class="close-btn" id="statusPickerCloseBtn">×</button>
+      </header>
+      <div class="modal-body">
+        <p class="status-picker-context" id="statusPickerContext"></p>
+        <div class="status-picker-grid" id="statusPickerGrid"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- カード学習モーダル -->
+  <div id="cardLearningModal" class="modal" hidden>
+    <div class="modal-content card-learning">
+      <header class="modal-header">
+        <span id="cardLearningTitle">カード学習</span>
+        <button class="close-btn" id="cardLearningCloseBtn">×</button>
+      </header>
+      <div class="modal-body">
+        <div class="card-progress" id="cardProgress">1 / 1</div>
+        <div class="study-card" id="studyCard">
+          <div class="study-card-face front" id="cardFront">
+            <p class="card-q" id="cardQuestion"></p>
+            <button class="card-flip-btn" id="cardFlipBtn">めくる →</button>
+          </div>
+          <div class="study-card-face back" id="cardBack" hidden>
+            <p class="card-a" id="cardAnswer"></p>
+            <p class="card-hint" id="cardHint"></p>
+            <div class="card-self-eval">
+              <p>自分の評価：</p>
+              <div class="status-picker-grid" id="cardStatusGrid"></div>
+            </div>
+          </div>
+        </div>
+        <div class="card-nav">
+          <button id="cardPrevBtn">← 前</button>
+          <button id="cardNextBtn">次 →</button>
         </div>
       </div>
     </div>
