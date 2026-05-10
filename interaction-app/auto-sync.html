@@ -281,15 +281,63 @@ function step(label, kind = 'run') {
     const cloudInfoTotal = (info.total_rows||0) + (info.praise_rows||0) + (info.eval_rows||0) + (info.aba_rows||0) + (info.ketebure_rows||0);
     step(`  (参考) info APIの raw row数: 合計${cloudInfoTotal}件 (deleted=1含む)`, 'info');
 
-    // L1 最新件数も再計測
+    // L1 最新件数も再計測 (deleted=1除く生存数で比較に統一)
     const finalLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
-    const finalLocalTotal = (finalLocal.records||[]).length + (finalLocal.praises||[]).length + (finalLocal.evaluations||[]).length + (finalLocal.abaRecords||[]).length + (finalLocal.ketebureRecords||[]).length;
-    step(`✓ L1 最終件数: 合計${finalLocalTotal}件`, 'ok');
+    const aliveLocal = (arr) => (arr || []).filter(x => x && String(x.deleted) !== '1').length;
+    const finalLocalCounts = {
+      records: aliveLocal(finalLocal.records),
+      praises: aliveLocal(finalLocal.praises),
+      evaluations: aliveLocal(finalLocal.evaluations),
+      abaRecords: aliveLocal(finalLocal.abaRecords),
+      ketebureRecords: aliveLocal(finalLocal.ketebureRecords)
+    };
+    const finalLocalTotal = Object.values(finalLocalCounts).reduce((a,b)=>a+b,0);
+    const finalLocalRaw = (finalLocal.records||[]).length + (finalLocal.praises||[]).length + (finalLocal.evaluations||[]).length + (finalLocal.abaRecords||[]).length + (finalLocal.ketebureRecords||[]).length;
+    step(`✓ L1 最終生存件数: 合計${finalLocalTotal}件 (deleted含むraw: ${finalLocalRaw}件 / 差${finalLocalRaw - finalLocalTotal}件)`, 'ok');
+    log.result.localFinal = { total: finalLocalTotal, raw: finalLocalRaw, ...finalLocalCounts };
+
+    // L2 (IDB) も生存数で再計算
+    let idbTotal = '?';
+    let idbAliveTotal = '?';
+    if (log.result.idbAfter && log.result.idbAfter.total != null) {
+      idbTotal = log.result.idbAfter.total;
+      // IDBの内容を再度読んで deleted=1 を除外した数を計算
+      try {
+        await new Promise((resolve) => {
+          const req = indexedDB.open('interactionApp', 1);
+          req.onupgradeneeded = (e) => { const db = e.target.result; if (!db.objectStoreNames.contains('appState')) db.createObjectStore('appState'); };
+          req.onsuccess = () => {
+            const db = req.result;
+            const r = db.transaction(['appState'], 'readonly').objectStore('appState').get('current');
+            r.onsuccess = () => {
+              const v = r.result;
+              if (v && v.json) {
+                try {
+                  const idbData = JSON.parse(v.json);
+                  idbAliveTotal = aliveLocal(idbData.records) + aliveLocal(idbData.praises) +
+                    aliveLocal(idbData.evaluations) + aliveLocal(idbData.abaRecords) +
+                    aliveLocal(idbData.ketebureRecords);
+                  log.result.idbAlive = idbAliveTotal;
+                } catch (_) {}
+              }
+              resolve();
+            };
+            r.onerror = () => resolve();
+          };
+          req.onerror = () => resolve();
+        });
+      } catch (_) {}
+      step(`✓ L2 IDB生存件数: ${idbAliveTotal}件 (raw: ${idbTotal}件)`, 'ok');
+    }
 
     // 3層整合チェック (生存数ベース)
-    const idbTotal = log.result.idbAfter ? log.result.idbAfter.total : '?';
-    const allMatch = (finalLocalTotal === idbTotal) && (finalLocalTotal === cloudAliveTotal);
-    step(allMatch ? `🎉 3層完全一致: L1=L2=L3=${finalLocalTotal}件` : `⚠ 3層差: L1=${finalLocalTotal} / L2=${idbTotal} / L3生存=${cloudAliveTotal}`, allMatch ? 'ok' : 'err');
+    const allMatch = (finalLocalTotal === idbAliveTotal) && (finalLocalTotal === cloudAliveTotal);
+    step(
+      allMatch
+        ? `🎉 3層完全一致: L1=L2=L3=${finalLocalTotal}件 (生存ベース)`
+        : `⚠ 3層差: L1生存=${finalLocalTotal} / L2生存=${idbAliveTotal} / L3生存=${cloudAliveTotal}`,
+      allMatch ? 'ok' : 'err'
+    );
 
     step('🎉 完全双方向同期完了', 'ok');
     document.title = (allMatch ? '✅' : '⚠') + ' 双方向同期完了 - 担任記録';

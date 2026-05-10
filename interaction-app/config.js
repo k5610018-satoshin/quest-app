@@ -16,7 +16,7 @@ window.APP_CONFIG = {
 
   // SWのCACHE_VERSIONと一致させる (build.sh で自動同期)
   // 健全性ダッシュボードの「Cache: X」表示や診断レポートで利用
-  cacheVersion: 'v20260510l',
+  cacheVersion: 'v20260510m',
 
   // 表示名（配布版では一般的な名前に変更可能）
   brandName: '担任記録アプリ',
