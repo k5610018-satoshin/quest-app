@@ -324,7 +324,8 @@ function renderSyncUI() {
     </div>
     <div class="sync-row" style="margin-top:8px">
       <button class="primary" id="syncNowBtn">今すぐ同期</button>
-      <button class="ghost" id="syncPushAllBtn" title="ローカルの全記録をGASへ送る（初回移行用）">全件アップロード</button>
+      <button class="ghost" id="syncPushAllBtn" title="交友関係(records)のみ全件をGASへ送る（旧仕様）">交友関係のみ全件アップロード</button>
+      <button id="syncPushAllTypesBtn" title="全種別(records/praises/evaluations/aba/ketebure)を一括push。重複はGAS側で自動スキップ。" style="background:#28a745;color:white;border:1px solid #28a745;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">⬆ 全種別をクラウドへ送信</button>
     </div>
     <div class="sync-row" style="margin-top:12px; padding:10px; background:#fff8e6; border:1px solid #f5b042; border-radius:6px;">
       <div style="flex:1">
@@ -353,6 +354,25 @@ function bindSyncEvents() {
     } else if (e.target.id === 'syncPushAllBtn') {
       saveSyncInputs();
       pushAllRecords();
+    } else if (e.target.id === 'syncPushAllTypesBtn') {
+      saveSyncInputs();
+      const cnts = {
+        records: (state.records || []).length,
+        praises: (state.praises || []).length,
+        evaluations: (state.evaluations || []).length,
+        aba: (state.abaRecords || []).length,
+        kete: (state.ketebureRecords || []).length
+      };
+      const total = Object.values(cnts).reduce((a, b) => a + b, 0);
+      if (!confirm(
+        `ローカルの全種別をクラウドへ強制送信します。\n\n` +
+        `送信件数:\n` +
+        `  交友関係 ${cnts.records}件 / ほめ ${cnts.praises}件 / 評価 ${cnts.evaluations}件\n` +
+        `  ABA ${cnts.aba}件 / けテぶれ ${cnts.kete}件\n` +
+        `  合計 ${total}件\n\n` +
+        `(クラウドに既にある同IDレコードは自動スキップ。何度押しても安全)\n\n` +
+        `続行しますか？`)) return;
+      pushAllToGas();
     } else if (e.target.id === 'syncEmergencyRestoreBtn') {
       saveSyncInputs();
       emergencyRestoreFromGas();
@@ -977,6 +997,97 @@ async function pushRecordToGas(record, action) {
     addToPendingQueue({ action: action || 'add', record });
     showSyncStatus('オフライン中(自動再試行します)', true);
     return false;
+  }
+}
+
+// けテぶれの全件アップロード（GAS bulk_add対応済み: dataType='ketebure' / ketebureRecords[]）
+async function pushAllKetebure() {
+  if (!checkSyncReady()) return;
+  if (!Array.isArray(state.ketebureRecords) || state.ketebureRecords.length === 0) {
+    showToast('送信するけテぶれ記録がありません', 'error');
+    return;
+  }
+  if (_isSyncing) return;
+  _isSyncing = true;
+  showSyncStatus(`けテぶれ全${state.ketebureRecords.length}件送信中…`);
+  try {
+    const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({
+        action: 'bulk_add',
+        dataType: 'ketebure',
+        ketebureRecords: state.ketebureRecords,
+        deviceId: _deviceId
+      })
+    });
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error);
+    showSyncStatus(`けテぶれ送信完了: ${data.added}件追加 / ${data.skipped}件重複`);
+  } catch (err) {
+    showSyncStatus('けテぶれ送信失敗: ' + err.message, true);
+  } finally {
+    _isSyncing = false;
+  }
+}
+
+// 全種別をクラウドへ送信（push only / 重複は GAS bulk_add 側でスキップされるので何度押しても安全）
+async function pushAllToGas() {
+  if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
+  const summary = {};
+  // pendingQueueがあれば先に送る
+  try { await flushPendingQueue(); } catch (_) {}
+
+  async function _bulkPush(label, dataType, payloadKey, arr) {
+    if (!Array.isArray(arr) || arr.length === 0) {
+      summary[label] = '0件 (送信なし)';
+      return;
+    }
+    showSyncStatus(`${label} 全${arr.length}件送信中…`);
+    try {
+      const body = { action: 'bulk_add', deviceId: _deviceId };
+      if (dataType) body.dataType = dataType;
+      body[payloadKey] = arr;
+      const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(body)
+      });
+      const data = await res.json();
+      if (!data.ok) throw new Error(data.error || 'GAS error');
+      summary[label] = `+${data.added}件 (重複${data.skipped}件)`;
+    } catch (e) {
+      summary[label] = 'ERR ' + e.message;
+    }
+  }
+
+  if (_isSyncing) return { ok: false, error: '別の同期処理中' };
+  _isSyncing = true;
+  try {
+    // 各種別を順次送信 (GASのrate limit対策で並列にしない)
+    await _bulkPush('交友関係', null, 'records', state.records);
+    await _bulkPush('ほめ', 'praise', 'praises', state.praises);
+    await _bulkPush('評価', 'evaluation', 'evaluations', state.evaluations);
+    await _bulkPush('ABA', 'aba', 'abaRecords', state.abaRecords);
+    await _bulkPush('けテぶれ', 'ketebure', 'ketebureRecords', state.ketebureRecords);
+    // 席替えはbulk push未対応の場合はスキップ
+    if (Array.isArray(state.seatingSnapshots) && state.seatingSnapshots.length > 0) {
+      // 個別に送る方式が安全
+      summary['席替え'] = state.seatingSnapshots.length + '件 (個別sync推奨)';
+    }
+    showSyncStatus(`全種別送信完了: ${Object.entries(summary).map(([k, v]) => k + ' ' + v).join(' / ')}`);
+    if (typeof showToast === 'function') {
+      const msg = '⬆ 送信完了:\n' + Object.entries(summary).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+      showToast(msg, 'success');
+    }
+    updateLastPullTime();
+    return { ok: true, summary };
+  } catch (err) {
+    showSyncStatus('全件送信エラー: ' + err.message, true);
+    if (typeof showToast === 'function') showToast('全件送信エラー: ' + err.message, 'error');
+    return { ok: false, error: err.message, summary };
+  } finally {
+    _isSyncing = false;
   }
 }
 
