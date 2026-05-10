@@ -614,7 +614,9 @@ async function _pullFromGasInner(opts) {
   if (!(opts && opts.fullPull)) {
     if (window.state && window.state.ui && window.state.ui.editingRecordId) {
       console.warn('[sync] 編集モード中のためpullを延期');
-      return;
+      // M3-residual修正: 編集中early-returnを skipped 形式に変えて、上位 (syncNow等) が
+      // 「同期完了」と虚偽表示しないようにする
+      return { skipped: true, reason: 'editing' };
     }
   }
   // since計算を安全側に倒す（computePullSinceがローカル状態を見て決定）
@@ -940,11 +942,13 @@ function enrichEvaluation(ev) {
 
 async function pushEvaluationToGas(evaluation, action) {
   if (!checkSyncReady()) return false;
+  // L-G修正: pendingQueue投入時も enrichEvaluation を適用 (matrix sheet空欄回避)
+  // (delete actionは元のevaluationのまま)
+  const enriched = action === 'delete' ? evaluation : enrichEvaluation(evaluation);
   if (!navigator.onLine) {
-    addToPendingQueue({ action: action || 'add', evaluation, dataType: 'evaluation' });
+    addToPendingQueue({ action: action || 'add', evaluation: enriched, dataType: 'evaluation' });
     return false;
   }
-  const payload = action === 'delete' ? evaluation : enrichEvaluation(evaluation);
   try {
     const res = await fetch(`${syncConfig.endpoint}?key=${encodeURIComponent(syncConfig.apiKey)}`, {
       method: 'POST',
@@ -952,7 +956,7 @@ async function pushEvaluationToGas(evaluation, action) {
       body: JSON.stringify({
         action: action || 'add',
         dataType: 'evaluation',
-        evaluation: payload,
+        evaluation: enriched,
         deviceId: _deviceId
       })
     });
@@ -962,7 +966,7 @@ async function pushEvaluationToGas(evaluation, action) {
     return true;
   } catch (err) {
     console.warn('[sync] evaluation push失敗:', err.message);
-    addToPendingQueue({ action: action || 'add', evaluation, dataType: 'evaluation' });
+    addToPendingQueue({ action: action || 'add', evaluation: enriched, dataType: 'evaluation' });
     return false;
   }
 }

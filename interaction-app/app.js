@@ -947,6 +947,12 @@ function init() {
       setTimeout(async () => {
         if (typeof window.fullSyncAllLayers === 'function') {
           console.log('[autosync] 実行開始');
+          // L-H修正: 5秒間に別タブが editingRecordId を再セットした可能性に備え、再度クリア
+          if (state && state.ui && state.ui.editingRecordId) {
+            console.log('[autosync] 直前再チェック: editingRecordId 解除');
+            state.ui.editingRecordId = null;
+            if (typeof saveState === 'function') saveState();
+          }
           const result = await window.fullSyncAllLayers();
           console.log('[autosync] 実行結果:', result);
           // M5修正: 完了視覚化、二重prefix防止
