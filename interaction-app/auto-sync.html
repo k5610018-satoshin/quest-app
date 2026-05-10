@@ -17,8 +17,8 @@
 </style>
 </head>
 <body>
-<h1>🔄 担任記録 自動同期 (L1↔L3)</h1>
-<p>このページを開くだけで、ローカル(L1)とクラウド(L3)を完全同期します。SWキャッシュ非依存。</p>
+<h1>🔄 担任記録 自動同期 (L1→L3 push + L1→L2 IDB)</h1>
+<p>このページを開くだけで、ローカル未送信レコードをクラウドへ送信し、IndexedDBへも同期します。SWキャッシュ非依存。</p>
 
 <div id="steps"></div>
 
@@ -31,8 +31,8 @@
 const STORAGE_KEY = 'interactionApp_v1';
 const SYNC_KEY = 'interactionApp_gasSync';
 const LAST_PULL_KEY = 'interactionApp_lastPull';
-const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
-const DEFAULT_API_KEY = 'cLgXe27Zo-2w7cfL';
+// F1修正: 個人版GAS資格情報のハードコード削除。設定済み(localStorage)からのみ取得。
+// 配布版では各先生がsetup-gas.htmlでGAS設定を入れる前提。
 
 const stepsEl = document.getElementById('steps');
 const resultEl = document.getElementById('result');
@@ -50,11 +50,11 @@ function step(label, kind = 'run') {
 (async () => {
   try {
     const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}');
-    const ep = cfg.endpoint || DEFAULT_ENDPOINT;
-    const ak = cfg.apiKey || DEFAULT_API_KEY;
+    const ep = cfg.endpoint;
+    const ak = cfg.apiKey;
     if (!ep || !ak) {
-      step('❌ GAS設定なし', 'err');
-      resultEl.textContent = 'GAS endpoint / apiKey が見つかりません';
+      step('❌ クラウド同期設定が未入力', 'err');
+      resultEl.textContent = 'クラウド同期未設定です。\n\nアプリの「⚙ 設定」タブ → クラウド同期(GAS) で\nWebアプリURLとAPI_KEYを入力してから再度開いてください。\n配布版の場合は setup-gas.html でセットアップウィザードを開けます。';
       return;
     }
     step('1. ローカル localStorage を読み込み中…');
@@ -92,9 +92,12 @@ function step(label, kind = 'run') {
 
     step('3. クラウドのID集合を構築中…');
     const cloudIds = new Set();
-    ['records', 'praises', 'evaluations', 'abaRecords', 'ketebureRecords', 'seatingSnapshots'].forEach(k => {
-      (cloud[k] || cloud.seating || []).forEach(x => x && x.id && cloudIds.add(x.id));
+    // L1修正: 各キーごとに独立に処理 (cloud.seating誤フォールバック削除)
+    ['records', 'praises', 'evaluations', 'abaRecords', 'ketebureRecords'].forEach(k => {
+      (cloud[k] || []).forEach(x => x && x.id && cloudIds.add(x.id));
     });
+    // 席替え: GAS応答は seatingSnapshots か(古い場合)seatingで返す
+    (cloud.seatingSnapshots || cloud.seating || []).forEach(x => x && x.id && cloudIds.add(x.id));
     step(`✓ クラウドID集合: ${cloudIds.size}個`, 'ok');
 
     step('4. ローカル only レコードを特定中…');
@@ -145,7 +148,13 @@ function step(label, kind = 'run') {
     }
 
     step('6. IndexedDB 同期 (ローカル localStorage → IDB)…');
-    if (window.indexedDB) {
+    // F3修正: localStorage が空 or 異常に小さいとき IDB 上書きを禁止 (過去BU破壊防止)
+    const localJson = localStorage.getItem(STORAGE_KEY);
+    if (!localJson) {
+      step('  ⚠ localStorage が空のためIDB書き込みをスキップ (過去BU保護)', 'err');
+    } else if (localJson.length < 100) {
+      step(`  ⚠ localStorage が異常に小さい(${localJson.length}文字)ためIDB書き込みをスキップ (過去BU保護)`, 'err');
+    } else if (window.indexedDB) {
       await new Promise((resolve) => {
         const req = indexedDB.open('interactionApp', 1);
         req.onupgradeneeded = (e) => {
@@ -156,7 +165,7 @@ function step(label, kind = 'run') {
           const db = req.result;
           try {
             const tx = db.transaction(['appState'], 'readwrite');
-            tx.objectStore('appState').put({ ts: new Date().toISOString(), json: localStorage.getItem(STORAGE_KEY) }, 'current');
+            tx.objectStore('appState').put({ ts: new Date().toISOString(), json: localJson }, 'current');
             tx.oncomplete = () => { step('  ✓ IDB書き込み完了', 'ok'); resolve(); };
             tx.onerror = () => { step('  ✗ IDB書き込み失敗', 'err'); resolve(); };
           } catch (e) {

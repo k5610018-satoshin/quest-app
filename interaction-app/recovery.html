@@ -48,15 +48,14 @@
 
 <div class="card">
   <div class="step">Step 4: アプリを開いて確認</div>
-  <p>復元後、<a href="file:///C:/Users/0248025/quest-app/interaction-app/index.html" target="_blank">担任記録アプリを開く</a> → 件数が戻っていることを確認してください。</p>
+  <p>復元後、<a href="index.html" target="_blank">担任記録アプリを開く</a> → 件数が戻っていることを確認してください。</p>
 </div>
 
 <script>
 const STORAGE_KEY = 'interactionApp_v1';
 const SYNC_STORAGE_KEY = 'interactionApp_gasSync';
 const LAST_PULL_KEY = 'interactionApp_lastPull';
-const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
-const DEFAULT_API_KEY  = 'cLgXe27Zo-2w7cfL';
+// F1修正: 個人版GAS資格情報のハードコード削除。設定済みlocalStorageからのみ取得。
 
 let cloudData = null;
 
@@ -134,8 +133,16 @@ document.getElementById('btnInspect').onclick = () => {
 document.getElementById('btnFetch').onclick = async () => {
   const out = document.getElementById('fetchOut');
   out.textContent = 'GAS取得中…';
+  // F1修正: クラウド設定を localStorage から取得 (個人GAS資格情報のハードコード排除)
+  const cfg = JSON.parse(localStorage.getItem(SYNC_STORAGE_KEY) || '{}');
+  const ep = cfg.endpoint;
+  const ak = cfg.apiKey;
+  if (!ep || !ak) {
+    out.innerHTML = '<span class="err">❌ クラウド同期未設定</span>\n設定タブの「クラウド同期(GAS)」でWebアプリURLとAPI_KEYを入力してから再度実行してください。';
+    return;
+  }
   try {
-    const url = `${DEFAULT_ENDPOINT}?key=${encodeURIComponent(DEFAULT_API_KEY)}&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=recovery-tool`;
+    const url = `${ep}?key=${encodeURIComponent(ak)}&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=recovery-tool`;
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP ' + res.status);
     cloudData = await res.json();

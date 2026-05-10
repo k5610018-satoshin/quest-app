@@ -942,8 +942,10 @@ function init() {
           console.log('[autosync] 実行開始');
           const result = await window.fullSyncAllLayers();
           console.log('[autosync] 実行結果:', result);
-          // 完了を視覚化
-          document.title = '✅ ' + (document.title || '');
+          // M5修正: 完了視覚化、二重prefix防止
+          if (!document.title.startsWith('✅') && !document.title.startsWith('⚠')) {
+            document.title = (result && result.ok ? '✅ ' : '⚠ ') + document.title;
+          }
           // 結果をlocalStorageに保存して外部から確認できるように
           try {
             localStorage.setItem('interactionApp_autosync_lastResult', JSON.stringify({

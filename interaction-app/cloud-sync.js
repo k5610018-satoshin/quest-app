@@ -566,6 +566,20 @@ async function pullFromGas(opts) {
   } else {
     if (!checkSyncReady()) return;
   }
+  // M4修正: pull中も _isSyncing フラグで他の同期処理(push)と排他制御
+  if (_isSyncing) {
+    console.warn('[sync] 別の同期処理中、pullをスキップ');
+    return;
+  }
+  _isSyncing = true;
+  try {
+    return await _pullFromGasInner(opts);
+  } finally {
+    _isSyncing = false;
+  }
+}
+
+async function _pullFromGasInner(opts) {
   // 編集モード中はpullを延期（編集中レコードがpull先で上書きされるリスク回避）
   // ただし opts.fullPull (緊急復元) は編集中でも実行
   if (!(opts && opts.fullPull)) {
@@ -1053,6 +1067,24 @@ async function fullSyncAllLayers() {
     if (typeof showToast === 'function') showToast('クラウド同期未設定', 'error');
     return { ok: false, error: 'no-sync' };
   }
+  // M3修正: 編集中フラグを問答無用ではクリアしない (未保存内容上書きを防ぐ)
+  if (window.state && window.state.ui && window.state.ui.editingRecordId) {
+    if (!confirm('編集中の記録があります。完全同期で上書きされる可能性があります。\n編集を破棄して同期を続けますか？')) {
+      return { ok: false, error: 'editing in progress' };
+    }
+    window.state.ui.editingRecordId = null;
+    if (typeof saveState === 'function') saveState();
+  }
+  // M4修正: 起動時pull等の他の同期処理が走っていれば最大30秒待つ
+  let waited = 0;
+  while (_isSyncing && waited < 30000) {
+    await new Promise(r => setTimeout(r, 500));
+    waited += 500;
+  }
+  if (_isSyncing) {
+    if (typeof showToast === 'function') showToast('別の同期処理中。後で再実行してください', 'error');
+    return { ok: false, error: 'sync busy' };
+  }
   const before = sumLocalRecords();
   showSyncStatus('完全同期: L1→L3 push 開始…');
   try {
@@ -1061,16 +1093,17 @@ async function fullSyncAllLayers() {
     showSyncStatus('完全同期: L3→L1 pull 開始…');
     // 2. L3 → L1 pull (全件)
     localStorage.removeItem(LAST_PULL_KEY);
-    if (window.state && window.state.ui) window.state.ui.editingRecordId = null;
     await pullFromGas({ fullPull: true });
     // 3. L1 → L2 saveState (IDB同期)
     if (typeof saveState === 'function') saveState();
     const after = sumLocalRecords();
     if (typeof refreshAll === 'function') refreshAll();
-    const msg = `🔄 完全同期完了\n  ${before}件 → ${after}件 (差分${after - before > 0 ? '+' : ''}${after - before})\n  L3 push: ${pushRes && pushRes.summary ? Object.entries(pushRes.summary).map(([k,v]) => k+'='+v).join(', ') : 'OK'}`;
-    showSyncStatus(`✅ 完全同期完了 ${before}→${after}件`);
-    if (typeof showToast === 'function') showToast(msg, 'success');
-    return { ok: true, before, after };
+    const pushOk = pushRes && pushRes.ok;
+    const summaryStr = pushRes && pushRes.summary ? Object.entries(pushRes.summary).map(([k,v]) => k+'='+v).join(', ') : 'OK';
+    const msg = `${pushOk ? '🔄 完全同期完了' : '⚠ 完全同期: push一部失敗'}\n  ${before}件 → ${after}件 (差分${after - before > 0 ? '+' : ''}${after - before})\n  L3 push: ${summaryStr}`;
+    showSyncStatus(`${pushOk ? '✅' : '⚠'} 完全同期${pushOk ? '完了' : '部分失敗'} ${before}→${after}件`, !pushOk);
+    if (typeof showToast === 'function') showToast(msg, pushOk ? 'success' : 'error');
+    return { ok: pushOk, before, after, pushSummary: pushRes && pushRes.summary, errors: pushRes && pushRes.errors };
   } catch (err) {
     showSyncStatus('完全同期失敗: ' + err.message, true);
     if (typeof showToast === 'function') showToast('完全同期失敗: ' + err.message, 'error');
@@ -1079,13 +1112,17 @@ async function fullSyncAllLayers() {
 }
 
 // 全種別をクラウドへ送信（push only / 重複は GAS bulk_add 側でスキップされるので何度押しても安全）
+//   注意: pull していないので updateLastPullTime() は呼ばない (F2修正)
+//   注意: 評価は enrichEvaluation で studentName/unitName を付与してから送信 (M1修正)
+//   注意: bulk_add 失敗時は pendingQueue に積む (L3修正)
 async function pushAllToGas() {
   if (!checkSyncReady()) return { ok: false, error: 'クラウド同期未設定' };
   const summary = {};
+  const errored = [];
   // pendingQueueがあれば先に送る
   try { await flushPendingQueue(); } catch (_) {}
 
-  async function _bulkPush(label, dataType, payloadKey, arr) {
+  async function _bulkPush(label, dataType, payloadKey, singleKey, arr) {
     if (!Array.isArray(arr) || arr.length === 0) {
       summary[label] = '0件 (送信なし)';
       return;
@@ -1100,39 +1137,52 @@ async function pushAllToGas() {
         headers: { 'Content-Type': 'text/plain;charset=utf-8' },
         body: JSON.stringify(body)
       });
+      if (!res.ok) throw new Error('HTTP ' + res.status);
       const data = await res.json();
       if (!data.ok) throw new Error(data.error || 'GAS error');
       summary[label] = `+${data.added}件 (重複${data.skipped}件)`;
     } catch (e) {
       summary[label] = 'ERR ' + e.message;
+      errored.push({ label, error: e.message, count: arr.length });
+      // L3修正: 失敗時は単発pushで pendingQueue に積み (オフライン時の再試行ルートを確保)
+      try {
+        for (const r of arr) {
+          if (singleKey === 'record') addToPendingQueue({ action: 'add', record: r });
+          else addToPendingQueue({ action: 'add', dataType: dataType, [singleKey]: r });
+        }
+        console.warn(`[sync] ${label} bulk失敗 → ${arr.length}件をpendingQueueへ`);
+      } catch (qe) { console.warn('[sync] pendingQueue退避失敗:', qe); }
     }
   }
 
   if (_isSyncing) return { ok: false, error: '別の同期処理中' };
   _isSyncing = true;
   try {
+    // M1: 評価は studentName/unitName 付与してから送信 (マトリクスシート空欄回避)
+    const enrichedEvals = (state.evaluations || []).map(typeof enrichEvaluation === 'function' ? enrichEvaluation : (x => x));
     // 各種別を順次送信 (GASのrate limit対策で並列にしない)
-    await _bulkPush('交友関係', null, 'records', state.records);
-    await _bulkPush('ほめ', 'praise', 'praises', state.praises);
-    await _bulkPush('評価', 'evaluation', 'evaluations', state.evaluations);
-    await _bulkPush('ABA', 'aba', 'abaRecords', state.abaRecords);
-    await _bulkPush('けテぶれ', 'ketebure', 'ketebureRecords', state.ketebureRecords);
+    await _bulkPush('交友関係', null, 'records', 'record', state.records);
+    await _bulkPush('ほめ', 'praise', 'praises', 'praise', state.praises);
+    await _bulkPush('評価', 'evaluation', 'evaluations', 'evaluation', enrichedEvals);
+    await _bulkPush('ABA', 'aba', 'abaRecords', 'aba', state.abaRecords);
+    await _bulkPush('けテぶれ', 'ketebure', 'ketebureRecords', 'ketebure', state.ketebureRecords);
     // 席替えはbulk push未対応の場合はスキップ
     if (Array.isArray(state.seatingSnapshots) && state.seatingSnapshots.length > 0) {
-      // 個別に送る方式が安全
       summary['席替え'] = state.seatingSnapshots.length + '件 (個別sync推奨)';
     }
-    showSyncStatus(`全種別送信完了: ${Object.entries(summary).map(([k, v]) => k + ' ' + v).join(' / ')}`);
+    const okFlag = errored.length === 0;
+    const statusMsg = `全種別送信${okFlag ? '完了' : '部分失敗'}: ${Object.entries(summary).map(([k, v]) => k + ' ' + v).join(' / ')}`;
+    showSyncStatus(statusMsg, !okFlag);
     if (typeof showToast === 'function') {
-      const msg = '⬆ 送信完了:\n' + Object.entries(summary).map(([k, v]) => `  ${k}: ${v}`).join('\n');
-      showToast(msg, 'success');
+      const msg = (okFlag ? '⬆ 送信完了:\n' : '⚠ 一部失敗:\n') + Object.entries(summary).map(([k, v]) => `  ${k}: ${v}`).join('\n');
+      showToast(msg, okFlag ? 'success' : 'error');
     }
-    updateLastPullTime();
-    return { ok: true, summary };
+    // F2修正: pull していないので updateLastPullTime() は呼ばない
+    return { ok: okFlag, summary, errors: errored };
   } catch (err) {
     showSyncStatus('全件送信エラー: ' + err.message, true);
     if (typeof showToast === 'function') showToast('全件送信エラー: ' + err.message, 'error');
-    return { ok: false, error: err.message, summary };
+    return { ok: false, error: err.message, summary, errors: errored };
   } finally {
     _isSyncing = false;
   }

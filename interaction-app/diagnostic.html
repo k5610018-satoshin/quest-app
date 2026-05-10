@@ -102,8 +102,7 @@ const SYNC_KEY = 'interactionApp_gasSync';
 const LAST_PULL_KEY = 'interactionApp_lastPull';
 const QUEUE_KEY = 'interactionApp_pendingQueue';
 const DEVICE_ID_KEY = 'interactionApp_deviceId';
-const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
-const DEFAULT_API_KEY = 'cLgXe27Zo-2w7cfL';
+// F1修正: 個人版GAS資格情報のハードコード削除。設定済みlocalStorageからのみ取得。
 
 function counts(s) {
   return {
@@ -160,8 +159,9 @@ async function readIdb() {
 
 async function readCloud() {
   const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}');
-  const ep = cfg.endpoint || DEFAULT_ENDPOINT;
-  const ak = cfg.apiKey || DEFAULT_API_KEY;
+  const ep = cfg.endpoint;
+  const ak = cfg.apiKey;
+  if (!ep || !ak) return { ok: false, error: 'クラウド同期未設定 (設定タブで入力してください)' };
   const url = `${ep}?key=${encodeURIComponent(ak)}&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=diagnostic`;
   try {
     const r = await fetch(url);
