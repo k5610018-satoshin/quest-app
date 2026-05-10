@@ -17,8 +17,8 @@
 </style>
 </head>
 <body>
-<h1>🔄 担任記録 自動同期 (L1→L3 push + L1→L2 IDB)</h1>
-<p>このページを開くだけで、ローカル未送信レコードをクラウドへ送信し、IndexedDBへも同期します。SWキャッシュ非依存。</p>
+<h1>🔄 担任記録 完全双方向同期 (L1↔L2↔L3)</h1>
+<p>このページを開くだけで、L1(localStorage) ↔ L3(クラウドGAS) の双方向差分を同期し、L2(IndexedDB)も最新化します。SWキャッシュ非依存。</p>
 
 <div id="steps"></div>
 
@@ -100,7 +100,7 @@ function step(label, kind = 'run') {
     (cloud.seatingSnapshots || cloud.seating || []).forEach(x => x && x.id && cloudIds.add(x.id));
     step(`✓ クラウドID集合: ${cloudIds.size}個`, 'ok');
 
-    step('4. ローカル only レコードを特定中…');
+    step('4a. ローカル only レコード(L1にあるがL3に無い)を特定中…');
     const types = [
       { key: 'records', dataType: null, payloadKey: 'records', label: '交友関係' },
       { key: 'praises', dataType: 'praise', payloadKey: 'praises', label: 'ほめ' },
@@ -118,10 +118,25 @@ function step(label, kind = 'run') {
     step(`✓ ローカルonly合計: ${totalToPush}件 (` + Object.entries(localOnly).map(([k, v]) => `${k} ${v.length}`).join(' / ') + ')', totalToPush > 0 ? 'ok' : 'info');
     log.result.localOnly = Object.fromEntries(Object.entries(localOnly).map(([k, v]) => [k, v.length]));
 
+    step('4b. クラウド only レコード(L3にあるがL1に無い)を特定中…');
+    const localIds = {};
+    for (const t of types) {
+      localIds[t.key] = new Set((data[t.key] || []).map(x => x && x.id).filter(Boolean));
+    }
+    const cloudOnly = {};
+    let totalToPull = 0;
+    for (const t of types) {
+      const arr = (cloud[t.key] || []).filter(x => x && x.id && String(x.deleted) !== '1' && !localIds[t.key].has(x.id));
+      cloudOnly[t.label] = arr;
+      totalToPull += arr.length;
+    }
+    step(`✓ クラウドonly合計: ${totalToPull}件 (` + Object.entries(cloudOnly).map(([k, v]) => `${k} ${v.length}`).join(' / ') + ')', totalToPull > 0 ? 'ok' : 'info');
+    log.result.cloudOnly = Object.fromEntries(Object.entries(cloudOnly).map(([k, v]) => [k, v.length]));
+
     if (totalToPush === 0) {
-      step('5. push対象なし → 同期スキップ', 'info');
+      step('5a. push対象なし → スキップ', 'info');
     } else {
-      step(`5. クラウドへ push (${totalToPush}件)…`);
+      step(`5a. クラウドへ push (${totalToPush}件)…`);
       const pushed = {};
       for (const t of types) {
         const arr = localOnly[t.label];
@@ -147,13 +162,44 @@ function step(label, kind = 'run') {
       log.result.pushed = pushed;
     }
 
+    if (totalToPull === 0) {
+      step('5b. pull対象なし → スキップ', 'info');
+    } else {
+      step(`5b. ローカルへ pull (${totalToPull}件)…`);
+      const pulled = {};
+      for (const t of types) {
+        const arr = cloudOnly[t.label];
+        if (arr.length === 0) { pulled[t.label] = 0; continue; }
+        // ローカル配列に追加 (deleted=1は既にfilter済)
+        if (!Array.isArray(data[t.key])) data[t.key] = [];
+        // パース必要なフィールドの正規化
+        for (const item of arr) {
+          if (typeof item.aspects === 'string') { try { item.aspects = JSON.parse(item.aspects); } catch (_) { item.aspects = []; } }
+          if (typeof item.behaviors === 'string') { try { item.behaviors = JSON.parse(item.behaviors); } catch (_) { item.behaviors = [item.behaviors]; } }
+          if (typeof item.evidences === 'string') { try { item.evidences = JSON.parse(item.evidences); } catch (_) { item.evidences = []; } }
+        }
+        data[t.key].push(...arr);
+        pulled[t.label] = '+' + arr.length + '件';
+        step(`  ${t.label}: ${pulled[t.label]}`, 'ok');
+      }
+      // L1 (localStorage) にマージ結果を即書き込み
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(data));
+        step('  ✓ L1 localStorage 更新完了', 'ok');
+      } catch (e) {
+        step('  ✗ L1 localStorage 更新失敗: ' + e.message, 'err');
+      }
+      log.result.pulled = pulled;
+    }
+
     step('6. IndexedDB 同期 (ローカル localStorage → IDB)…');
-    // F3修正: localStorage が空 or 異常に小さいとき IDB 上書きを禁止 (過去BU破壊防止)
-    const localJson = localStorage.getItem(STORAGE_KEY);
-    if (!localJson) {
+    // F3修正: localStorage が空 or 異常に小さいとき IDB 上書きを禁止 (過去BU保護)
+    const localJsonNow = localStorage.getItem(STORAGE_KEY);
+    let idbWriteOk = false;
+    if (!localJsonNow) {
       step('  ⚠ localStorage が空のためIDB書き込みをスキップ (過去BU保護)', 'err');
-    } else if (localJson.length < 100) {
-      step(`  ⚠ localStorage が異常に小さい(${localJson.length}文字)ためIDB書き込みをスキップ (過去BU保護)`, 'err');
+    } else if (localJsonNow.length < 100) {
+      step(`  ⚠ localStorage が異常に小さい(${localJsonNow.length}文字)ためIDB書き込みをスキップ (過去BU保護)`, 'err');
     } else if (window.indexedDB) {
       await new Promise((resolve) => {
         const req = indexedDB.open('interactionApp', 1);
@@ -165,28 +211,74 @@ function step(label, kind = 'run') {
           const db = req.result;
           try {
             const tx = db.transaction(['appState'], 'readwrite');
-            tx.objectStore('appState').put({ ts: new Date().toISOString(), json: localJson }, 'current');
-            tx.oncomplete = () => { step('  ✓ IDB書き込み完了', 'ok'); resolve(); };
-            tx.onerror = () => { step('  ✗ IDB書き込み失敗', 'err'); resolve(); };
+            tx.objectStore('appState').put({ ts: new Date().toISOString(), json: localJsonNow }, 'current');
+            tx.oncomplete = () => { idbWriteOk = true; step(`  ✓ IDB書き込み完了 (${localJsonNow.length}文字)`, 'ok'); resolve(); };
+            tx.onerror = () => { step('  ✗ IDB書き込み失敗: ' + (tx.error && tx.error.message), 'err'); resolve(); };
           } catch (e) {
             step('  ✗ IDB tx失敗: ' + e.message, 'err');
             resolve();
           }
         };
-        req.onerror = () => { step('  ✗ IDB open失敗', 'err'); resolve(); };
+        req.onerror = () => { step('  ✗ IDB open失敗: ' + (req.error && req.error.message), 'err'); resolve(); };
       });
     } else {
       step('  ✗ IndexedDB利用不可', 'err');
+    }
+
+    step('6b. IDB 件数検証 (書き込み後の実態確認)…');
+    if (window.indexedDB) {
+      await new Promise((resolve) => {
+        const req = indexedDB.open('interactionApp', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('appState')) db.createObjectStore('appState');
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          const r = db.transaction(['appState'], 'readonly').objectStore('appState').get('current');
+          r.onsuccess = () => {
+            const v = r.result;
+            if (!v || !v.json) { step('  ✗ IDBから読み出せず', 'err'); resolve(); return; }
+            try {
+              const idbData = JSON.parse(v.json);
+              const idbCounts = {
+                records: (idbData.records||[]).length,
+                praises: (idbData.praises||[]).length,
+                evaluations: (idbData.evaluations||[]).length,
+                aba: (idbData.abaRecords||[]).length,
+                kete: (idbData.ketebureRecords||[]).length
+              };
+              const idbTotal = Object.values(idbCounts).reduce((a,b)=>a+b,0);
+              step(`  ✓ IDB現在: 合計${idbTotal}件 (記録${idbCounts.records} / ほめ${idbCounts.praises} / 評価${idbCounts.evaluations} / ABA${idbCounts.aba} / けテ${idbCounts.kete}) ts=${v.ts}`, 'ok');
+              log.result.idbAfter = { total: idbTotal, ...idbCounts, ts: v.ts };
+            } catch (e) { step('  ✗ IDB parse失敗: ' + e.message, 'err'); }
+            resolve();
+          };
+          r.onerror = () => { step('  ✗ IDB get失敗', 'err'); resolve(); };
+        };
+        req.onerror = () => { step('  ✗ IDB open失敗', 'err'); resolve(); };
+      });
     }
 
     step('7. クラウド最新件数を再確認中…');
     const r2 = await fetch(ep + '?key=' + encodeURIComponent(ak) + '&action=info');
     const info = await r2.json();
     log.result.cloudFinal = info;
-    step(`✓ クラウド最終件数: 記録 ${info.total_rows} / ほめ ${info.praise_rows} / 評価 ${info.eval_rows} / ABA ${info.aba_rows} / けテ ${info.ketebure_rows}`, 'ok');
+    const cloudFinalTotal = (info.total_rows||0) + (info.praise_rows||0) + (info.eval_rows||0) + (info.aba_rows||0) + (info.ketebure_rows||0);
+    step(`✓ クラウド最終件数: 合計${cloudFinalTotal}件 (記録 ${info.total_rows} / ほめ ${info.praise_rows} / 評価 ${info.eval_rows} / ABA ${info.aba_rows} / けテ ${info.ketebure_rows})`, 'ok');
 
-    step('🎉 完全同期完了', 'ok');
-    document.title = '✅ 完全同期完了 - 担任記録';
+    // L1 最新件数も再計測
+    const finalLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const finalLocalTotal = (finalLocal.records||[]).length + (finalLocal.praises||[]).length + (finalLocal.evaluations||[]).length + (finalLocal.abaRecords||[]).length + (finalLocal.ketebureRecords||[]).length;
+    step(`✓ L1 最終件数: 合計${finalLocalTotal}件`, 'ok');
+
+    // 3層整合チェック
+    const idbTotal = log.result.idbAfter ? log.result.idbAfter.total : '?';
+    const allMatch = (finalLocalTotal === idbTotal) && (finalLocalTotal === cloudFinalTotal);
+    step(allMatch ? `🎉 3層完全一致: L1=L2=L3=${finalLocalTotal}件` : `⚠ 3層差: L1=${finalLocalTotal} / L2=${idbTotal} / L3=${cloudFinalTotal}`, allMatch ? 'ok' : 'err');
+
+    step('🎉 完全双方向同期完了', 'ok');
+    document.title = (allMatch ? '✅' : '⚠') + ' 双方向同期完了 - 担任記録';
     resultEl.textContent = JSON.stringify(log, null, 2);
 
     // 結果を localStorage に保存して外部から確認できるように
