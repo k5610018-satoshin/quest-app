@@ -1047,6 +1047,7 @@ async function pushAllKetebure() {
 //   2. L3→L1: クラウドから全件 pull (既存ローカル保持マージ)
 //   3. L1→L2: saveState() で IDB を同期
 // 何度押しても安全 (重複自動スキップ)
+// window.fullSyncAllLayers として公開 (URL ?autosync=1 や外部から呼び出し可能)
 async function fullSyncAllLayers() {
   if (!checkSyncReady()) {
     if (typeof showToast === 'function') showToast('クラウド同期未設定', 'error');
@@ -1463,3 +1464,9 @@ document.addEventListener('DOMContentLoaded', () => {
   patchSaveRecordForSync();
   initCloudSync();
 });
+
+// ===== グローバル公開 (URL autosyncや外部スクリプトから呼び出し可能) =====
+window.fullSyncAllLayers = fullSyncAllLayers;
+window.pushAllToGas = pushAllToGas;
+window.pullFromGas = pullFromGas;
+window.emergencyRestoreFromGas = emergencyRestoreFromGas;

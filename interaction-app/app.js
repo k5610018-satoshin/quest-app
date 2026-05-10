@@ -929,6 +929,40 @@ function init() {
   // IndexedDB 自動補完 (非同期、localStorage消失時の最後の砦)
   // 2秒後実行: cloud-syncの起動時pullが先に走るのを待つ
   setTimeout(() => { idbCheckAndRestore(); }, 2000);
+
+  // URLパラメータ ?autosync=1 が付いていたら、起動完了後に自動で完全同期
+  // (PowerShellや外部スクリプトから確実に同期実行できる経路)
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('autosync') === '1') {
+      console.log('[autosync] URLパラメータ検出 → fullSyncAllLayers実行予約');
+      // 5秒後実行: cloud-sync の初期化と起動時pullの完了を待つ
+      setTimeout(async () => {
+        if (typeof window.fullSyncAllLayers === 'function') {
+          console.log('[autosync] 実行開始');
+          const result = await window.fullSyncAllLayers();
+          console.log('[autosync] 実行結果:', result);
+          // 完了を視覚化
+          document.title = '✅ ' + (document.title || '');
+          // 結果をlocalStorageに保存して外部から確認できるように
+          try {
+            localStorage.setItem('interactionApp_autosync_lastResult', JSON.stringify({
+              ts: new Date().toISOString(),
+              result: result
+            }));
+          } catch (_) {}
+        } else {
+          console.warn('[autosync] fullSyncAllLayers関数が見つかりません');
+          try {
+            localStorage.setItem('interactionApp_autosync_lastResult', JSON.stringify({
+              ts: new Date().toISOString(),
+              error: 'fullSyncAllLayers not found'
+            }));
+          } catch (_) {}
+        }
+      }, 5000);
+    }
+  } catch (_) {}
 }
 
 function showStartupBanners() {
