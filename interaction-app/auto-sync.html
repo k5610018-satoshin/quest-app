@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<title>担任記録 — 自動同期</title>
+<style>
+  body { font-family: 'メイリオ', system-ui, sans-serif; max-width: 800px; margin: 24px auto; padding: 0 16px; color: #222; line-height: 1.5; }
+  h1 { font-size: 20px; }
+  pre { background: #f4f4f4; padding: 12px; border-radius: 4px; font-size: 12px; max-height: 400px; overflow: auto; }
+  .ok { color: #2a7; font-weight: bold; }
+  .err { color: #c33; font-weight: bold; }
+  .info { color: #357abd; font-weight: bold; }
+  .step { padding: 8px; margin: 4px 0; background: #fafafa; border-left: 4px solid #ccc; }
+  .step.ok { border-left-color: #2a7; }
+  .step.err { border-left-color: #c33; }
+  .step.run { border-left-color: #357abd; background: #e8f4fc; }
+</style>
+</head>
+<body>
+<h1>🔄 担任記録 自動同期 (L1↔L3)</h1>
+<p>このページを開くだけで、ローカル(L1)とクラウド(L3)を完全同期します。SWキャッシュ非依存。</p>
+
+<div id="steps"></div>
+
+<h2>結果</h2>
+<pre id="result">処理中…</pre>
+
+<p><a href="index.html">▶ 担任記録アプリを開く</a> | <a href="diagnostic.html">📊 診断レポート</a></p>
+
+<script>
+const STORAGE_KEY = 'interactionApp_v1';
+const SYNC_KEY = 'interactionApp_gasSync';
+const LAST_PULL_KEY = 'interactionApp_lastPull';
+const DEFAULT_ENDPOINT = 'https://script.google.com/macros/s/AKfycby6OoIJ7xeWRw_7QfMElXRAOrTqb4HqwD6r-MSppY1oZ36jqYtEzufpfKNWFoS7-bpe/exec';
+const DEFAULT_API_KEY = 'cLgXe27Zo-2w7cfL';
+
+const stepsEl = document.getElementById('steps');
+const resultEl = document.getElementById('result');
+const log = { steps: [], result: {} };
+
+function step(label, kind = 'run') {
+  const el = document.createElement('div');
+  el.className = 'step ' + kind;
+  el.textContent = label;
+  stepsEl.appendChild(el);
+  log.steps.push({ label, kind, ts: new Date().toISOString() });
+  return el;
+}
+
+(async () => {
+  try {
+    const cfg = JSON.parse(localStorage.getItem(SYNC_KEY) || '{}');
+    const ep = cfg.endpoint || DEFAULT_ENDPOINT;
+    const ak = cfg.apiKey || DEFAULT_API_KEY;
+    if (!ep || !ak) {
+      step('❌ GAS設定なし', 'err');
+      resultEl.textContent = 'GAS endpoint / apiKey が見つかりません';
+      return;
+    }
+    step('1. ローカル localStorage を読み込み中…');
+    const data = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+    const localCounts = {
+      records: (data.records || []).length,
+      praises: (data.praises || []).length,
+      evaluations: (data.evaluations || []).length,
+      abaRecords: (data.abaRecords || []).length,
+      ketebureRecords: (data.ketebureRecords || []).length,
+      seatingSnapshots: (data.seatingSnapshots || []).length
+    };
+    const localTotal = Object.values(localCounts).reduce((a, b) => a + b, 0);
+    step(`✓ ローカル: ${localTotal}件 (記録 ${localCounts.records} / ほめ ${localCounts.praises} / 評価 ${localCounts.evaluations} / ABA ${localCounts.abaRecords} / けテ ${localCounts.ketebureRecords})`, 'ok');
+    log.result.local = localCounts;
+
+    step('2. クラウドGASから全レコード取得中…');
+    const pullUrl = ep + '?key=' + encodeURIComponent(ak) + '&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=auto-sync-page';
+    const r1 = await fetch(pullUrl);
+    if (!r1.ok) throw new Error('HTTP ' + r1.status);
+    const cloud = await r1.json();
+    if (!cloud.ok) throw new Error('GAS error: ' + cloud.error);
+
+    const cloudCounts = {
+      records: (cloud.records || []).length,
+      praises: (cloud.praises || []).length,
+      evaluations: (cloud.evaluations || []).length,
+      abaRecords: (cloud.abaRecords || []).length,
+      ketebureRecords: (cloud.ketebureRecords || []).length,
+      seatingSnapshots: (cloud.seatingSnapshots || cloud.seating || []).length
+    };
+    const cloudTotal = Object.values(cloudCounts).reduce((a, b) => a + b, 0);
+    step(`✓ クラウド: ${cloudTotal}件 (記録 ${cloudCounts.records} / ほめ ${cloudCounts.praises} / 評価 ${cloudCounts.evaluations} / ABA ${cloudCounts.abaRecords} / けテ ${cloudCounts.ketebureRecords})`, 'ok');
+    log.result.cloud = cloudCounts;
+
+    step('3. クラウドのID集合を構築中…');
+    const cloudIds = new Set();
+    ['records', 'praises', 'evaluations', 'abaRecords', 'ketebureRecords', 'seatingSnapshots'].forEach(k => {
+      (cloud[k] || cloud.seating || []).forEach(x => x && x.id && cloudIds.add(x.id));
+    });
+    step(`✓ クラウドID集合: ${cloudIds.size}個`, 'ok');
+
+    step('4. ローカル only レコードを特定中…');
+    const types = [
+      { key: 'records', dataType: null, payloadKey: 'records', label: '交友関係' },
+      { key: 'praises', dataType: 'praise', payloadKey: 'praises', label: 'ほめ' },
+      { key: 'evaluations', dataType: 'evaluation', payloadKey: 'evaluations', label: '評価' },
+      { key: 'abaRecords', dataType: 'aba', payloadKey: 'abaRecords', label: 'ABA' },
+      { key: 'ketebureRecords', dataType: 'ketebure', payloadKey: 'ketebureRecords', label: 'けテぶれ' }
+    ];
+    const localOnly = {};
+    let totalToPush = 0;
+    for (const t of types) {
+      const arr = (data[t.key] || []).filter(x => x && x.id && !cloudIds.has(x.id));
+      localOnly[t.label] = arr;
+      totalToPush += arr.length;
+    }
+    step(`✓ ローカルonly合計: ${totalToPush}件 (` + Object.entries(localOnly).map(([k, v]) => `${k} ${v.length}`).join(' / ') + ')', totalToPush > 0 ? 'ok' : 'info');
+    log.result.localOnly = Object.fromEntries(Object.entries(localOnly).map(([k, v]) => [k, v.length]));
+
+    if (totalToPush === 0) {
+      step('5. push対象なし → 同期スキップ', 'info');
+    } else {
+      step(`5. クラウドへ push (${totalToPush}件)…`);
+      const pushed = {};
+      for (const t of types) {
+        const arr = localOnly[t.label];
+        if (arr.length === 0) { pushed[t.label] = 0; continue; }
+        const body = { action: 'bulk_add', deviceId: 'auto-sync-page' };
+        if (t.dataType) body.dataType = t.dataType;
+        body[t.payloadKey] = arr;
+        try {
+          const r = await fetch(ep + '?key=' + encodeURIComponent(ak), {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify(body)
+          });
+          const dd = await r.json();
+          if (!dd.ok) throw new Error(dd.error || 'GAS error');
+          pushed[t.label] = '+' + (dd.added || 0) + '件 (重複skip ' + (dd.skipped || 0) + ')';
+          step(`  ${t.label}: ${pushed[t.label]}`, 'ok');
+        } catch (e) {
+          pushed[t.label] = 'ERR: ' + e.message;
+          step(`  ${t.label}: ERR ${e.message}`, 'err');
+        }
+      }
+      log.result.pushed = pushed;
+    }
+
+    step('6. IndexedDB 同期 (ローカル localStorage → IDB)…');
+    if (window.indexedDB) {
+      await new Promise((resolve) => {
+        const req = indexedDB.open('interactionApp', 1);
+        req.onupgradeneeded = (e) => {
+          const db = e.target.result;
+          if (!db.objectStoreNames.contains('appState')) db.createObjectStore('appState');
+        };
+        req.onsuccess = () => {
+          const db = req.result;
+          try {
+            const tx = db.transaction(['appState'], 'readwrite');
+            tx.objectStore('appState').put({ ts: new Date().toISOString(), json: localStorage.getItem(STORAGE_KEY) }, 'current');
+            tx.oncomplete = () => { step('  ✓ IDB書き込み完了', 'ok'); resolve(); };
+            tx.onerror = () => { step('  ✗ IDB書き込み失敗', 'err'); resolve(); };
+          } catch (e) {
+            step('  ✗ IDB tx失敗: ' + e.message, 'err');
+            resolve();
+          }
+        };
+        req.onerror = () => { step('  ✗ IDB open失敗', 'err'); resolve(); };
+      });
+    } else {
+      step('  ✗ IndexedDB利用不可', 'err');
+    }
+
+    step('7. クラウド最新件数を再確認中…');
+    const r2 = await fetch(ep + '?key=' + encodeURIComponent(ak) + '&action=info');
+    const info = await r2.json();
+    log.result.cloudFinal = info;
+    step(`✓ クラウド最終件数: 記録 ${info.total_rows} / ほめ ${info.praise_rows} / 評価 ${info.eval_rows} / ABA ${info.aba_rows} / けテ ${info.ketebure_rows}`, 'ok');
+
+    step('🎉 完全同期完了', 'ok');
+    document.title = '✅ 完全同期完了 - 担任記録';
+    resultEl.textContent = JSON.stringify(log, null, 2);
+
+    // 結果を localStorage に保存して外部から確認できるように
+    try {
+      localStorage.setItem('interactionApp_autosync_lastResult', JSON.stringify({
+        ts: new Date().toISOString(),
+        url: location.href,
+        log: log
+      }));
+    } catch (_) {}
+
+  } catch (e) {
+    step('❌ エラー: ' + e.message, 'err');
+    document.title = '❌ 同期失敗 - 担任記録';
+    resultEl.textContent = 'ERROR: ' + e.message + '\n\n' + JSON.stringify(log, null, 2);
+    try {
+      localStorage.setItem('interactionApp_autosync_lastResult', JSON.stringify({
+        ts: new Date().toISOString(),
+        error: e.message,
+        log: log
+      }));
+    } catch (_) {}
+  }
+})();
+</script>
+</body>
+</html>
