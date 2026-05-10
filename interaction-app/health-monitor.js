@@ -308,12 +308,17 @@ async function openDiagnosticModal() {
               ${cellRow('L3 クラウド', cl)}
             </tbody>
           </table>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;">
+            <button class="primary" id="diagFullPullBtn">☁ クラウドから全件取得 (L3→L1)</button>
+            <button id="diagPushAllBtn" style="background:#28a745;color:white;border:1px solid #28a745;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">⬆ 全種別をクラウドへ送信 (L1→L3)</button>
+            <button id="diagFullSyncBtn" style="background:#6f42c1;color:white;border:1px solid #6f42c1;padding:5px 12px;border-radius:4px;cursor:pointer;font-weight:bold;">🔄 完全同期 (L1↔L2↔L3)</button>
+          </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;">
-            <button class="primary" id="diagFullPullBtn">☁ クラウドから全件取得</button>
             <button class="ghost" id="diagFlushBtn">⏳ 未送信を再送 (${pq}件${pqAge ? ' / 最古' + pqAge + '分' : ''})</button>
             <button class="ghost" id="diagCopyBtn">📋 診断ログをコピー</button>
             <a href="diagnostic.html" target="_blank" class="ghost" style="padding:5px 10px;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:#333;background:#fff;">🔗 詳細診断ページ</a>
             <a href="recovery.html" target="_blank" class="ghost" style="padding:5px 10px;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:#333;background:#fff;">🆘 緊急復旧ツール</a>
+            <a href="auto-sync.html" target="_blank" class="ghost" style="padding:5px 10px;border:1px solid #ddd;border-radius:4px;text-decoration:none;color:#333;background:#fff;">⚡ auto-sync (SW非依存)</a>
           </div>
           <div style="background:#f9fafb;border:1px solid #eee;border-radius:4px;padding:8px;font-size:11.5px;font-family:ui-monospace,monospace;white-space:pre-wrap;" id="diagOutput">準備中…</div>
         </div>
@@ -331,12 +336,64 @@ async function openDiagnosticModal() {
     if (typeof window.pullFromGas !== 'function') return;
     showToast?.('クラウドから全件取得中…');
     try {
-      await window.pullFromGas({ fullPull: true });
+      const r = await window.pullFromGas({ fullPull: true });
       if (typeof window.refreshAll === 'function') window.refreshAll();
-      showToast?.('✓ 全件取得完了', 'success');
-      close();
+      if (r && r.skipped) {
+        showToast?.('⚠ pullスキップ: ' + (r.reason || 'busy'), 'error');
+      } else {
+        showToast?.('✓ 全件取得完了', 'success');
+        close();
+      }
     } catch (e) {
       showToast?.('全件取得失敗: ' + e.message, 'error');
+    }
+  });
+
+  document.getElementById('diagPushAllBtn')?.addEventListener('click', async () => {
+    if (typeof window.pushAllToGas !== 'function') {
+      showToast?.('pushAllToGas関数なし。新コードがロードされていない可能性。Ctrl+Shift+R を試してください', 'error');
+      return;
+    }
+    showToast?.('全種別をクラウドへ送信中…');
+    try {
+      const r = await window.pushAllToGas();
+      if (r && r.ok) {
+        const summaryStr = r.summary ? Object.entries(r.summary).map(([k,v]) => `${k}: ${v}`).join(' / ') : 'OK';
+        showToast?.(`⬆ 送信完了\n${summaryStr}`, 'success');
+      } else {
+        const errStr = r && r.errors && r.errors.length
+          ? r.errors.map(e => `${e.label}(${e.count}件): ${e.error}`).join('\n')
+          : (r && r.error) || 'unknown';
+        showToast?.(`⚠ 送信一部失敗\n${errStr}`, 'error');
+      }
+      // 件数バー更新
+      if (typeof refreshHealthBar === 'function') refreshHealthBar();
+    } catch (e) {
+      showToast?.('送信エラー: ' + e.message, 'error');
+    }
+  });
+
+  document.getElementById('diagFullSyncBtn')?.addEventListener('click', async () => {
+    if (typeof window.fullSyncAllLayers !== 'function') {
+      showToast?.('fullSyncAllLayers関数なし。新コードがロードされていない可能性。Ctrl+Shift+R を試してください', 'error');
+      return;
+    }
+    if (!confirm('完全同期 (L1↔L2↔L3) を実行します。\n  1. ローカル → クラウド push\n  2. クラウド → ローカル pull\n  3. IndexedDB 同期\n何度実行しても安全です。続行しますか？')) return;
+    showToast?.('完全同期中…');
+    try {
+      const r = await window.fullSyncAllLayers();
+      if (r && r.ok) {
+        showToast?.(`🔄 完全同期完了 ${r.before}→${r.after}件`, 'success');
+        close();
+      } else {
+        const detail = r && r.errors && r.errors.length
+          ? r.errors.map(e => `${e.label}: ${e.error}`).join('; ')
+          : (r && r.error) || 'unknown';
+        showToast?.(`⚠ 完全同期 部分失敗: ${detail}`, 'error');
+      }
+      if (typeof refreshHealthBar === 'function') refreshHealthBar();
+    } catch (e) {
+      showToast?.('完全同期エラー: ' + e.message, 'error');
     }
   });
 

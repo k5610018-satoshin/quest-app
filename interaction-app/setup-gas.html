@@ -512,6 +512,31 @@
         <b>🎉 お疲れ様でした！</b> これで複数PC・スマホで自動同期できる状態になりました。<br>
         記録すると数秒〜5分以内にクラウドへ送信され、別端末では「今すぐ同期」で取得できます。
       </div>
+
+      <div class="info" style="margin-top:18px; background:#e8f4fc; border-left-color:#4a90e2;">
+        <b>🚀 さらに便利に: ?autosync=1 ブックマーク</b><br>
+        起動と同時に「全層完全同期(L1↔L2↔L3)」を自動実行する起動オプションがあります。<br>
+        <b>使い方:</b><br>
+        <ol style="margin: 6px 0;">
+          <li>下のリンクを右クリック → 「ブックマークに追加」</li>
+          <li>毎回このブックマークから開けば、最新クラウドデータが起動5秒後に自動反映</li>
+        </ol>
+        <a href="index.html?autosync=1" id="autosyncLink" style="display:inline-block;padding:6px 14px;background:#4a90e2;color:white;text-decoration:none;border-radius:6px;font-weight:600;margin-top:6px;">📌 担任記録アプリ (起動時自動同期)</a>
+        <div style="margin-top:6px;font-size:11.5px;color:#666;">
+          ※ 5秒待ってから fullSyncAllLayers() を実行 → 結果はトーストとタイトル(✅/⚠) で確認できます。<br>
+          ※ 編集中フラグは自動解除されます (バックグラウンドタブで止まらないように)。
+        </div>
+      </div>
+
+      <div class="info" style="margin-top:18px; background:#fff8e6; border-left-color:#f5b042;">
+        <b>🆘 もしデータが消えたら</b><br>
+        <ul style="margin: 6px 0;">
+          <li><b>緊急復元ボタン</b>: 設定タブ → クラウド同期 → 「🆘 クラウドから緊急復元」 (赤ボタン)</li>
+          <li><b>diagnostic.html</b>: アプリと同じChromeで開くと L1/L2/L3 の件数差を一覧表示</li>
+          <li><b>auto-sync.html</b>: ?autosync=1 と同じ処理を独立ページで実行 (SWキャッシュ非依存)</li>
+          <li><b>recovery.html</b>: 3-step手動復旧ツール</li>
+        </ul>
+      </div>
     </div>
 
     <!-- ============ ナビゲーション ============ -->
