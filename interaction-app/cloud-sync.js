@@ -85,7 +85,8 @@ function initCloudSync() {
       console.warn('[sync] visibility flush失敗:', err.message);
     }
     try {
-      await pullFromGas();
+      // visibility pull は他処理を邪魔しない (skipIfBusy)
+      await pullFromGas({ skipIfBusy: true });
     } catch (err) {
       console.warn('[sync] visibility pull失敗:', err.message);
     }
@@ -479,8 +480,13 @@ async function syncNow() {
   showSyncStatus('同期中…');
   try {
     await flushPendingQueue();
-    await pullFromGas();
-    showSyncStatus('同期完了');
+    // M4-bug-B修正: pull結果を検証して虚偽の「同期完了」を出さない
+    const pr = await pullFromGas();
+    if (pr && pr.skipped) {
+      showSyncStatus('同期スキップ: ' + (pr.reason || 'busy'), true);
+    } else {
+      showSyncStatus('同期完了');
+    }
   } catch (err) {
     showSyncStatus('同期エラー: ' + err.message, true);
   }
@@ -534,7 +540,11 @@ async function emergencyRestoreFromGas() {
 
     // LAST_PULL_KEY をリセット → since=2000-01-01 で全件取得
     localStorage.removeItem(LAST_PULL_KEY);
-    await pullFromGas({ fullPull: true });
+    // M4-bug-A修正: pull結果を検証 (silent skipの場合は失敗扱い)
+    const pr = await pullFromGas({ fullPull: true });
+    if (pr && pr.skipped) {
+      throw new Error('pullがスキップされました: ' + (pr.reason || 'busy'));
+    }
 
     const after = sumLocalRecords();
     const diff = after - before;
@@ -559,21 +569,40 @@ async function emergencyRestoreFromGas() {
   }
 }
 
+// pullFromGas wrapper:
+//   opts.fullPull: true → since=2000-01-01 強制全取得 (緊急復元等)
+//   opts.skipIfBusy: true → 別同期中なら silent return (auto-pollから呼ばれる場合)
+//   default: 別同期中なら最大30秒待機してから実行 (緊急復元/syncNow/fullSync/診断ボタン)
+//   戻り値: { skipped: true } または pull結果 (mergedSeats等)
 async function pullFromGas(opts) {
   // 緊急/全件モード(opts.fullPull)はsyncConfig無効でも実行する
   if (opts && opts.fullPull) {
-    if (!syncConfig.endpoint || !syncConfig.apiKey) return;
+    if (!syncConfig.endpoint || !syncConfig.apiKey) return { skipped: true, reason: 'no-config' };
   } else {
-    if (!checkSyncReady()) return;
+    if (!checkSyncReady()) return { skipped: true, reason: 'no-sync' };
   }
-  // M4修正: pull中も _isSyncing フラグで他の同期処理(push)と排他制御
+  // M4修正(再): _isSyncing 中の挙動を opts.skipIfBusy で制御
+  //   skipIfBusy=true → 即silent return (auto-pollなど、待つほどの価値が無い場合)
+  //   skipIfBusy=false → 最大30秒待機 (ユーザートリガーや緊急復元では確実に実行)
   if (_isSyncing) {
-    console.warn('[sync] 別の同期処理中、pullをスキップ');
-    return;
+    if (opts && opts.skipIfBusy) {
+      console.warn('[sync] 別の同期処理中、pullをスキップ (skipIfBusy)');
+      return { skipped: true, reason: 'busy' };
+    }
+    let waited = 0;
+    while (_isSyncing && waited < 30000) {
+      await new Promise(r => setTimeout(r, 500));
+      waited += 500;
+    }
+    if (_isSyncing) {
+      console.warn('[sync] 30秒待機しても他同期処理が解放されずpullスキップ');
+      return { skipped: true, reason: 'busy-timeout' };
+    }
   }
   _isSyncing = true;
   try {
-    return await _pullFromGasInner(opts);
+    const inner = await _pullFromGasInner(opts);
+    return Object.assign({ skipped: false }, inner || {});
   } finally {
     _isSyncing = false;
   }
@@ -898,12 +927,14 @@ async function pushAllAba() {
 // ===== 評価 push/pull =====
 
 function enrichEvaluation(ev) {
+  // L-E修正: null-safety (ev が null/undefined の場合は素通し)
+  if (!ev || typeof ev !== 'object') return ev;
   // GASマトリクスシート用に学生名・単元名を付与
-  const s = state.students.find(x => x.id === ev.studentId);
-  const u = state.units && state.units.find(x => x.id === ev.unitId);
+  const s = (state && Array.isArray(state.students)) ? state.students.find(x => x && x.id === ev.studentId) : null;
+  const u = (state && Array.isArray(state.units)) ? state.units.find(x => x && x.id === ev.unitId) : null;
   return Object.assign({}, ev, {
     studentName: s ? s.name : '',
-    unitName: u ? u.name : ev.unitId
+    unitName: u ? u.name : (ev.unitId || '')
   });
 }
 
@@ -1093,17 +1124,27 @@ async function fullSyncAllLayers() {
     showSyncStatus('完全同期: L3→L1 pull 開始…');
     // 2. L3 → L1 pull (全件)
     localStorage.removeItem(LAST_PULL_KEY);
-    await pullFromGas({ fullPull: true });
+    const pullRes = await pullFromGas({ fullPull: true });
+    // M4-bug-C修正: pull結果も検証して虚偽の完了表示を出さない
+    const pullOk = !(pullRes && pullRes.skipped);
     // 3. L1 → L2 saveState (IDB同期)
     if (typeof saveState === 'function') saveState();
     const after = sumLocalRecords();
     if (typeof refreshAll === 'function') refreshAll();
     const pushOk = pushRes && pushRes.ok;
+    const allOk = pushOk && pullOk;
     const summaryStr = pushRes && pushRes.summary ? Object.entries(pushRes.summary).map(([k,v]) => k+'='+v).join(', ') : 'OK';
-    const msg = `${pushOk ? '🔄 完全同期完了' : '⚠ 完全同期: push一部失敗'}\n  ${before}件 → ${after}件 (差分${after - before > 0 ? '+' : ''}${after - before})\n  L3 push: ${summaryStr}`;
-    showSyncStatus(`${pushOk ? '✅' : '⚠'} 完全同期${pushOk ? '完了' : '部分失敗'} ${before}→${after}件`, !pushOk);
-    if (typeof showToast === 'function') showToast(msg, pushOk ? 'success' : 'error');
-    return { ok: pushOk, before, after, pushSummary: pushRes && pushRes.summary, errors: pushRes && pushRes.errors };
+    const issues = [];
+    if (!pushOk && pushRes && pushRes.errors && pushRes.errors.length) {
+      issues.push('push失敗: ' + pushRes.errors.map(e => `${e.label}(${e.count}件: ${e.error})`).join(', '));
+    }
+    if (!pullOk) {
+      issues.push('pullスキップ: ' + (pullRes.reason || 'busy'));
+    }
+    const msg = `${allOk ? '🔄 完全同期完了' : '⚠ 完全同期: 部分失敗'}\n  ${before}件 → ${after}件 (差分${after - before > 0 ? '+' : ''}${after - before})\n  L3 push: ${summaryStr}` + (issues.length ? '\n  ' + issues.join('\n  ') : '');
+    showSyncStatus(`${allOk ? '✅' : '⚠'} 完全同期${allOk ? '完了' : '部分失敗'} ${before}→${after}件`, !allOk);
+    if (typeof showToast === 'function') showToast(msg, allOk ? 'success' : 'error');
+    return { ok: allOk, before, after, pushSummary: pushRes && pushRes.summary, errors: pushRes && pushRes.errors, pullSkipped: !pullOk };
   } catch (err) {
     showSyncStatus('完全同期失敗: ' + err.message, true);
     if (typeof showToast === 'function') showToast('完全同期失敗: ' + err.message, 'error');

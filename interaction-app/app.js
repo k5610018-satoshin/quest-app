@@ -936,6 +936,13 @@ function init() {
     const params = new URLSearchParams(window.location.search);
     if (params.get('autosync') === '1') {
       console.log('[autosync] URLパラメータ検出 → fullSyncAllLayers実行予約');
+      // L-F修正: autosync URL は明示的同意とみなし、編集中フラグを問答無用クリア
+      // (バックグラウンドタブで confirm が表示されず無限保留になるのを防ぐ)
+      if (state && state.ui && state.ui.editingRecordId) {
+        console.log('[autosync] 編集モードフラグを自動解除 (autosync URLは明示的同意)');
+        state.ui.editingRecordId = null;
+        if (typeof saveState === 'function') saveState();
+      }
       // 5秒後実行: cloud-sync の初期化と起動時pullの完了を待つ
       setTimeout(async () => {
         if (typeof window.fullSyncAllLayers === 'function') {
