@@ -526,16 +526,19 @@ function saveState() {
   }
 }
 
-// ========== IndexedDB 自動補完 ==========
-// 起動時にIndexedDBを読み、ローカルより件数が多ければ不足分をIDマージで補完。
-// localStorageが消失/縮小していた場合の自動復旧の最後の砦。
+// ========== IndexedDB 自動補完 (双方向同期) ==========
+// 起動時にIndexedDBとlocalStorageを照合し、
+//   ケースA: IDB > L1 (localStorageが消失/縮小) → IDBから不足分をIDマージで補完
+//   ケースB: L1 > IDB (IDB書き込みが古い or 書き込み失敗履歴) → saveState()で同期
 async function idbCheckAndRestore() {
   if (typeof window.idbLoadState !== 'function') return;
   try {
     const wrapped = await window.idbLoadState();
-    if (!wrapped || !wrapped.json) return;
-    let idbData;
-    try { idbData = JSON.parse(wrapped.json); } catch (_) { return; }
+    let idbData = {};
+    let idbExists = false;
+    if (wrapped && wrapped.json) {
+      try { idbData = JSON.parse(wrapped.json); idbExists = true; } catch (_) {}
+    }
 
     function len(a) { return Array.isArray(a) ? a.length : 0; }
     const localTotal = len(state.records) + len(state.praises) + len(state.evaluations) +
@@ -543,51 +546,65 @@ async function idbCheckAndRestore() {
     const idbTotal = len(idbData.records) + len(idbData.praises) + len(idbData.evaluations) +
                      len(idbData.abaRecords) + len(idbData.ketebureRecords) + len(idbData.seatingSnapshots);
 
-    // しきい値: IDBの方が5件以上多ければ復元 (1〜4件差は意図的削除と仮定)
-    if (idbTotal <= localTotal + 4) return;
-
-    function mergeFromIdb(localArr, idbArr, normalize) {
-      if (!Array.isArray(idbArr) || idbArr.length === 0) return 0;
-      if (!Array.isArray(localArr)) localArr = [];
-      const ids = new Set(localArr.map(x => x && x.id).filter(Boolean));
-      let n = 0;
-      for (const item of idbArr) {
-        if (!item || !item.id) continue;
-        if (ids.has(item.id)) continue;
-        const ni = normalize ? normalize(item) : item;
-        if (!ni) continue;
-        localArr.push(ni);
-        ids.add(ni.id || item.id);
-        n++;
+    // ===== ケースA: IDBの方が5件以上多い → IDBから補完 =====
+    if (idbTotal >= localTotal + 5) {
+      function mergeFromIdb(localArr, idbArr, normalize) {
+        if (!Array.isArray(idbArr) || idbArr.length === 0) return 0;
+        if (!Array.isArray(localArr)) localArr = [];
+        const ids = new Set(localArr.map(x => x && x.id).filter(Boolean));
+        let n = 0;
+        for (const item of idbArr) {
+          if (!item || !item.id) continue;
+          if (ids.has(item.id)) continue;
+          const ni = normalize ? normalize(item) : item;
+          if (!ni) continue;
+          localArr.push(ni);
+          ids.add(ni.id || item.id);
+          n++;
+        }
+        return n;
       }
-      return n;
+
+      if (!Array.isArray(state.records)) state.records = [];
+      if (!Array.isArray(state.praises)) state.praises = [];
+      if (!Array.isArray(state.evaluations)) state.evaluations = [];
+      if (!Array.isArray(state.abaRecords)) state.abaRecords = [];
+      if (!Array.isArray(state.ketebureRecords)) state.ketebureRecords = [];
+      if (!Array.isArray(state.seatingSnapshots)) state.seatingSnapshots = [];
+
+      let added = 0;
+      added += mergeFromIdb(state.records, idbData.records, normalizeRecord);
+      added += mergeFromIdb(state.praises, idbData.praises, typeof normalizePraise === 'function' ? normalizePraise : null);
+      added += mergeFromIdb(state.evaluations, idbData.evaluations, typeof normalizeEvaluation === 'function' ? normalizeEvaluation : null);
+      added += mergeFromIdb(state.abaRecords, idbData.abaRecords, typeof normalizeAba === 'function' ? normalizeAba : null);
+      added += mergeFromIdb(state.ketebureRecords, idbData.ketebureRecords, typeof normalizeKetebure === 'function' ? normalizeKetebure : null);
+      added += mergeFromIdb(state.seatingSnapshots, idbData.seatingSnapshots, null);
+
+      if (added > 0) {
+        saveState();
+        if (typeof refreshAll === 'function') refreshAll();
+        console.log('[idb] L1<IDB → 復元:', { added, idbTotal, localTotal });
+        if (typeof showToast === 'function') {
+          showToast(`💾 IndexedDBから ${added}件 を補完しました`, 'success');
+        }
+      }
+      return;
     }
 
-    if (!Array.isArray(state.records)) state.records = [];
-    if (!Array.isArray(state.praises)) state.praises = [];
-    if (!Array.isArray(state.evaluations)) state.evaluations = [];
-    if (!Array.isArray(state.abaRecords)) state.abaRecords = [];
-    if (!Array.isArray(state.ketebureRecords)) state.ketebureRecords = [];
-    if (!Array.isArray(state.seatingSnapshots)) state.seatingSnapshots = [];
-
-    let added = 0;
-    added += mergeFromIdb(state.records, idbData.records, normalizeRecord);
-    added += mergeFromIdb(state.praises, idbData.praises, typeof normalizePraise === 'function' ? normalizePraise : null);
-    added += mergeFromIdb(state.evaluations, idbData.evaluations, typeof normalizeEvaluation === 'function' ? normalizeEvaluation : null);
-    added += mergeFromIdb(state.abaRecords, idbData.abaRecords, typeof normalizeAba === 'function' ? normalizeAba : null);
-    added += mergeFromIdb(state.ketebureRecords, idbData.ketebureRecords, typeof normalizeKetebure === 'function' ? normalizeKetebure : null);
-    added += mergeFromIdb(state.seatingSnapshots, idbData.seatingSnapshots, null);
-
-    if (added > 0) {
+    // ===== ケースB: L1の方が5件以上多い → IDBに同期 =====
+    if (localTotal >= idbTotal + 5) {
+      console.log('[idb] L1>IDB → IDBへ同期:', { localTotal, idbTotal, diff: localTotal - idbTotal });
+      // saveStateを呼ぶとL1とIDB両方に書かれる(idb-storage.jsのidbSaveStateが発火)
       saveState();
-      if (typeof refreshAll === 'function') refreshAll();
-      console.log('[idb] 復元完了:', { added, idbTotal, localTotal, idbTs: wrapped.ts });
       if (typeof showToast === 'function') {
-        showToast(`💾 IndexedDBから ${added}件 を補完しました`, 'success');
+        showToast(`🔄 IndexedDBに ${localTotal - idbTotal}件 を同期しました`, 'success');
       }
+      return;
     }
+
+    // ケースC: 件数差が4件以下 → 何もしない (意図的削除との区別がつかないため)
   } catch (e) {
-    console.warn('[idb] 復元エラー:', e);
+    console.warn('[idb] 自動同期エラー:', e);
   }
 }
 

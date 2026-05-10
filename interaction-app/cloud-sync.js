@@ -326,6 +326,7 @@ function renderSyncUI() {
       <button class="primary" id="syncNowBtn">今すぐ同期</button>
       <button class="ghost" id="syncPushAllBtn" title="交友関係(records)のみ全件をGASへ送る（旧仕様）">交友関係のみ全件アップロード</button>
       <button id="syncPushAllTypesBtn" title="全種別(records/praises/evaluations/aba/ketebure)を一括push。重複はGAS側で自動スキップ。" style="background:#28a745;color:white;border:1px solid #28a745;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">⬆ 全種別をクラウドへ送信</button>
+      <button id="syncFullSyncAllBtn" title="L1↔L2↔L3 を完全同期(L1→L3 push → L3→L1 pull → IDB同期)" style="background:#6f42c1;color:white;border:1px solid #6f42c1;padding:8px 14px;border-radius:6px;cursor:pointer;font-weight:bold;">🔄 全層を完全同期 (L1↔L2↔L3)</button>
     </div>
     <div class="sync-row" style="margin-top:12px; padding:10px; background:#fff8e6; border:1px solid #f5b042; border-radius:6px;">
       <div style="flex:1">
@@ -373,6 +374,16 @@ function bindSyncEvents() {
         `(クラウドに既にある同IDレコードは自動スキップ。何度押しても安全)\n\n` +
         `続行しますか？`)) return;
       pushAllToGas();
+    } else if (e.target.id === 'syncFullSyncAllBtn') {
+      saveSyncInputs();
+      if (!confirm(
+        `L1(localStorage)・L2(IndexedDB)・L3(クラウド) を完全同期します。\n\n` +
+        `処理:\n` +
+        `  1. ローカルの未送信を全件アップロード (L1→L3, 重複自動スキップ)\n` +
+        `  2. クラウドから全件取得 (L3→L1, 既存ローカルは保持)\n` +
+        `  3. IndexedDBへ同期 (L1→L2)\n\n` +
+        `何度押しても安全です。続行しますか？`)) return;
+      fullSyncAllLayers();
     } else if (e.target.id === 'syncEmergencyRestoreBtn') {
       saveSyncInputs();
       emergencyRestoreFromGas();
@@ -1028,6 +1039,41 @@ async function pushAllKetebure() {
     showSyncStatus('けテぶれ送信失敗: ' + err.message, true);
   } finally {
     _isSyncing = false;
+  }
+}
+
+// L1↔L2↔L3 完全同期
+//   1. L1→L3: ローカルの全種別をクラウドへ push (bulk_add重複自動スキップ)
+//   2. L3→L1: クラウドから全件 pull (既存ローカル保持マージ)
+//   3. L1→L2: saveState() で IDB を同期
+// 何度押しても安全 (重複自動スキップ)
+async function fullSyncAllLayers() {
+  if (!checkSyncReady()) {
+    if (typeof showToast === 'function') showToast('クラウド同期未設定', 'error');
+    return { ok: false, error: 'no-sync' };
+  }
+  const before = sumLocalRecords();
+  showSyncStatus('完全同期: L1→L3 push 開始…');
+  try {
+    // 1. L1 → L3 push
+    const pushRes = await pushAllToGas();
+    showSyncStatus('完全同期: L3→L1 pull 開始…');
+    // 2. L3 → L1 pull (全件)
+    localStorage.removeItem(LAST_PULL_KEY);
+    if (window.state && window.state.ui) window.state.ui.editingRecordId = null;
+    await pullFromGas({ fullPull: true });
+    // 3. L1 → L2 saveState (IDB同期)
+    if (typeof saveState === 'function') saveState();
+    const after = sumLocalRecords();
+    if (typeof refreshAll === 'function') refreshAll();
+    const msg = `🔄 完全同期完了\n  ${before}件 → ${after}件 (差分${after - before > 0 ? '+' : ''}${after - before})\n  L3 push: ${pushRes && pushRes.summary ? Object.entries(pushRes.summary).map(([k,v]) => k+'='+v).join(', ') : 'OK'}`;
+    showSyncStatus(`✅ 完全同期完了 ${before}→${after}件`);
+    if (typeof showToast === 'function') showToast(msg, 'success');
+    return { ok: true, before, after };
+  } catch (err) {
+    showSyncStatus('完全同期失敗: ' + err.message, true);
+    if (typeof showToast === 'function') showToast('完全同期失敗: ' + err.message, 'error');
+    return { ok: false, error: err.message };
   }
 }
 
