@@ -7855,8 +7855,7 @@ function generateSeating() {
 
   // 警告ペア (要配慮児童同士・トラブル相手・要観察ペア)
   const watchPairs = new Set();
-  // 既知トラブル: 長田優真(5) - 山崎玲央(26) のような配慮ペア
-  // メモにあるパターンから推定: highlight同士や、watchPairs を検出
+  // highlight同士や watchPairs を検出して警告対象に追加
   const highlightIds = state.students.filter(s => s.highlight).map(s => s.id);
   for (let i = 0; i < highlightIds.length; i++) {
     for (let j = i+1; j < highlightIds.length; j++) {

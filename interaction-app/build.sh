@@ -235,6 +235,8 @@ if os.path.exists(students_json):
 def fix_personal(t):
     t = t.replace('5年4組', '◯年◯組')
     t = t.replace('5-4-2026', '')
+    # 学校名
+    t = t.replace('戸田小学校', '◯◯小学校').replace('戸田小', '本校')
     # CSV プレースホルダの汎用例 (佐藤太郎/鈴木花子は誤解を招くので置換)
     t = t.replace('佐藤太郎', '山田太郎').replace('さとうたろう', 'やまだたろう')
     t = t.replace('鈴木花子', '田中花子').replace('すずきはなこ', 'たなかはなこ')
@@ -242,6 +244,13 @@ def fix_personal(t):
     t = re.sub(r'佐藤(慎之介|先生|シンノスケ|しんのすけ)', '担任', t)
     # 単独の「佐藤」も置換 (識別文字列内のみ)
     t = re.sub(r'(?<![一-龯])佐藤(?![一-龯])', '担任', t)
+    # 個人 Windows ユーザ名・GitHubハンドル
+    t = t.replace('K5610018', '').replace('Shinnnosuke', '担任')
+    # K5610 単独 (Windows ユーザディレクトリ等) も汎用化
+    # 順序重要: K5610018 を先に空に置換 → 残った K5610 を (ユーザ名) に
+    t = t.replace('K5610', '(ユーザ名)')
+    # 学校固有のメール/ドメイン
+    t = t.replace('@k.nagoya-c.ed.jp', '@example.com')
     return t
 
 # 全テキストファイルに対して fix_personal を適用
@@ -257,11 +266,23 @@ if applied:
 
 # 5) 個人情報チェック (失敗時はerror)
 check_targets = glob.glob(os.path.join(out, '*'))
-suspicious_terms = ['5年4組', '5-4-2026', '佐藤慎之介', 'satoshin', '0248025@k.nagoya-c.ed.jp']
+suspicious_terms = [
+    # クラス・学校・ID
+    '5年4組', '5-4-2026', '戸田小', '戸田小学校',
+    # 個人名・メール・ハンドル
+    '佐藤慎之介', '佐藤シンノスケ', 'satoshin', 'Shinnnosuke',
+    'K5610018', 'K5610',
+    '0248025@k.nagoya-c.ed.jp', 'k5610018@gmail.com', 'K5610018@gmail.com',
+    # 個人版GAS資格情報 (auto-sync.html等にハードコードされていた個人鍵)
+    'AKfycby6OoIJ7xeWRw', 'cLgXe27Zo-2w7cfL',
+    # 児童実名 (要配慮児童リスト)
+    '長田優真', '愛玲菜', '伊藤煌', '橋本彩希',
+    '下釜有真', '斉藤初実', '井上笑菜', '服部実波', '山崎玲央',
+]
 errors = []
 for p in check_targets:
     if not os.path.isfile(p): continue
-    if p.endswith('.png') or p.endswith('.gif'): continue
+    if p.endswith('.png') or p.endswith('.gif') or p.endswith('.jpg'): continue
     try:
         with open(p, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -277,7 +298,7 @@ if errors:
         print(f"  {fn}: '{term}' が含まれます")
     sys.exit(1)
 else:
-    print("\n[OK] 個人情報チェック: クリーン")
+    print("\n[OK] 個人情報チェック: クリーン (児童実名/学校名/個人ID/GAS鍵 全て不在)")
 PY
   echo "[OK] 配布版生成完了: $out_dir"
   echo "  確認: 各先生は setup-gas.html を開いて自分のGAS設定を作成"
