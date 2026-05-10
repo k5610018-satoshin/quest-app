@@ -76,6 +76,48 @@ label { font-weight: 600; color: var(--muted); font-size: 12px; }
   z-index: 100;
 }
 .header-left { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+
+/* === PWA インストール促進ボタン / モーダル === */
+.pwa-install-btn {
+  background: linear-gradient(135deg, #4a90e2, #357ab8);
+  color: #fff;
+  border: none;
+  padding: 5px 12px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 16px;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(74,144,226,0.35);
+  align-self: center;
+  white-space: nowrap;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.pwa-install-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 10px rgba(74,144,226,0.45); }
+.pwa-install-btn:active { transform: translateY(0); }
+
+.pwa-install-modal {
+  position: fixed; inset: 0;
+  background: rgba(0,0,0,0.45);
+  z-index: 9999;
+  display: flex; align-items: center; justify-content: center;
+  padding: 16px;
+}
+.pwa-install-modal-inner {
+  background: #fff; border-radius: 12px; max-width: 420px; width: 100%;
+  padding: 20px 22px; box-shadow: 0 12px 40px rgba(0,0,0,0.25);
+  font-size: 14px; line-height: 1.6;
+}
+.pwa-install-modal-inner h3 { margin: 0 0 12px; font-size: 17px; color: #357ab8; }
+.pwa-install-modal-inner ol { margin: 0 0 12px 20px; padding: 0; }
+.pwa-install-modal-inner ol li { margin-bottom: 6px; }
+.pwa-install-modal-btns {
+  display: flex; gap: 8px; justify-content: flex-end; margin-top: 14px;
+}
+.pwa-install-modal-btns button {
+  padding: 7px 16px; font-size: 13px; border-radius: 6px; cursor: pointer; border: 1px solid #ccc; background: #f5f5f5;
+}
+.pwa-install-modal-btns button.primary { background: #4a90e2; color: #fff; border-color: #357ab8; }
+
 .app-header h1 {
   margin: 0;
   font-size: 16px;
@@ -3998,6 +4040,85 @@ body { display: flex; flex-direction: column; }
   .ket-rating-btn { padding: 3px 8px; font-size: 14px; }
   .eval-grade-btn { padding: 3px 8px; font-size: 13px; }
   details.recent-records summary { padding: 2px 6px; font-size: 10.5px; }
+}
+
+/* ========================================================================
+ * モバイル対応 (iOS Safari / Android Chrome) — 480px以下
+ * 致命級バグ修正: タッチターゲット44px / 横スクロール解消 / iOSズーム抑止 / 100vh問題
+ * ======================================================================== */
+@media (max-width: 480px) {
+  /* iOS Safari の 100vh 問題: アドレスバーで content 切れ防止 */
+  html, body { height: auto; min-height: 100vh; min-height: 100dvh; min-height: -webkit-fill-available; }
+  body { display: block; }
+  .tab-panel { flex: none; min-height: 0; overflow: visible; }
+  .tab-panel.active { display: block; }
+  .tab-panel.active:not(#tab-record) { overflow: visible; }
+  #tab-record .student-grid { grid-auto-rows: minmax(48px, auto); }
+
+  /* ヘッダ: 縦積みでオーバーフロー解消 */
+  .app-header { flex-direction: column; align-items: stretch; padding: 4px 8px; gap: 4px; }
+  .header-left { gap: 6px; row-gap: 2px; }
+  .app-header h1 { font-size: 14px; }
+  .health-badge, .storage-health .sh-pill { font-size: 10px; }
+
+  /* タブナビ: 横スクロール許可 (既存 overflow-x:auto を活かしつつ overscroll に親切に) */
+  .tabs { -webkit-overflow-scrolling: touch; overscroll-behavior-x: contain; gap: 2px; }
+  .tab-btn { padding: 8px 10px; font-size: 12px; min-height: 40px; flex-shrink: 0; }
+
+  /* 記録モード切替: 横スクロール許可 (5ボタンが画面外に出るのを防ぐ) */
+  .record-mode-bar { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+  .record-mode-btn { flex: 0 0 auto; min-width: 88px; min-height: 40px; padding: 8px 10px; font-size: 12px; }
+
+  /* タブパネル余白を縮小 (画面幅を稼ぐ) */
+  .tab-panel { padding: 6px 6px 12px; }
+
+  /* 児童グリッド: 7→4列 (Apple HIG 44pt 最低値を守る) */
+  .student-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; }
+  .student-grid .student-btn { min-height: 48px; padding: 6px 2px; font-size: 13px; }
+  #interactionRecordView .student-grid .student-btn { min-height: 52px; font-size: 14px; }
+  .student-grid.ket-student-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  .student-grid.ket-student-grid .student-btn { min-height: 44px; font-size: 12px; }
+
+  /* iOS ズーム回避: 入力系 16px 以上必須 */
+  input, select, textarea { font-size: 16px !important; }
+  input[type="date"], input[type="text"], input[type="number"], input[type="search"] { font-size: 16px !important; }
+
+  /* レコードツールバー: 縦積み + 全アイテム可視 */
+  .record-toolbar { gap: 6px; padding: 6px 8px; }
+  .toolbar-group { flex-wrap: wrap; }
+  .scene-buttons { gap: 4px; }
+  .scene-btn { min-height: 40px; padding: 8px 10px; font-size: 13px; }
+  .mode-btn { min-height: 40px; padding: 6px 10px; }
+
+  /* ボタン全般: タッチ可能サイズ確保 */
+  button.primary, button.ghost, button.danger { min-height: 40px; }
+  button.compact { min-height: 36px; }
+
+  /* モーダル: スマホ画面に確実に収まる */
+  .modal { max-width: 94vw; max-height: 88vh; max-height: 88dvh; padding: 14px 16px; margin: 10px; }
+  .modal h2 { font-size: 16px; }
+  .modal table th, .modal table td { font-size: 12px; padding: 4px 6px; }
+  .modal .modal-actions button { min-height: 40px; }
+
+  /* インタラクション上部バー: 折り返し */
+  .interaction-top-bar { font-size: 11px; gap: 4px; padding: 4px 6px; }
+  .interaction-actions { margin-left: 0; width: 100%; justify-content: flex-end; flex-wrap: wrap; }
+
+  /* レコードメイン: 1カラム強制 */
+  .record-main { grid-template-columns: 1fr !important; gap: 8px; }
+  .record-main > .side-panel { max-height: none; }
+
+  /* 履歴テーブル: 横スクロール許可 */
+  .history-table { display: block; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+
+  /* 全画面 overflow の最終ガード */
+  body { overflow-x: hidden; }
+}
+
+/* PWA standalone: ノッチ/ホームインジケータ safe-area 対応 */
+@media (display-mode: standalone) {
+  .app-header { padding-top: max(6px, env(safe-area-inset-top)); padding-left: max(16px, env(safe-area-inset-left)); padding-right: max(16px, env(safe-area-inset-right)); }
+  body { padding-bottom: env(safe-area-inset-bottom); }
 }
 
 /* 横幅1280px以下: タブバーや余白を圧縮 */

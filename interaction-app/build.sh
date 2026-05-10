@@ -147,7 +147,7 @@ cmd_dist() {
     analytics-plus.js dashboard-overview.js seating-planner.js
     seating-correlation.js centrality-extra.js print-report.js
     search-bar.js templates.js photo-library.js voice-memo.js
-    ai-insights.js extra-features.js onboarding-wizard.js
+    ai-insights.js extra-features.js onboarding-wizard.js pwa-install.js
     icon-192.png icon-512.png
     setup-gas.html gas-code.gs gas-appsscript.json
     diagnostic.html recovery.html auto-sync.html
