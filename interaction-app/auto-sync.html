@@ -260,22 +260,36 @@ function step(label, kind = 'run') {
       });
     }
 
-    step('7. クラウド最新件数を再確認中…');
-    const r2 = await fetch(ep + '?key=' + encodeURIComponent(ak) + '&action=info');
-    const info = await r2.json();
-    log.result.cloudFinal = info;
-    const cloudFinalTotal = (info.total_rows||0) + (info.praise_rows||0) + (info.eval_rows||0) + (info.aba_rows||0) + (info.ketebure_rows||0);
-    step(`✓ クラウド最終件数: 合計${cloudFinalTotal}件 (記録 ${info.total_rows} / ほめ ${info.praise_rows} / 評価 ${info.eval_rows} / ABA ${info.aba_rows} / けテ ${info.ketebure_rows})`, 'ok');
+    step('7. クラウド最新件数を再取得 (deleted=1除く生存数)…');
+    // info API は deleted=1 を含む raw row数なので、再fetch all して生存数で比較
+    const r2 = await fetch(ep + '?key=' + encodeURIComponent(ak) + '&since=2000-01-01T00:00:00.000Z&dataType=all&deviceId=auto-sync-final');
+    const cloudFinal = await r2.json();
+    const cloudAliveCounts = {};
+    let cloudAliveTotal = 0;
+    for (const t of types) {
+      const arr = (cloudFinal[t.key] || []).filter(x => x && x.id && String(x.deleted) !== '1');
+      cloudAliveCounts[t.label] = arr.length;
+      cloudAliveTotal += arr.length;
+    }
+    log.result.cloudAlive = { total: cloudAliveTotal, ...cloudAliveCounts };
+    step(`✓ クラウド生存件数(deleted=1除く): 合計${cloudAliveTotal}件 (` + Object.entries(cloudAliveCounts).map(([k,v])=>`${k} ${v}`).join(' / ') + ')', 'ok');
+
+    // 参考: info APIの raw row数 (deleted含む)
+    const r3 = await fetch(ep + '?key=' + encodeURIComponent(ak) + '&action=info');
+    const info = await r3.json();
+    log.result.cloudInfo = info;
+    const cloudInfoTotal = (info.total_rows||0) + (info.praise_rows||0) + (info.eval_rows||0) + (info.aba_rows||0) + (info.ketebure_rows||0);
+    step(`  (参考) info APIの raw row数: 合計${cloudInfoTotal}件 (deleted=1含む)`, 'info');
 
     // L1 最新件数も再計測
     const finalLocal = JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
     const finalLocalTotal = (finalLocal.records||[]).length + (finalLocal.praises||[]).length + (finalLocal.evaluations||[]).length + (finalLocal.abaRecords||[]).length + (finalLocal.ketebureRecords||[]).length;
     step(`✓ L1 最終件数: 合計${finalLocalTotal}件`, 'ok');
 
-    // 3層整合チェック
+    // 3層整合チェック (生存数ベース)
     const idbTotal = log.result.idbAfter ? log.result.idbAfter.total : '?';
-    const allMatch = (finalLocalTotal === idbTotal) && (finalLocalTotal === cloudFinalTotal);
-    step(allMatch ? `🎉 3層完全一致: L1=L2=L3=${finalLocalTotal}件` : `⚠ 3層差: L1=${finalLocalTotal} / L2=${idbTotal} / L3=${cloudFinalTotal}`, allMatch ? 'ok' : 'err');
+    const allMatch = (finalLocalTotal === idbTotal) && (finalLocalTotal === cloudAliveTotal);
+    step(allMatch ? `🎉 3層完全一致: L1=L2=L3=${finalLocalTotal}件` : `⚠ 3層差: L1=${finalLocalTotal} / L2=${idbTotal} / L3生存=${cloudAliveTotal}`, allMatch ? 'ok' : 'err');
 
     step('🎉 完全双方向同期完了', 'ok');
     document.title = (allMatch ? '✅' : '⚠') + ' 双方向同期完了 - 担任記録';
